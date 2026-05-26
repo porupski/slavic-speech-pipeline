@@ -1,0 +1,62 @@
+# --- data and model outputs (never commit) -----------------------------------
+data/
+runs/
+test_runs/
+test_processed_jsonl/
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+
+# --- python -------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- virtual envs -------------------------------------------------------------
+.env
+.venv/
+venv/
+env/
+ENV/
+
+# --- jupyter ------------------------------------------------------------------
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# --- editors / IDEs -----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- testing / coverage -------------------------------------------------------
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# --- logs ---------------------------------------------------------------------
+*.log
+logs/
+
+# --- huggingface / torch caches if accidentally placed in-repo ---------------
+.cache/
+hf_cache/
+torch_cache/
