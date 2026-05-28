@@ -15,15 +15,18 @@ praatio>=6.0       # TextGrid
 requests>=2.31
 tqdm>=4.66
 
+# --- plotting (chapter 2 onwards) ---------------------------------------------
+matplotlib>=3.7
+
 # --- notebooks ----------------------------------------------------------------
 jupyter>=1.0
 ipykernel>=6.25
 
 # --- chapters 3+ (uncomment when needed) --------------------------------------
-# torch>=2.1
-# transformers>=4.40
-# datasets>=2.18
-# accelerate>=0.27
-# scikit-learn>=1.3
-# matplotlib>=3.7
-# seaborn>=0.13
+torch>=2.1
+transformers>=4.40
+datasets>=2.18
+accelerate>=0.27
+scikit-learn>=1.3
+matplotlib>=3.7
+seaborn>=0.13

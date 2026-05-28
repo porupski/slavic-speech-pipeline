@@ -1,0 +1,12 @@
+                       precision    recall  f1-score   support
+
+predominantlyNegative     0.0000    0.0000    0.0000         0
+        mixedNegative     1.0000    0.6667    0.8000         3
+      neutralNegative     0.0000    0.0000    0.0000         1
+      neutralPositive     0.0000    0.0000    0.0000         0
+        mixedPositive     0.0000    0.0000    0.0000         0
+predominantlyPositive     0.0000    0.0000    0.0000         0
+
+             accuracy                         0.5000         4
+            macro avg     0.1667    0.1111    0.1333         4
+         weighted avg     0.7500    0.5000    0.6000         4

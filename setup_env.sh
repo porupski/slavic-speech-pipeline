@@ -31,11 +31,18 @@ mamba install -n "${ENV_NAME}" -c conda-forge -y \
     numpy pandas scipy \
     pysoundfile librosa \
     lxml \
+    matplotlib seaborn \
+    scikit-learn \
     jupyter ipykernel tqdm requests
 
 echo
+echo "→ Installing PyTorch (CPU build by default — replace with CUDA build if needed)..."
+mamba install -n "${ENV_NAME}" -c pytorch -y \
+    pytorch cpuonly
+
+echo
 echo "→ Installing pip-only packages..."
-mamba run -n "${ENV_NAME}" pip install praatio
+mamba run -n "${ENV_NAME}" pip install praatio transformers datasets accelerate
 
 echo
 echo "→ Registering Jupyter kernel..."
@@ -50,6 +57,6 @@ echo "To activate:"
 echo "   mamba activate ${ENV_NAME}"
 echo
 echo "To verify:"
-echo "   python -c 'import numpy, pandas, soundfile, librosa, lxml, praatio; print(\"ok\")'"
+echo "   python -c 'import numpy, pandas, soundfile, librosa, lxml, praatio, torch, transformers; print(\"ok\")'"
 echo
 echo "For chapter 3+ (training), see ENV_SETUP.md → 'Adding chapter 3+ dependencies'."
