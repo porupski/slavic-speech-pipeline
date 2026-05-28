@@ -1,4 +1,0 @@
-run_name: ROG-Dialog_sentiment_classification_20260528-092630
-run_dir:  /home/ivan/Posao_IJS/Stepping_Stones/github_full_repo/slavic-speech-pipeline/runs/test/ROG-Dialog_sentiment_classification_20260528-092630
-phase:    phase2_test
-epoch:    1
