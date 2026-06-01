@@ -1,6 +1,7 @@
 # --- data and model outputs (never commit) -----------------------------------
 data/
 runs/
+models/
 test_runs/
 test_processed_jsonl/
 *.wav

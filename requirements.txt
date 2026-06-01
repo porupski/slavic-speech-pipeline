@@ -21,6 +21,7 @@ matplotlib>=3.7
 # --- notebooks ----------------------------------------------------------------
 jupyter>=1.0
 ipykernel>=6.25
+jupytext>=1.14
 
 # --- chapters 3+ (uncomment when needed) --------------------------------------
 torch>=2.1

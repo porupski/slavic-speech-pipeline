@@ -1,384 +1,303 @@
 # Speech ML Pipeline — Project Blueprint
 
-A clean, modular, plug-and-play pipeline for fine-tuning speech models on audio instance and audio frame tasks (classification + regression).
+A modular, plug-and-play pipeline for fine-tuning Wav2Vec2 models on Slavic speech corpora. Instance- and frame-level classification (regression deferred).
 
-The goal: scripts so clean, organized, and easy to follow that someone can clone the repo and run an experiment within an hour.
+**Mission for v1:** end-to-end ROG-Art filled-pause frame model. Clone the repo → run the notebooks in order → working classifier.
 
 ---
 
 ## 1. Guiding principles
 
-These are non-negotiable. Every design choice flows from them.
-
-1. **Lego, not monolith.** Each stage (data prep, training, inference, analysis) is a self-contained module. Outputs of one stage are the inputs of the next via a single, agreed-on data format.
-2. **One job per script.** No script does two things. If it feels like two things, split it.
-3. **Py + ipynb pairs sharing a utils.py.** The `.py` is the lean production runner. The `.ipynb` is the same logic broken into cells, with markdown commentary, made for learning, debugging, and adapting. Both import from the same `utils_*.py` module — zero code duplication.
-4. **Task type is a parameter, not a fork.** Classification and regression share ~90% of the code. They are one pipeline with `TASK_TYPE = "classification" | "regression"` as a config flag. No `_classification.py` + `_regression.py` duplication.
-5. **Dataset is a parameter, not a fork.** Every dataset has its own `data_prep/` script that converts its native format into the same canonical JSONL. After that, the rest of the pipeline doesn't know or care which dataset it came from.
-6. **Configs live at the top of each script in a single dataclass.** No buried magic constants, no scattered hardcoded paths. One block to edit, top of the file.
-7. **More markdown, not less.** Each chapter folder gets its own README.md. Aggressive documentation now is cheaper than archaeology later.
-8. **QoL only where it earns its keep.** Per-epoch checkpoint logging — yes. Resume training, hyperparam search, distributed training — not yet.
+1. **Lego, not monolith.** Each stage is a self-contained notebook connected via canonical JSONL.
+2. **One job per notebook.** No notebook does two things (the dual-output prep is one job: extract from EXB).
+3. **Notebook-first, py runners last.** Notebooks are the production artifact for v1. Final ceremonial step before shipping: refactor into `main.py` + `utils_<chapter>.py`. Not before.
+4. **Task type is a parameter.** Classification + regression share the pipeline; one config flag switches. (Regression deferred for chapter 4.)
+5. **Dataset is a parameter.** Each corpus has one prep notebook; downstream is dataset-agnostic.
+6. **Config dataclass at the top of every notebook.** No buried constants.
+7. **Aggressive markdown.** Each chapter has a README. Each notebook has section headers.
+8. **QoL only where it earns its keep.** Per-epoch logging — yes. Resume training, hyperparam search, distributed — no.
 
 ---
 
 ## 2. Canonical data format
 
-The single agreed-on format that every dataset producer outputs and every consumer reads. This is the contract that makes the lego work.
+One JSONL line = one record. Same schema across instance and frame flavors; only `labels` differs in shape.
 
-**One JSONL line = one instance.**
-
+**Instance record:**
 ```json
 {
-  "instance_id": "ROG-dialog-0021_SPK0_2.190_2.200",
-  "dataset": "ROG",
-  "file_id": "ROG-dialog-0021",
-  "audio_path": "/abs/path/to/instance.wav",
-  "start_t": 2.190,
-  "end_t": 2.200,
-  "speaker": "SPK0",
+  "instance_id": "ROG-Art_Rog-Art-J-G3003_2.190_3.450",
+  "dataset": "ROG-Art",
+  "file_id": "Rog-Art-J-Gvecg-P500001",
+  "audio_path": "data/cut_audio/ROG-Art/<file>.wav",
   "split": "train",
-  "text": "Tudi.",
+  "speaker": "Artur-J-G3003",
+  "start_t": 2.190, "end_t": 3.450,
+  "text": "eee dober dan",
   "labels": {
     "sentiment": "neutralPositive",
-    "dialogue_act_function": "question"
+    "filled_pause_present": 1
   },
-  "metadata": {
-    "speaker_gender": "f",
-    "speaker_age": "32",
-    "source_file": "ROG-dialog-0021.wav"
-  }
+  "metadata": {"source_file": "...", "subcorpus": "Artur-J"}
+}
+```
+
+**Frame record** (one per source WAV, full duration):
+```json
+{
+  "instance_id": "ROG-Art_Rog-Art-J-Gvecg-P500001_0.000_2613.000",
+  "dataset": "ROG-Art",
+  "file_id": "Rog-Art-J-Gvecg-P500001",
+  "audio_path": "data/cut_audio/ROG-Art-Full/<file>.wav",
+  "split": "train",
+  "start_t": 0.0, "end_t": 2613.000,
+  "frame_rate_hz": 50,
+  "labels": {"filled_pause": [0, 0, 1, 1, 0, ...]},
+  "metadata": {"n_frames": {"filled_pause": 130650}}
 }
 ```
 
 **Rules.**
+- `instance_id` globally unique. `{dataset}_{file_id}_{speaker?}_{start}_{end}` works.
+- `audio_path` is **project-relative** (e.g. `data/cut_audio/...`), not absolute. `utils_dataprep.from_project_relative` resolves it.
+- `audio_path` points to a **16 kHz mono WAV.** Instance: per-segment cut. Frame: normalized full-file copy.
+- `split` ∈ `{train, dev, test}`. Assigned by prep, grouped by `file_id` so no recording leaks.
+- `labels` is a dict; trainer picks one key. Multiple labels per record encouraged.
+- `metadata` is free-form; trainer ignores it, analysis scripts can use it.
 
-- `instance_id` is globally unique across all datasets. `{dataset}_{file_id}_{speaker}_{start}_{end}` works.
-- `audio_path` is an absolute path to a pre-cut WAV (16 kHz mono). The splitter does this once; downstream never re-cuts.
-- `split` is `"train" | "dev" | "test"`. Already assigned by the data prep stage.
-- `labels` is a dict. Multiple labels per instance are fine — the trainer picks which key to use.
-- `metadata` is a free-form dict for anything else useful (gender, age, source, etc.). The trainer ignores it but analysis scripts can use it.
-
-**For frame-level tasks** (chapter 4), labels become a list aligned to a fixed frame rate:
-
-```json
-{
-  "instance_id": "...",
-  "audio_path": "...",
-  "frame_rate_hz": 50,
-  "labels": {
-    "primary_stress": [0, 0, 0, 1, 1, 0, 0, ...]
-  }
-}
-```
-
-Same JSONL, same loaders, just the label shape differs.
+**Frame-rate constraint:** `frame_rate_hz == 50` (Wav2Vec2-base ~native rate). Chapter 4 resamples labels per-record to the model's actual output frame count internally.
 
 ---
 
-## 3. Repository layout
+## 3. Data layout on disk
 
 ```
-speech-ml-pipeline/
-├── README.md                          ← entry point, links to chapters
-├── BLUEPRINT.md                       ← this file
+data/
+├── raw/<CORPUS>/<CORPUS>.zip            # downloaded archives, gitignored
+├── unpacked/<CORPUS>/.../EXB|WAV/       # post-unzip (nesting varies by corpus)
+├── cut_audio/
+│   ├── <CORPUS>/                        # per-instance cuts (chapter 3 input)
+│   └── <CORPUS>-Full/                   # normalized full-file 16 kHz mono (chapter 4 input)
+├── processed_jsonl/
+│   ├── <corpus>_instance.raw.jsonl      # prep output — points at cuts that may not exist yet
+│   ├── <corpus>_instance.jsonl          # post-audio_splitter (paths verified)
+│   └── <corpus>_frame.raw.jsonl         # prep output — points at full-file WAVs (no splitter step)
+└── reports/                             # sniff_dataset outputs
+```
+
+**`.raw.jsonl` vs `.jsonl`:** prep notebooks emit `.raw.jsonl`. After `audio_splitter` runs and confirms all instance cuts exist, it writes the `.jsonl` (no `.raw`) version. Frame JSONLs skip this — the normalize-and-copy step is inside the prep notebook itself.
+
+---
+
+## 4. Repository layout
+
+```
+slavic-speech-pipeline/
+├── README.md
+├── BLUEPRINT.md                          ← this file, the activity log
 ├── requirements.txt
 ├── .gitignore
 │
 ├── 1_data_prep/
-│   ├── README.md                      ← what the canonical format is, how to add a new dataset
-│   ├── utils_dataprep.py              ← shared: JSONL I/O, audio cutting, split assignment
-│   ├── prep_ROG.py                    ← EXB → canonical JSONL
-│   ├── prep_ROG.ipynb
-│   ├── prep_GOS.py                    ← TextGrid → canonical JSONL (primary stress)
-│   ├── prep_GOS.ipynb
-│   ├── prep_ParlaSpeech.py            ← (future)
-│   └── audio_splitter.py              ← cuts source WAVs into per-instance clips
+│   ├── README.md
+│   ├── utils_dataprep.py                 ← the ONLY utils file (for now)
+│   ├── 10_download_data.ipynb            ← chapter 1, step 0
+│   ├── 11a_prep_ROG.ipynb                ← chapter 1, step 1, variant a (ROG-Art)
+│   ├── 11b_prep_ROG_dia.ipynb            ← step 1, variant b (ROG-Dialog)
+│   ├── 11c_prep_ParlaSpeech.ipynb        ← step 1, variant c (future)
+│   └── 12_audio_splitter.ipynb           ← step 2
 │
 ├── 2_data_analysis/
 │   ├── README.md
-│   ├── utils_analysis.py              ← shared plotting + stats
-│   ├── sniff_dataset.py               ← descriptive stats for any canonical JSONL
-│   ├── sniff_dataset.ipynb
-│   ├── label_distributions.py
-│   └── audio_duration_stats.py
+│   └── 20_sniff_dataset.ipynb
 │
 ├── 3_instance_models/
-│   ├── README.md                      ← classifier + regressor explained side-by-side
-│   ├── utils_instance.py              ← shared model code, training loop, metrics dispatch
-│   ├── train_instance.py              ← single script, TASK_TYPE switches behavior
-│   ├── train_instance.ipynb
-│   ├── inference_instance.py
-│   └── inference_instance.ipynb
-│
-├── 4_frame_models/                    ← chapter 4, slovenian primary stress
 │   ├── README.md
-│   ├── utils_frame.py
-│   ├── train_frame.py
-│   ├── train_frame.ipynb
-│   ├── inference_frame.py
-│   └── inference_frame.ipynb
+│   └── 30_train_instance.ipynb
 │
-├── 5_analysis/                        ← post-hoc, after a model is trained
+├── 4_frame_models/
 │   ├── README.md
-│   ├── utils_results.py
-│   ├── find_best_epoch.py             ← (replaces 3i0_Find_best_epoch_performer)
-│   ├── error_analysis.py
-│   ├── confusion_matrix_viewer.ipynb
-│   └── compare_runs.py
+│   └── 40_train_frame.ipynb
 │
-└── data/                              ← gitignored, local only
-    ├── raw/
-    ├── processed_jsonl/
-    └── cut_audio/
+├── 5_analysis/                           ← stub; see chapter 5 below
+│   └── README.md
+│
+└── data/                                 ← gitignored
 ```
 
-**Naming convention inside each chapter:**
-
-- `utils_<chapter>.py` — the shared boilerplate
-- `<verb>_<noun>.py` + `<verb>_<noun>.ipynb` — runner + notebook pair
-- `README.md` — chapter overview, run order, gotchas
+**Naming.** `<chapter><step><variant?>_<verb_noun>.ipynb`. No separator between chapter and step (`30`, not `3_0` or `3.0`). Variant letter `a/b/c` for parallel "same step, different dataset" notebooks. Folders: `<n>_<name>/`.
 
 ---
 
-## 4. Chapter-by-chapter battle plan
+## 5. Notebook conventions
+
+Every notebook in this repo follows the same shape. New chapters mirror existing ones.
+
+1. **Title + overview** (markdown). What this notebook does, inputs, outputs.
+2. **Setup** — find `PROJECT_ROOT` via `utils_dataprep`. Add `1_data_prep/` to `sys.path`.
+3. **Imports.**
+4. **Config dataclass** at the top, named `Config`. `test_mode: bool` field, defaults vary by chapter.
+5. **The actual work**, broken into numbered sections with markdown commentary between.
+
+**Standalone for now.** The only project import is `utils_dataprep`. No cross-notebook imports yet; some logic is duplicated across notebooks. That's intentional — we factor only when patterns have stabilized across ≥2 notebooks.
+
+**Test mode** mirrors outputs to `runs/test/`, `models/test/`, or prefixes with `test_` (for prep). Real and test runs never collide.
+
+**Configs.** One dataclass, all knobs. No magic constants buried in cells.
+
+**Literal UTF-8 emojis** if a notebook is built programmatically. Surrogate-pair escapes (`\uXXXX`) break nbformat round-trip.
+
+**Per-epoch logs** for training notebooks: `runs/<run>/<phase>/epoch_logs/<n>/{epoch_summary.json, predictions.json, *.png}`. Best model only saved in phase 2 to `models/<run>/best_model/`.
+
+---
+
+## 6. Chapter-by-chapter plan
 
 ### Chapter 1 — Data prep
 
-**Goal:** produce a canonical JSONL per dataset.
+**Goal:** every dataset → canonical JSONL. EXB-based corpora (ROG-Art, ROG-Dialog) emit **both** instance and frame JSONLs from one EXB pass.
 
-**Order of work:**
+**Notebooks:**
+- `10_download_data.ipynb` — fetch corpora, unzip into `data/unpacked/`.
+- `11a_prep_ROG.ipynb` — ROG-Art EXB → `rog_instance.raw.jsonl` + `rog_frame.raw.jsonl`. Also normalizes WAVs to 16 kHz mono into `data/cut_audio/ROG-Art-Full/` for the frame model.
+- `11b_prep_ROG_dia.ipynb` — same dual-output pattern for ROG-Dialog.
+- `11c_prep_ParlaSpeech.ipynb` — placeholder, not yet built.
+- `12_audio_splitter.ipynb` — cuts source WAVs into per-instance clips for the instance JSONLs. **Currently ROG-Dialog only**; generalizing to ROG-Art is a follow-up.
 
-1. Lock down the canonical JSONL spec (section 2 above). Write it into `1_data_prep/README.md`.
-2. Port the EXB extractor (`1i0_Extract_info_from_EXB.py`) into `prep_ROG.py`, but emit canonical JSONL instead of the current bespoke format. The existing logic for timestamp matching, sentiment overlap, and validation is reusable as-is — wrap it.
-3. Port the instance-level audio splitter (`10i1_Split_Wavs_by_json.py`) into `audio_splitter.py`. Make it dataset-agnostic: input is a canonical JSONL, output is one WAV per instance + an updated JSONL with `audio_path` populated.
-4. Write `prep_GOS.py`: TextGrid → canonical JSONL with frame-level primary stress labels. (Schema in section 2.)
-5. Write the cleaning logic (`4i1_Filter_out_data.py`) into `utils_dataprep.py` as a function. Don't make it a separate stage — make it a step inside each `prep_*.py`.
+**Dual-output prep pattern.** For corpora with both segment-level and continuous annotations, one notebook emits two JSONLs from a single parse pass:
+- `<corpus>_instance.raw.jsonl` — one record per segment (e.g. colloq), with whatever scalar labels apply.
+- `<corpus>_frame.raw.jsonl` — one record per source WAV, with a 50 Hz label sequence covering the whole file.
 
-**Out of scope for now:** `prep_ParlaSpeech.py` (listed but not built).
-
-**Deliverable check:** running `python prep_ROG.py` produces `data/processed_jsonl/rog_instance.jsonl` ready for training. Running `python prep_GOS.py` produces `data/processed_jsonl/gos_frame.jsonl`.
-
----
-
-### Chapter 2 — Data analysis / sniff
-
-**Goal:** look at any canonical JSONL and immediately understand what's in it. No training, no models — just stats and plots.
-
-**Scripts:**
-
-- `sniff_dataset.py` — counts instances, label distributions (per split), audio duration histogram, speaker counts, missing-value report. Reads canonical JSONL, prints + saves a markdown report.
-- `audio_duration_stats.py` — duration percentiles, useful for picking `max_length` for the trainer.
-- `label_distributions.py` — pretty plots of class balance, with imbalance warnings.
-
-**Why this comes before training:** because every time you load a new dataset you want to see what's in it before you waste 4 hours training on garbage. This chapter is your "is the data prep stage working" check.
-
-**Deliverable check:** `python sniff_dataset.py --jsonl rog_instance.jsonl` prints a clean report and saves a few PNGs.
+Both share the same canonical schema and the same `file_id`-grouped splits (same seed) so no leakage and the splits agree across flavors.
 
 ---
 
-### Chapter 3 — Audio instance models (classifier + regressor)
+### Chapter 2 — Sniff dataset
 
-**Goal:** one trainer that does both classification and regression for instance-level tasks. Wav2Vec2-based.
+**Goal:** point at any canonical JSONL → print stats, save a markdown report + plots.
 
-**Single config block at the top of `train_instance.py`:**
+**Notebook:** `20_sniff_dataset.ipynb`. Works for both instance and frame JSONLs.
 
-```python
-@dataclass
-class Config:
-    # Data
-    jsonl_path: str = "data/processed_jsonl/gos_instance.jsonl"  # or rog_instance.jsonl
-    label_key: str = "primary_stress_present"                    # or "sentiment", etc.
-    task_type: str = "classification"                            # or "regression"
-
-    # Model
-    model_name: str = "facebook/wav2vec2-xls-r-300m"
-    freeze_feature_encoder: bool = True
-
-    # Training
-    batch_size: int = 8
-    grad_accum: int = 2
-    learning_rate: float = 1e-5
-    num_epochs: int = 20
-    max_grad_norm: float = 1.0
-
-    # Output
-    output_dir: str = "runs/"
-    use_cuda: bool = True
-    cuda_device: str = "0"
-```
-
-**Architecture:**
-
-- `utils_instance.py` holds: dataset loader (reads canonical JSONL), preprocessing, the `EpochCheckpointCallback`, the model factory (returns a classification head or regression head depending on `task_type`), and a metrics dispatcher (`macro_f1`, `accuracy`, `spearman` for classification; `mse`, `mae`, `spearman` for regression).
-- `train_instance.py` is small — config dataclass, then `main()` that calls into `utils_instance` for everything.
-- `train_instance.ipynb` walks through the same steps with markdown explanations between cells. Imports the same `utils_instance.py`.
-- Two-phase training (TRAIN→DEV for development, then TRAIN+DEV→TEST for final eval) preserved from your current scripts — it's a good pattern, keep it.
-
-**Recommended starting target: GOS primary-stress at the instance level** (does this word/segment contain primary stress, yes/no — binary classification). It's clean, you have ground truth, and it makes a strong first sanity check before touching ROG sentiment.
-
-**Then add ROG as a second target** by changing only `jsonl_path` and `label_key`.
-
-**Deliverable check:** `python train_instance.py` runs end-to-end, saves per-epoch logs + confusion matrix, and writes a best-model directory.
+**Why before training:** every time a new dataset lands, you want to see what's in it before training on it. This is the data-prep sanity check.
 
 ---
 
-### Chapter 4 — Audio frame models (Slovenian primary stress)
+### Chapter 3 — Instance models
 
-**Goal:** frame-level classification (and optionally regression) — predict a label for every 20ms frame of audio.
+**Goal:** one trainer, both classification and regression for instance-level labels.
 
-**What changes from chapter 3:**
+**Notebook:** `30_train_instance.ipynb`. Wav2Vec2 + classification head OR regression head, switched by `cfg.task_type`. Two-phase TRAIN→DEV, TRAIN+DEV→TEST.
 
-- Model head outputs `(seq_len, num_labels)` instead of `(num_labels,)`.
-- Labels are sequences aligned to the model's output frame rate (typically 50 Hz for Wav2Vec2).
-- Metrics now include frame-level F1, IoU/boundary metrics, plus optional event-level metrics (start/end of stress region).
-- The sliding-window audio splitter (`0i0_split_audio_60s.py`) becomes relevant for handling long files at inference time.
-
-**What stays the same:**
-
-- Canonical JSONL format (just with sequence labels — see section 2).
-- The `EpochCheckpointCallback` pattern.
-- Two-phase TRAIN→DEV / TRAIN+DEV→TEST training.
-- The config-dataclass-at-top convention.
-
-**Reference:** the parlastress repo (Croatian primary stress) — pull in its model head and frame-alignment logic when we hit this chapter.
-
-**Order of work:**
-
-1. Get instance-level GOS working in chapter 3 first. Don't start chapter 4 until chapter 3 is solid.
-2. Then re-prep the GOS data with frame-level labels (`prep_GOS.py` already designed for this in section 2).
-3. Adapt the chapter 3 trainer into `train_frame.py`. Most of `utils_instance.py` is reusable — `utils_frame.py` adds the sequence-head model and the frame-level metrics.
-
-**Deliverable check:** `python train_frame.py` trains on GOS Slovenian primary stress and produces frame-level F1 comparable to the Croatian parlastress results.
+**v1 targets:** ROG-Art sentiment, ROG-Dialog sentiment, ROG-Art filled_pause_present (binary instance-level sanity check against the frame model).
 
 ---
 
-### Chapter 5 — Post-hoc analysis
+### Chapter 4 — Frame models
 
-**Goal:** after a model has trained, understand what it did.
+**Goal:** frame-level classification on filled pauses (ROG-Art, ROG-Dialog).
 
-**Scripts:**
+**Notebook:** `40_train_frame.ipynb`. Custom `Wav2Vec2ForFrameClassification` head outputs `(B, T, num_labels)`. Token-CE with `ignore_index=-100`. Per-record label alignment via the model's actual CNN output length (works across Wav2Vec2 variants).
 
-- `find_best_epoch.py` — the cleaned-up version of `3i0_Find_best_epoch_performer.py`. Works for both classification and regression run directories.
-- `error_analysis.py` — for a given run + epoch, pull the predictions JSON, find the worst N misclassifications, and dump audio paths + transcripts + gold/pred labels into a CSV for manual inspection.
-- `compare_runs.py` — load multiple run directories and produce side-by-side metric comparisons.
-- `confusion_matrix_viewer.ipynb` — interactive notebook for poking at confusion matrices across epochs.
+**v1 constraints:** `frame_rate_hz == 50` only. `task_type == "classification"` only — frame regression deferred.
 
-**Why a separate chapter:** these scripts run *after* training and don't need the model loaded. They operate purely on the JSON output of chapter 3/4 runs. Keeping them separate keeps the training chapters lean.
+**Reference:** parlastress (Croatian filled-pause / primary-stress repo) for the model head and metric patterns.
 
 ---
 
-## 5. The py + ipynb pattern, concretely
+### Chapter 5 — Post-hoc analysis (stub)
 
-Yes, notebooks can import from `.py` files in the same folder. Standard pattern:
+**Goal:** operate on saved run directories from chapters 3/4. No model loading.
 
-```python
-# In train_instance.ipynb, cell 1:
-from utils_instance import (
-    load_canonical_jsonl,
-    build_model,
-    EpochCheckpointCallback,
-    compute_metrics,
-)
-```
+**Planned notebooks (not yet built):**
+- `50_find_best_epoch.ipynb` — scan a run directory, report best epoch by configurable metric. Works for instance and frame runs.
+- `51_error_analysis.ipynb` — pull `predictions.json`, surface worst-N records with audio paths + gold/pred for manual inspection.
+- `52_compare_runs.ipynb` — side-by-side metrics across multiple run directories.
+- `53_frame_event_metrics.ipynb` — boundary / IoU / event-level metrics for frame runs (deferred from chapter 4 training loop, as planned).
 
-For the import to work, either (a) the notebook is started from the chapter folder, or (b) the notebook adds the folder to `sys.path`. The notebook can include this defensively:
-
-```python
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path.cwd()))  # or path to chapter folder
-```
-
-**The pair convention:**
-
-- `train_instance.py` — top of file: config dataclass + `main()`. Bottom: `if __name__ == "__main__": main()`. Total length: \~100-150 lines. Easy to read top-to-bottom in one sitting.
-- `train_instance.ipynb` — markdown cell explaining what the chapter does, then cells that walk through the exact same steps `main()` does, but with checkpoints between them ("OK, the dataset loaded — let's look at one example" etc.). Imports the same utils so logic is never duplicated.
-
-**Rule:** if you find yourself writing logic in the notebook that isn't in the `.py`, that logic belongs in `utils_*.py`. The notebook is for orchestration and exposition, not implementation.
+**Why a separate chapter:** these don't touch GPUs or models. Keeping them out of chapter 3/4 keeps training notebooks lean.
 
 ---
 
-## 6. What we are deliberately *not* doing yet
+## 7. Execution order
 
-To stay focused and not let scope creep eat the project:
+Strict. Don't skip ahead.
 
-- No ASR. Tempting, but it's a different paradigm (seq2seq/CTC, WER) and adds a third code path. Sentiment/stress classification and regression cover the instance + frame matrix already.
-- No multi-task heads. One label per training run.
-- No hyperparam search. Manually pick configs, log them, compare with `compare_runs.py`.
-- No distributed training. Single-GPU is enough for now.
-- No model serving / API. Inference scripts produce JSON; that's the deliverable.
-- No `prep_ParlaSpeech.py` implementation. Listed as a placeholder.
-- No real-time / streaming inference.
+**Phase A — foundation**
+1. Download data (`10_download_data.ipynb`).
+2. Prep ROG-Art (`11a_prep_ROG.ipynb`) → both instance and frame JSONLs.
+3. Sniff (`20_sniff_dataset.ipynb`) on the frame JSONL to confirm signal.
 
----
+**Phase B — frame model end-to-end (the headline v1 deliverable)**
+4. Train frame (`40_train_frame.ipynb`) on ROG-Art filled pause. End-to-end pipeline check.
+5. `50_find_best_epoch.ipynb` (chapter 5) — closes the training loop.
 
-## 7. Execution order — what to actually build first
+**Phase C — second corpus**
+6. Prep ROG-Dialog (`11b_prep_ROG_dia.ipynb`) — dual output.
+7. Generalize `12_audio_splitter.ipynb` to ROG-Art.
+8. Re-train chapter 4 on combined or per-corpus frame data.
 
-Strict order. Don't skip ahead.
+**Phase D — instance models**
+9. Train instance (`30_train_instance.ipynb`) on ROG-Art filled_pause_present (sanity vs frame).
+10. Train instance on ROG sentiment.
 
-**Phase A — foundation (chapter 1 + 2)**
-
-1. Write `1_data_prep/README.md` with the canonical JSONL spec.
-2. Write `utils_dataprep.py` (JSONL I/O, splitter, cleaner).
-3. Write `prep_GOS.py` — primary-stress, instance-level. This is your sanity-check dataset, so it goes first.
-4. Write `audio_splitter.py`. Run it against GOS output to cut WAVs.
-5. Write `sniff_dataset.py` (chapter 2). Point it at the GOS JSONL. Confirm everything looks sane.
-
-**Phase B — first model (chapter 3)**
-
-6. Write `utils_instance.py` and `train_instance.py`. Run on GOS primary-stress as binary classification. This is the moment of truth: pipeline works end-to-end on a clean task.
-7. Write `inference_instance.py`. Confirm it loads a saved model and runs.
-8. Write `find_best_epoch.py` (chapter 5) — small, useful, gives the training loop closure.
-
-**Phase C — port ROG into the pipeline**
-
-9. Write `prep_ROG.py` emitting canonical JSONL.
-10. Run `sniff_dataset.py` on the ROG output. Look at label balance.
-11. Run `train_instance.py` with ROG sentiment as target — change two config lines.
-12. Run `train_instance.py` again with `task_type="regression"` — change one config line.
-
-**Phase D — frame models (chapter 4)**
-
-13. Re-prep GOS with frame-level labels.
-14. Write `utils_frame.py` and `train_frame.py`. Reuse as much from chapter 3 as possible.
-15. Train Slovenian primary stress frame classifier. Compare to parlastress Croatian results.
-
-**Stop here.** This is the project's defined endpoint.
+**Phase E — final polish**
+11. Chapter 5 remaining notebooks.
+12. Refactor stable notebooks → `main.py` + `utils_<chapter>.py`. Ceremonial step before shipping.
 
 ---
 
-## 8. Future plans (out of scope for v1)
+## 8. Not doing yet (FUTURE.md material)
 
-Park these in a `FUTURE.md` once the v1 is done:
-
-- ParlaSpeech data prep.
-- Multi-task learning (sentiment + dialogue act jointly).
-- Frame-level regression (e.g. continuous stress strength).
-- Cross-lingual transfer experiments.
-- ASR baseline for comparison.
-- Hyperparameter sweep tooling.
-- An inference web demo.
+ASR. Multi-task heads. Hyperparam search. Distributed training. Model serving. Real-time inference. ParlaSpeech prep. Frame-level regression. Cross-lingual transfer. GOS primary stress.
 
 ---
 
-## 9. Naming + small conventions
+## 9. Sanity checklist for v1
 
-- Folders: lowercase with underscores. Numeric prefix shows order (`1_data_prep`).
-- Scripts: `verb_noun.py`. `train_instance.py`, not `instance_train.py` or `tr_inst.py`.
-- Utils: `utils_<chapter>.py`. One per chapter.
-- Configs: always at the top of the runnable script, in a `@dataclass` named `Config`.
-- Run output folders: `runs/{dataset}_{task}_{timestamp}_{hp_summary}/` — same as your current pattern, which is good.
-- Emoji in print statements: fine, keeps logs readable. Don't go overboard.
-- Comments: more is better than less for the first version. Strip later if it gets noisy.
+- [ ] A new person clones the repo, runs phase A + B notebooks in order, only edits the top Config cell, gets a working frame model.
+- [ ] Every chapter folder has a README explaining run order.
+- [ ] Adding a new corpus = one new `11<x>_prep_<CORPUS>.ipynb`.
+- [ ] Adding a new target label = change `label_key` (and `label_order` if classification) in chapter 3/4 Config.
+- [ ] Chapter 4 trains on ROG-Art filled pause with reasonable frame-F1 (compare to parlastress Croatian).
+- [ ] Notebooks all run cleanly top-to-bottom in test mode.
+- [ ] Final ceremonial pass: refactor to `main.py` + `utils_<chapter>.py`.
 
 ---
 
-## 10. Sanity checklist before declaring v1 done
+## 10. Activity log
 
-- [ ] A new person can clone the repo and run `python train_instance.py` (with the data already downloaded) without editing anything other than the config block.
-- [ ] Each chapter folder has a README explaining what's in it and how to run it.
-- [ ] No code is duplicated between classification and regression.
-- [ ] No code is duplicated between `.py` and `.ipynb` — both import the same utils.
-- [ ] Adding a new dataset means writing one `prep_*.py`. Nothing else changes.
-- [ ] Adding a new target label means changing two lines of config. Nothing else changes.
-- [ ] The frame model works on Slovenian primary stress with reasonable F1.
+Mark items as ✅ when done and working end-to-end. When something gets checked, ask Claude to update this section.
+
+**Done**
+- ✅ `utils_dataprep.py` — JSONL I/O, validation, splits, instance ID
+- ✅ `10_download_data.ipynb`
+- ✅ `11b_prep_ROG_dia.ipynb` — ROG-Dialog instance JSONL (frame output pending re-pass)
+- ✅ `12_audio_splitter.ipynb` — ROG-Dialog only
+- ✅ `20_sniff_dataset.ipynb`
+- ✅ `30_train_instance.ipynb`
+- ✅ `40_train_frame.ipynb` — chapter 4 trainer, verified end-to-end on synthetic fixture
+
+**In progress**
+- 🔄 `11a_prep_ROG.ipynb` — rebuilt with dual output (instance + frame), verified on synthetic fixture, needs run on real ROG-Art
+
+**Next up**
+- [ ] Run `11a_prep_ROG.ipynb` on real ROG-Art → run `40_train_frame.ipynb` against the resulting JSONL end-to-end
+- [ ] `11b_prep_ROG_dia.ipynb` — add dual-output (frame JSONL for filled pauses)
+- [ ] `12_audio_splitter.ipynb` — generalize to ROG-Art
+- [ ] `50_find_best_epoch.ipynb`
+
+---
+
+## 11. Notes for the conversation log
+
+Stuff worth remembering between sessions but not worth surfacing in the main flow:
+
+- Wav2Vec2-base CNN stride = 320 samples @ 16 kHz, *nominal* 50 Hz. Actual output is ~49 Hz (kernel-vs-stride boundary loss in first conv). Chapter 4 handles this with per-record alignment via the model's `_get_feat_extract_output_lengths` (replicated as pure config arithmetic).
+- Transformers 5.x requires `label2id` keys to be **strings** when passing to `from_pretrained`. Internal dicts can stay int-keyed; stringify only at the boundary.
+- Transformers 5.x renamed `no_cuda=` → `use_cpu=` in `TrainingArguments`.
+- Use `soundfile.read` not `torchaudio.load` — recent torchaudio requires `torchcodec`.
+- HF Trainer requires `accelerate>=1.1.0` in transformers 5.x.
+- ROG.zip unpacks into a triple-nested `ROG/ROG/ROG/ROG-Art/` tree. ROG-Art.wav.zip unpacks into `ROG-Art.wav/ROG/ROG-Art/WAV/`.
+- ROG-Art source WAVs are 44.1 kHz mono. Resampled once in `11a_prep_ROG.ipynb` to 16 kHz mono into `data/cut_audio/ROG-Art-Full/`.
+- ROG `vocalDisfluency` tier values seen: `filledPause`, `silentPause`, `lengthening`. v1 targets `filledPause` only; the prep notebook is configurable to take others.
+- Frame label union across speakers for multi-speaker dialog files (frame[t]=1 if any speaker has a matching event at time t). Worth revisiting once we see real ROG-Dialog frame distributions.

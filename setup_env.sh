@@ -42,7 +42,7 @@ mamba install -n "${ENV_NAME}" -c pytorch -y \
 
 echo
 echo "→ Installing pip-only packages..."
-mamba run -n "${ENV_NAME}" pip install praatio transformers datasets accelerate
+mamba run -n "${ENV_NAME}" pip install praatio transformers datasets accelerate jupytext
 
 echo
 echo "→ Registering Jupyter kernel..."
