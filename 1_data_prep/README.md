@@ -230,7 +230,8 @@ data/
 │   │   ├── ROG.zip
 │   │   └── ROG-Art.wav.zip
 │   ├── GOS/
-│   └── ParlaSpeech-HR/
+│   ├── ParlaSpeech-HR/
+│   └── ParlaSpeech-HR-audio/
 │
 ├── unpacked/                         ← extracted source files
 │   ├── ROG/
@@ -257,12 +258,12 @@ data/
 
 | Script | Job |
 |---|---|
-| `download_data.ipynb` / `.py` | Curl + unpack from CLARIN. Idempotent. `--dataset` flag selects which. |
+| `10_download_data.ipynb` | Download + unpack from CLARIN. Idempotent. Multi-dataset. |
 | `utils_dataprep.py` | JSONL I/O, schema validation, cleaner, splitter, project-root resolver, EXB / TextGrid parsing helpers. |
-| `prep_ROG.ipynb` / `.py` | EXB → canonical JSONL (instance-level, sentiment + dialogue act). |
-| `prep_GOS.ipynb` / `.py` | TextGrid → canonical JSONL (frame-level, primary stress). |
-| `prep_ParlaSpeech.ipynb` / `.py` | JSONL → canonical JSONL (placeholder for v1). |
-| `audio_splitter.py` | Given a canonical JSONL with `start_t` / `end_t`, cut source WAVs into per-instance clips and rewrite `audio_path`. |
+| `11a_prep_ROG-art.ipynb` | EXB → canonical JSONL (ROG-Art, instance + frame). |
+| `11b_prep_ROG.ipynb` | EXB → canonical JSONL (ROG-Dialog, instance-level). |
+| `11c_prep_parlaspeech.ipynb` | ParlaSpeech JSONL → canonical JSONL (instance + frame). |
+| `12_audio_splitter.ipynb` | Given a canonical JSONL with `start_t` / `end_t`, cut source WAVs into per-instance clips and rewrite `audio_path`. |
 
 **Develop notebooks first.** Once a notebook is stable, distill the body into the matching `.py` and verify it runs identically end-to-end. Both import from the same `utils_dataprep.py`.
 
@@ -281,27 +282,35 @@ Failure modes are loud: it prints the offending `instance_id` and the first fail
 
 ## 11. Data sources & citations
 
-### ROG 1.1 — Slovenian spoken corpus (with annotations)
+### ROG 1.1 — Slovenian spoken corpus
 
 - Handle: `http://hdl.handle.net/11356/2062`
-- Files used: `ROG.zip` (annotations, EXB + TEI + TRS) and `ROG-Art.wav.zip` (audio, 44.1 kHz 16-bit mono).
-- Annotations include: lemmas, MSDs, UD, prosodic units, disfluencies, dialogue acts, sentiment.
-- Citation: Verdonik, Darinka; et al., 2026, *Training corpus of spoken Slovenian ROG 1.1*, CLARIN.SI.
+- TODO: confirm final citation once ROG 1.1 is published.
+- TODO: document ROG-Dialog handle separately.
 
 ### GOS 2.1 — Slovenian reference speech corpus
 
-- Handle: `http://hdl.handle.net/11356/1863`
-- Audio is under a restricted licence, separate handle: `http://hdl.handle.net/11356/1973`.
-- Primary-stress TextGrids are a **separate, manually annotated layer** on top of GOS audio (not part of the CLARIN release). These come from the user's own annotation work.
-- Citation: Verdonik, Darinka; et al., 2023, *Spoken corpus Gos 2.1 (transcriptions)*, CLARIN.SI.
+- Handle (transcriptions): `http://hdl.handle.net/11356/1863`
+- Handle (audio, restricted): `http://hdl.handle.net/11356/1973`
+- TODO: document GOS audio auth flow.
 
-### ParlaSpeech 3.0 — multilingual parliamentary speech
+### ParlaSpeech 3.0 — multilingual parliamentary speech (annotations)
 
 - Handle: `http://hdl.handle.net/11356/1833`
 - Project page: <https://clarinsi.github.io/parlaspeech/>
-- Languages: HR, RS, CZ, PL. Total download is large (~120 GB+). The downloader supports per-language selection.
-- Enrichment layers used in this pipeline: **filled pauses** (all 4 langs), **primary stress** (HR, RS).
-- Citation: see CLARIN handle.
+- Citation: Ljubešić, Nikola; et al., 2025, *Spoken corpora of parliamentary debates ParlaSpeech 3.0*, Slovenian language resource repository CLARIN.SI, ISSN 2820-4042, http://hdl.handle.net/11356/1833.
+- Enrichment layers used in this pipeline: **filled pauses** (HR, RS, PL, CZ), **primary stress** (HR, RS only).
+
+### ParlaSpeech audio — per-language releases
+
+Audio is on earlier, separate handles. Each pairs with the v3.0 annotation JSONL above.
+
+| Lang | Handle | Size | Citation |
+|---|---|---|---|
+| HR | `http://hdl.handle.net/11356/1914` | ~207 GB | Ljubešić, Nikola; Koržinek, Danijel and Rupnik, Peter, 2024, *Parliamentary spoken corpus of Croatian ParlaSpeech-HR 2.0*, CLARIN.SI, http://hdl.handle.net/11356/1914. |
+| RS | `http://hdl.handle.net/11356/1834` | ~63 GB | Ljubešić, Nikola; Rupnik, Peter and Koržinek, Danijel, 2024, *Parliamentary spoken corpus of Serbian ParlaSpeech-RS 1.0*, CLARIN.SI, http://hdl.handle.net/11356/1834. |
+| PL | `http://hdl.handle.net/11356/1686` | ~59 GB | Koržinek, Danijel and Ljubešić, Nikola, 2024, *Parliamentary spoken corpus of Polish ParlaSpeech-PL 1.0*, CLARIN.SI, http://hdl.handle.net/11356/1686. |
+| CZ | `http://hdl.handle.net/11356/1785` | ~153 GB | Kopp, Matyáš and Ljubešić, Nikola, 2024, *Parliamentary spoken corpus of Czech ParlaSpeech-CZ 1.0*, CLARIN.SI, http://hdl.handle.net/11356/1785. |
 
 ---
 
@@ -311,29 +320,30 @@ Failure modes are loud: it prints the offending `instance_id` and the first fail
 cd 1_data_prep
 
 # 1. Download (idempotent, skips if already present)
-python download_data.py --dataset ROG
+#    Annotations:
+jupyter nbconvert --to notebook --execute 10_download_data.ipynb  # cfg.datasets=["ParlaSpeech-HR"]
+#    Audio (large — set confirm_large=True):
+#    cfg.datasets=["ParlaSpeech-HR-audio"]
 
-# 2. Convert source format to canonical JSONL (still needs audio cut)
-python prep_ROG.py
-# → data/processed_jsonl/rog_instance.raw.jsonl  (audio_path points at source)
+# 2. Convert source format to canonical JSONL
+jupyter nbconvert --to notebook --execute 11c_prep_parlaspeech.ipynb  # cfg.lang="HR"
 
 # 3. Cut per-instance WAVs and rewrite audio_path
-python audio_splitter.py --jsonl data/processed_jsonl/rog_instance.raw.jsonl \
-                        --out   data/processed_jsonl/rog_instance.jsonl \
-                        --out-audio data/cut_audio/ROG/
+jupyter nbconvert --to notebook --execute 12_audio_splitter.ipynb
 
 # 4. Verify
-python ../2_data_analysis/sniff_dataset.py --jsonl data/processed_jsonl/rog_instance.jsonl
+python ../2_data_analysis/sniff_dataset.py --jsonl data/processed_jsonl/parlaspeech_hr_instance.jsonl
 ```
 
-For test runs, set `test_mode = True` in each script's Config; everything writes to `test_*` mirrors so real outputs are safe.
+For test runs, set `test_mode = True` in each notebook's Config.
 
 ---
 
 ## 13. Gotchas
 
 - **ROG WAVs are 44.1 kHz 16-bit mono**, not 16 kHz. `audio_splitter.py` resamples to 16 kHz on the way out.
-- **EXB files have nested speaker tiers**; the parser must thread sentiment / dialogue-act annotations back to the right speaker's timestamps. The current `1i0_Extract_info_from_EXB.py` handles this; we port its logic into `utils_dataprep.py`.
-- **GOS audio is on a separate, restricted CLARIN handle** — downloader needs to handle the auth flow or document a manual step.
-- **ParlaSpeech is huge.** Default download is HR only; full pull is opt-in.
-- **TextGrid label-to-frame alignment** for GOS stress needs the source WAV's duration and a chosen `frame_rate_hz`. `utils_dataprep.textgrid_to_frame_labels()` handles this when chapter 4 starts.
+- **EXB files have nested speaker tiers**; the parser must thread sentiment / dialogue-act annotations back to the right speaker's timestamps.
+- **GOS audio is on a separate, restricted CLARIN handle** — downloader needs auth or a manual step.
+- **ParlaSpeech audio is huge.** HR alone is ~207 GB in 6 tarballs. Download per-language, confirm disk space first.
+- **ParlaSpeech annotation (v3.0) and audio (v2.0/v1.0) are on different handles.** The JSONL `audio` field paths are relative to the unpacked audio root — set `cfg.audio_base_dir` in `11c_prep_parlaspeech.ipynb` before training.
+- **TextGrid label-to-frame alignment** for stress needs the source WAV duration and `frame_rate_hz`. `utils_dataprep.textgrid_to_frame_labels()` handles this when chapter 4 starts.
