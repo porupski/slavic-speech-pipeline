@@ -159,7 +159,7 @@ Every notebook in this repo follows the same shape. New chapters mirror existing
 
 **Notebooks:**
 - `10_download_data.ipynb` — fetch corpora, unzip into `data/unpacked/`.
-- `11a_prep_ROG.ipynb` — ROG-Art EXB → `rog_instance.raw.jsonl` + `rog_frame.raw.jsonl`. Also normalizes WAVs to 16 kHz mono into `data/cut_audio/ROG-Art-Full/` for the frame model.
+- `11a_prep_ROG_art.ipynb` — ROG-Art EXB → `rog_instance.raw.jsonl` + `rog_frame.raw.jsonl`. Also normalizes WAVs to 16 kHz mono into `data/cut_audio/ROG-Art-Full/` for the frame model.
 - `11b_prep_ROG_dia.ipynb` — same dual-output pattern for ROG-Dialog.
 - `11c_prep_ParlaSpeech.ipynb` — placeholder, not yet built.
 - `12_audio_splitter.ipynb` — cuts source WAVs into per-instance clips for the instance JSONLs. **Currently ROG-Dialog only**; generalizing to ROG-Art is a follow-up.
@@ -224,7 +224,7 @@ Strict. Don't skip ahead.
 
 **Phase A — foundation**
 1. Download data (`10_download_data.ipynb`).
-2. Prep ROG-Art (`11a_prep_ROG.ipynb`) → both instance and frame JSONLs.
+2. Prep ROG-Art (`11a_prep_ROG_art.ipynb`) → both instance and frame JSONLs.
 3. Sniff (`20_sniff_dataset.ipynb`) on the frame JSONL to confirm signal.
 
 **Phase B — frame model end-to-end (the headline v1 deliverable)**
@@ -278,10 +278,10 @@ Mark items as ✅ when done and working end-to-end. When something gets checked,
 - ✅ `40_train_frame.ipynb` — chapter 4 trainer, verified end-to-end on synthetic fixture
 
 **In progress**
-- 🔄 `11a_prep_ROG.ipynb` — rebuilt with dual output (instance + frame), verified on synthetic fixture, needs run on real ROG-Art
+- 🔄 `11a_prep_ROG_art.ipynb` — rebuilt with dual output (instance + frame), verified on synthetic fixture, needs run on real ROG-Art
 
 **Next up**
-- [ ] Run `11a_prep_ROG.ipynb` on real ROG-Art → run `40_train_frame.ipynb` against the resulting JSONL end-to-end
+- [ ] Run `11a_prep_ROG_art.ipynb` on real ROG-Art → run `40_train_frame.ipynb` against the resulting JSONL end-to-end
 - [ ] `11b_prep_ROG_dia.ipynb` — add dual-output (frame JSONL for filled pauses)
 - [ ] `12_audio_splitter.ipynb` — generalize to ROG-Art
 - [ ] `50_find_best_epoch.ipynb`
