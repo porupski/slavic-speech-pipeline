@@ -2,8 +2,12 @@
 data/
 runs/
 models/
+stock_models/
 test_runs/
 test_processed_jsonl/
+
+# --- local backups (created before risky edits) ------------------------------
+*.BACKUP.*
 *.wav
 *.mp3
 *.flac
