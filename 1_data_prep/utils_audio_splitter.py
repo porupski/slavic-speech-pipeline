@@ -336,6 +336,80 @@ def make_record_path_resolver(
     return resolver
 
 
+def _dig(d: dict, path: tuple[str, ...]):
+    """Walk a nested dict by a key path; None if any hop is missing."""
+    cur = d
+    for k in path:
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(k)
+    return cur
+
+
+def make_flac_index_resolver(
+    audio_root: str | Path,
+    *,
+    record_key_path: tuple[str, ...] = ("metadata", "source_audio"),
+    index_cache_path: str | Path | None = None,
+    pattern: str = "*.flac",
+) -> Resolver:
+    """
+    For ParlaSpeech-style corpora where the JSONL audio field's directory nesting
+    is NOT reproducible and varies by corpus (HR/RS: partX/{hash}/, CZ:
+    partX/audio/psp/YYYY/MM/DD/). One recursive scan of `audio_root` builds a
+    {basename -> absolute Path} index — the filename `{hash}_{start}-{end}.flac`
+    is unique across a corpus, so directory layout is irrelevant. Each record is
+    resolved by the basename of `record[*record_key_path]`. Whole-file convert
+    (no slicing).
+
+    `index_cache_path` makes the scan persistent: if the cache file exists it is
+    loaded instead of rescanning (huge win for HR's ~1.4M files); otherwise the
+    scan runs once and writes it. Delete the cache file to force a rescan.
+    """
+    import json
+
+    root = udp.from_project_relative(audio_root)
+    if not root.exists():
+        raise FileNotFoundError(f"audio_root does not exist: {root}")
+
+    cache = udp.from_project_relative(index_cache_path) if index_cache_path else None
+    index: dict[str, Path] = {}
+
+    if cache is not None and cache.exists():
+        raw = json.loads(cache.read_text(encoding="utf-8"))
+        index = {name: udp.from_project_relative(rel) for name, rel in raw.items()}
+        print(f"loaded audio index from cache: {len(index):,} files "
+              f"({udp.to_project_relative(cache)})")
+    else:
+        collisions = 0
+        for f in root.rglob(pattern):
+            if f.name in index:
+                collisions += 1
+                continue
+            index[f.name] = f
+        msg = f"scanned {len(index):,} files under {udp.to_project_relative(root)}"
+        if collisions:
+            msg += f"  ({collisions} duplicate basenames ignored)"
+        print(msg)
+        if cache is not None:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(
+                json.dumps({n: udp.to_project_relative(p) for n, p in index.items()},
+                           ensure_ascii=False),
+                encoding="utf-8",
+            )
+            print(f"  cached index → {udp.to_project_relative(cache)}")
+
+    def resolver(rec: dict) -> SourceRef | None:
+        raw = _dig(rec, record_key_path)
+        if not raw:
+            return None
+        path = index.get(Path(raw).name)
+        return SourceRef(path, None, None) if path is not None else None
+
+    return resolver
+
+
 # --------------------------------------------------------------------------- #
 # Self-test
 # --------------------------------------------------------------------------- #
