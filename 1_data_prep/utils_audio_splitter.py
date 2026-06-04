@@ -29,16 +29,27 @@ Prep notebooks can write their own resolver — it's just a function.
 Performance:
 - `num_workers == 0` (default): sequential + an LRU source cache, records sorted
   by source path. Best when many records share one big source (ROG).
-- `num_workers > 0`: thread pool, no cache. Best when every record has its own
-  small source (ParlaSpeech's 290k FLACs). Threads win here because soundfile
-  decode and the resample release the GIL.
+- `num_workers > 0`: a pool of workers, no cache. Best when every record has its
+  own small source (ParlaSpeech's hundreds of thousands of FLACs).
+  `parallel_backend="process"` (default) gives *true* multi-core parallelism —
+  decode + resample are CPU-bound and `librosa.resample` spends most of its time
+  holding the GIL, so threads barely scale on this workload. Processes do.
+  `parallel_backend="thread"` is kept for I/O-bound or fork-unfriendly cases.
+  Workers receive only `(instance_id, audio_path, SourceRef)` — small and
+  picklable — because resolution happens up front in the parent, so the big
+  resolver index is never shipped across the process boundary.
+
+  Note: the process backend relies on the default `fork` start method (Linux),
+  so it works inside Jupyter without a `__main__` guard. On spawn-only platforms
+  (macOS/Windows notebooks) use `parallel_backend="thread"`.
 """
 
 from __future__ import annotations
 
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Callable
 
@@ -149,25 +160,44 @@ def _cut_independent(ref: SourceRef, dst: Path) -> None:
     )
 
 
+def _maybe_tqdm(iterable, *, total: int, desc: str, enable: bool):
+    """Wrap an iterable in a tqdm bar if available + enabled; else pass through."""
+    if not enable:
+        return iterable
+    try:
+        from tqdm.auto import tqdm
+        return tqdm(iterable, total=total, desc=desc, unit=" rec", leave=False)
+    except Exception:  # noqa: BLE001 — progress is cosmetic, never fatal
+        return iterable
+
+
 def _process_one(
-    rec: dict, ref: SourceRef | None, cache: SourceCache | None,
-    *, force: bool, short_cut_warn_ms: int,
-) -> tuple[dict | None, str, str | None]:
+    instance_id: str,
+    audio_path: str,
+    ref: "SourceRef | None",
+    *,
+    cache: "SourceCache | None" = None,
+    force: bool,
+    short_cut_warn_ms: int,
+) -> tuple[str | None, str, str | None]:
     """
-    Cut a single record. Returns (kept_record_or_None, outcome, note).
+    Cut a single record's audio. Returns (normalised_path | None, outcome, note).
 
     outcome ∈ {"kept", "skipped_existing", "missing_source", "cut_failed"}.
     note is a short warning string (or None) for the caller to surface.
+
+    Takes only the id + destination path + resolved SourceRef — never the full
+    record — so it stays tiny to ship across a process boundary. The orchestrator
+    owns the record dict and writes the returned `audio_path` back onto it.
     """
     if ref is None:
         return None, "missing_source", None
 
-    dst = udp.from_project_relative(rec["audio_path"])
+    dst = udp.from_project_relative(audio_path)
 
     # Idempotency: a non-empty destination is left alone unless force=True.
     if dst.exists() and dst.stat().st_size > 0 and not force:
-        rec["audio_path"] = udp.to_project_relative(dst)
-        return rec, "skipped_existing", None
+        return udp.to_project_relative(dst), "skipped_existing", None
 
     try:
         if cache is not None:
@@ -175,16 +205,15 @@ def _process_one(
         else:
             _cut_independent(ref, dst)
     except Exception as ex:  # noqa: BLE001 — we want to drop & report, not crash
-        return None, "cut_failed", f"{rec.get('instance_id', '?')}: {ex}"
+        return None, "cut_failed", f"{instance_id}: {ex}"
 
     note = None
     if ref.is_slice and short_cut_warn_ms > 0 and ref.end_t is not None:
         dur_ms = (round_time(ref.end_t) - (round_time(ref.start_t) or 0.0)) * 1000.0
         if dur_ms < short_cut_warn_ms:
-            note = f"short cut ({dur_ms:.0f} ms): {rec.get('instance_id', '?')}"
+            note = f"short cut ({dur_ms:.0f} ms): {instance_id}"
 
-    rec["audio_path"] = udp.to_project_relative(dst)
-    return rec, "kept", note
+    return udp.to_project_relative(dst), "kept", note
 
 
 # --------------------------------------------------------------------------- #
@@ -199,17 +228,27 @@ def cut_dataset(
     source_cache_size: int = 4,
     short_cut_warn_ms: int = 100,
     num_workers: int = 0,
+    parallel_backend: str = "process",
+    chunksize: int | None = None,
+    progress: bool = True,
     max_warn_print: int = 25,
 ) -> tuple[list[dict], dict]:
     """
     Cut every record per `resolver`. Returns (kept_records, stats).
 
-    num_workers == 0 → sequential + LRU cache (best for shared big sources).
-    num_workers  > 0 → thread pool, no cache (best for many small sources).
+    num_workers == 0 → sequential + LRU cache (best for shared big sources, ROG).
+    num_workers  > 0 → worker pool, no cache (best for many small sources):
+        parallel_backend="process" (default) → true multi-core (CPU-bound cut).
+        parallel_backend="thread"            → I/O-bound / fork-unfriendly cases.
+    chunksize → tasks per dispatch in process mode (None → auto from len/workers).
 
     Records whose source can't be resolved, or whose cut fails, are dropped.
     `audio_path` on kept records is normalised to project-relative.
     """
+    if parallel_backend not in ("process", "thread"):
+        raise ValueError(
+            f"parallel_backend must be 'process' or 'thread', got {parallel_backend!r}")
+
     stats = {"input": len(records), "missing_source": 0, "cut_failed": 0,
              "skipped_existing": 0, "kept": 0, "short_warned": 0}
     kept: list[dict] = []
@@ -224,31 +263,44 @@ def cut_dataset(
             print(f"   {note}")
             warns_shown += 1
 
-    # Resolve once, up front (also needed to sort by source in sequential mode).
+    # Resolve once, up front. Keeps the (possibly huge) resolver index in the
+    # parent only — workers receive just the small SourceRef per record.
     pairs = [(rec, resolver(rec)) for rec in records]
 
     if num_workers and num_workers > 0:
-        with ThreadPoolExecutor(max_workers=num_workers) as ex:
-            futures = [
-                ex.submit(_process_one, rec, ref, None,
-                          force=force, short_cut_warn_ms=short_cut_warn_ms)
-                for rec, ref in pairs
-            ]
-            for fut in as_completed(futures):
-                rec_out, outcome, note = fut.result()
+        ids   = [rec.get("instance_id", "?") for rec, _ in pairs]
+        paths = [rec["audio_path"] for rec, _ in pairs]
+        refs  = [ref for _, ref in pairs]
+        worker = partial(_process_one, cache=None,
+                         force=force, short_cut_warn_ms=short_cut_warn_ms)
+        if chunksize is None:
+            chunksize = max(1, len(pairs) // (num_workers * 64) or 1)
+
+        Pool = ProcessPoolExecutor if parallel_backend == "process" else ThreadPoolExecutor
+        desc = f"cutting ({parallel_backend} ×{num_workers})"
+        with Pool(max_workers=num_workers) as ex:
+            # map preserves input order, so results zip straight back to pairs.
+            results = ex.map(worker, ids, paths, refs, chunksize=chunksize)
+            results = _maybe_tqdm(results, total=len(pairs), desc=desc, enable=progress)
+            for (rec, _ref), (new_path, outcome, note) in zip(pairs, results):
                 _surface(outcome, note)
-                if rec_out is not None and outcome in ("kept", "skipped_existing"):
-                    kept.append(rec_out)
+                if outcome in ("kept", "skipped_existing"):
+                    rec["audio_path"] = new_path
+                    kept.append(rec)
     else:
         cache = SourceCache(max_size=source_cache_size)
         # Sort by source path so all cuts of one source are back-to-back.
         pairs.sort(key=lambda p: str(p[1].path) if p[1] else "")
-        for rec, ref in pairs:
-            rec_out, outcome, note = _process_one(
-                rec, ref, cache, force=force, short_cut_warn_ms=short_cut_warn_ms)
+        iterator = _maybe_tqdm(pairs, total=len(pairs),
+                               desc="cutting (sequential)", enable=progress)
+        for rec, ref in iterator:
+            new_path, outcome, note = _process_one(
+                rec.get("instance_id", "?"), rec["audio_path"], ref,
+                cache=cache, force=force, short_cut_warn_ms=short_cut_warn_ms)
             _surface(outcome, note)
-            if rec_out is not None and outcome in ("kept", "skipped_existing"):
-                kept.append(rec_out)
+            if outcome in ("kept", "skipped_existing"):
+                rec["audio_path"] = new_path
+                kept.append(rec)
 
     return kept, stats
 
@@ -450,12 +502,37 @@ def _selftest() -> None:
         assert s1 == 16000 and s2 == 16000, (s1, s2)
         assert abs(len(d1) / s1 - 0.750) < 0.01, len(d1) / s1
         assert abs(len(d2) / s2 - 3.000) < 0.01, len(d2) / s2
-        print(f"✅ sliced {len(d1)/s1:.3f}s + whole {len(d2)/s2:.3f}s at 16 kHz")
+        print(f"✅ sequential: sliced {len(d1)/s1:.3f}s + whole {len(d2)/s2:.3f}s at 16 kHz")
 
-        # Idempotency + parallel path
-        _, stats2 = cut_dataset(recs, resolver, num_workers=2)
+        # Idempotent re-run via the parallel (process) path.
+        _, stats2 = cut_dataset(recs, resolver, num_workers=2, parallel_backend="process")
         assert stats2["skipped_existing"] == 2, stats2
-        print("✅ idempotent re-run skipped existing (parallel path)")
+        print("✅ process backend: idempotent re-run skipped existing")
+
+        # Process backend actually cuts, into a fresh destination.
+        pslice, pwhole = td / "p_slice.wav", td / "p_whole.wav"
+        precs = [
+            {"instance_id": "p_slice", "audio_path": str(pslice),
+             "start_t": 0.500, "end_t": 1.250},
+            {"instance_id": "p_whole", "audio_path": str(pwhole)},
+        ]
+        kept_p, stats_p = cut_dataset(precs, resolver, num_workers=2,
+                                      parallel_backend="process", progress=False)
+        assert stats_p["kept"] == 2, stats_p
+        dp1, sp1 = sf.read(str(pslice))
+        dp2, sp2 = sf.read(str(pwhole))
+        assert abs(len(dp1) / sp1 - 0.750) < 0.01, len(dp1) / sp1
+        assert abs(len(dp2) / sp2 - 3.000) < 0.01, len(dp2) / sp2
+        # Order preserved → kept records line up with input order.
+        assert [r["instance_id"] for r in kept_p] == ["p_slice", "p_whole"], kept_p
+        print(f"✅ process backend: cut {len(kept_p)} fresh files, order preserved")
+
+        # Thread backend still works (kept for fork-unfriendly platforms).
+        trecs = [{"instance_id": "t_whole2", "audio_path": str(td / "t_whole2.wav")}]
+        _, stats_t = cut_dataset(trecs, resolver, num_workers=2,
+                                 parallel_backend="thread", progress=False)
+        assert stats_t["kept"] == 1, stats_t
+        print("✅ thread backend: still cuts")
 
     print("\nAll good.")
 
