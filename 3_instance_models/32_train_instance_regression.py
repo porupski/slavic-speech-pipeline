@@ -15,20 +15,61 @@
 # %% [markdown]
 # # Train instance — regression (chapter 3)
 #
-# One trainer for **instance-level regression**. Wav2Vec2-based. Split out of the
-# old `30_train_instance` so each task is its own clean pile — regression branches
-# live in `31_train_classification.ipynb` (gender + filled-pause). The two notebooks are deliberate twins:
-# the run engine (`run_phase`, the two-phase loop, run dirs) is identical; only the
-# task-specific cells differ. Redundancy collapses into utils in phase E.
+# One trainer for **instance-level regression** on Wav2Vec2-base. Twin of
+# `31_train_classification.ipynb` (gender + filled-pause): the run engine
+# (`run_phase`, the two-phase loop, run dirs, the stage-timing harness) is
+# **identical** across the two — only the task-specific cells differ. That
+# redundancy collapses into a shared utils module in phase E.
 #
 # **Two-phase training:** phase 1 trains TRAIN→DEV every epoch (no model saved);
 # phase 2 retrains TRAIN∪DEV→TEST and saves the best epoch's model.
 #
-# ---
+# **Run tiers**
+# - **test mode** (`cfg.test_mode`) — tiny random model, 1 epoch, a couple dozen
+#   records. Proves the plumbing end-to-end; produces no real result.
+# - **demo run** — real model, real-but-capped data (`DEMO_*` caps), ~1–2 h.
+#   A tangible number, trivial (gender) or not (age, sentiment).
+# - **full run** — caps off (`None`), whole corpus. You and the GPU.
 #
-# ## 0. Setup
+# **Regression-only knobs:** `normalize` (z-score the target on TRAIN stats,
+# invert before metrics) and `loss_function` (`mse` | `l1`).
+
+# %% [markdown]
+# # Setup
 
 # %%
+import time
+
+# ── Stage timing ───────────────────────────────────────────────────────────────
+# Identical harness across 31/32 (lifts to utils in phase E). mark() stamps a
+# milestone; the final cell prints a per-stage breakdown. Stdlib-only, cheap,
+# partial-run safe (prints whatever marks exist).
+STAGE_TIMES: dict[str, float] = {}
+
+def mark(stage: str) -> None:
+    STAGE_TIMES[stage] = time.time()
+
+def fmt_mmss(seconds: float) -> str:
+    s = int(round(max(0.0, seconds)))
+    return f"{s // 60:02d}:{s % 60:02d}"
+
+def print_stage_breakdown(times: dict[str, float]) -> None:
+    items = list(times.items())
+    if not items:
+        print("no timing recorded")
+        return
+    width = max(len(k) for k, _ in items)
+    print("stage timing (delta from previous mark)")
+    print("-" * (width + 11))
+    prev = items[0][1]
+    for name, t in items:
+        print(f"  {name:<{width}}  {fmt_mmss(t - prev)}")
+        prev = t
+    print("-" * (width + 11))
+    print(f"  {'TOTAL':<{width}}  {fmt_mmss(items[-1][1] - items[0][1])}")
+
+mark("literal start")
+
 import os
 import sys
 from pathlib import Path
@@ -49,14 +90,12 @@ os.environ["HF_HOME"] = str(PROJECT_ROOT / "stock_models")
 # ~/.cache/huggingface, so the download survives across machines / reclones.
 # MUST be set BEFORE any `from transformers import ...` — HF reads HF_HOME at
 # import time and caches the resolved path internally.
-# Note: if PROJECT_ROOT ends up wrong (e.g. notebook launched from an odd cwd),
-# HF_HOME will point somewhere unexpected; check the printout below.
 
 print(f"PROJECT_ROOT = {PROJECT_ROOT}")
 print(f"Chapter dir  = {HERE}")
 print(f"HF_HOME      = {os.environ['HF_HOME']}")
 
-# ── GPU GUARD — MUST run before torch is imported (cell 3) ────────────────────
+# ── GPU GUARD — MUST run before torch is imported (next cell) ─────────────────
 # CUDA_VISIBLE_DEVICES only takes effect if set BEFORE the first torch.cuda call.
 # GPU 2 is reserved for this project; we NEVER touch another GPU. No auto-arming:
 # you must type 'y' to use the GPU. ENTER (or anything else) = CPU.
@@ -74,11 +113,11 @@ else:
     USE_CUDA = False
     print("🖥️  CPU mode")
 
-
 # %% [markdown]
 # Standard third-party imports.
 
 # %%
+import gc
 import json
 import shutil
 from collections import Counter
@@ -102,30 +141,22 @@ from transformers import (
 plt.rcParams["figure.dpi"] = 100
 
 # %% [markdown]
-# ---
-#
-# ## 0.5 Target presets — pick what you train on
+# # Targets
 #
 # What combinations of *(dataset, label)* this trainer can handle. Pick one via
-# `Config.target` below; the resolver fills in `jsonl_path`, `label_key`,
-# `task_type`, and (for classification) `label_order`.
-#
-# Keys are short, stable strings. To add a new target, just add an entry here —
-# `Config.target` is the only downstream knob.
-#
-# `label_order: None` means "build it from the data union at load time" (used for
-# targets with many or unstable label spaces, e.g. `dialogue_act_function`).
-#
+# `Config.target`; the resolver fills `jsonl_path`, `label_key`, `task_type`,
+# `label_order`. To add a target, add an entry here — `Config.target` is the only
+# downstream knob.
 
 # %%
 TARGETS: dict = {
-    # ROG has no regression target yet — ParlaSpeech sentiment is generated below.
+    # ROG has no regression target yet — ParlaSpeech targets generated below.
     # ---- ParlaSpeech utterance_instance (generated per lang below) ------
 }
 
 
 def _add_parlaspeech_targets(targets: dict, langs=("hr", "rs", "pl", "cz")) -> None:
-    """Regression utterance_instance target per ParlaSpeech lang: ParlaSent logit.
+    """Regression utterance_instance targets per ParlaSpeech lang.
     (gender + filled-pause classification targets live in 31_classification.)"""
     for l in langs:
         path = f"data/processed_jsonl/parlaspeech_{l}_utterance_instance.jsonl"
@@ -147,8 +178,7 @@ def resolve_target(cfg, targets: dict) -> None:
     preset. Mutates cfg in place. Raises if cfg.target isn't a known key."""
     if cfg.target not in targets:
         raise ValueError(
-            f"Config.target={cfg.target!r} not in TARGETS. "
-            f"Known: {sorted(targets)}"
+            f"Config.target={cfg.target!r} not in TARGETS. Known: {sorted(targets)}"
         )
     t = targets[cfg.target]
     cfg.jsonl_path  = t["jsonl_path"]
@@ -159,53 +189,46 @@ def resolve_target(cfg, targets: dict) -> None:
 
 print(f"available targets: {sorted(TARGETS)}")
 
-
 # %% [markdown]
-# ---
-#
-# ## 1. Config
+# # Config
 #
 # All knobs are here.
 #
-# **Important rules**
-# - `task_type`: `"classification"` or `"regression"`.
-# - `label_key`: which key inside `labels` to train on (e.g. `"primary_stress_present"`, `"sentiment"`).
-# - `label_order`: **required for classification.** This is the canonical ordering of the label space (used as `id2label` *and* for ordinal Spearman). If unset, training fails with a loud error.
-# - `label_scale`: regression-only. Maps class string → float; if None, labels must already be numeric in the JSONL.
-# - `model_name`: defaults to a tiny random model when `test_mode=True`, otherwise to the real Wav2Vec2-XLS-R 300M.
-# - `use_cuda`: **False by default.** Flip to True on a GPU box.
-# - `test_mode`: small model, 1 epoch, batch 2, outputs under `runs/test/` + `models/test/`.
+# - `task_type`: regression-only here (`31_classification` handles classification).
+# - `label_key`: which key inside `labels` to train on (e.g. `speaker_age`,
+#   `sentiment_logit`).
+# - `normalize`: **regression-only.** `"none"` trains on raw labels; `"zscore"`
+#   standardizes the target using **TRAIN-only** mean/std and inverts before all
+#   metrics + saved predictions, so reported MSE/MAE/scatter stay in real units.
+#   (Essential for raw-magnitude targets like age; harmless for small ones.)
+# - `label_scale`: optional class→float map; if None, labels must already be numeric.
+# - `model_name`: `facebook/wav2vec2-base` (~95M). Test mode swaps in a tiny random model.
+# - `use_cuda`: honored from the GPU guard above; never touches a GPU other than 2.
 #
 # **Output layout**
-# - `runs/<run_name>/` — per-epoch logs, predictions, plots, config snapshot. **One folder per run.** Lightweight (~MB).
-# - `models/<run_name>/best_model/` — the final saved model weights + best epoch's artifacts. **Heavy** (~1 GB for XLS-R 300M).
+# - `runs/<run_name>/` — per-epoch logs, predictions, plots, config snapshot. Light (~MB).
+# - `models/<run_name>/best_model/` — final weights + best epoch's artifacts. Heavy.
 #
-# Both `runs/` and `models/` are gitignored. Keeping them separate means you can delete `models/` to reclaim disk without losing the experimental record.
-#
-# **⚠️ CPU training of the real (300M) model needs ~4–5 GB of working RAM** *on top of* the OS and your IDE. If VS Code is crashing on you, you have three options:
-# 1. Use a smaller model (`facebook/wav2vec2-base` is ~95M, 4× smaller).
-# 2. Drop `batch_size` to 2 and `grad_accum` to 1 to shrink activations.
-# 3. Train on a GPU box (CUDA halves peak memory and is 50× faster).
+# **⚠️ CPU training of wav2vec2-base needs a few GB of working RAM** on top of the
+# OS + IDE. If RAM-bound: drop `batch_size` to 2 / `grad_accum` to 1, or train on GPU.
 
 # %%
 @dataclass
 class Config:
-    # -- Target preset -------------------------------------------------------
-    # Pick from the TARGETS dict above. The resolver fills jsonl_path /
-    # label_key / task_type / label_order from the picked preset, so those
-    # fields below are placeholders that will be overwritten.
-    
-    # target: str = "parlaspeech_hr_sentiment"   # ParlaSent logit regression smoke target
-    target: str = "parlaspeech_hr_age"   # Speaker age regression smoke target
+    # -- Target preset (resolver overwrites the data fields below) -----------
+    # target: str = "parlaspeech_hr_sentiment"   # ParlaSent logit — small-magnitude demo
+    target: str = "parlaspeech_hr_age"           # speaker age (years) — demo target
 
     # -- Data (overwritten by resolve_target) -------------------------------
     jsonl_path:  str  = ""
     label_key:   str  = ""
-    task_type:   str  = "regression"     # "classification" | "regression"
+    task_type:   str  = "regression"     # regression-only in this notebook
     label_order: list | None = None
 
     # Regression: optional class→float map. If None, labels must already be numeric.
     label_scale: dict | None = None
+    # Regression target normalization: "none" | "zscore" (fit on TRAIN only).
+    normalize:   str  = "zscore"
 
     # -- Model ---------------------------------------------------------------
     model_name: str              = "facebook/wav2vec2-base"
@@ -216,15 +239,18 @@ class Config:
     batch_size: int      = 16
     grad_accum: int      = 1
     learning_rate: float = 1e-5
-    num_epochs: int      = 1      # 1 for sentiment smoke run test
+    num_epochs: int      = 1      # demo runs often use 2–3 for a tangible curve
     max_grad_norm: float = 1.0
     warmup_ratio: float  = 0.10
+    logging_steps: int   = 100
 
-    logging_steps: int   = 100    # was hardcoded 10 in TrainingArguments
+    # Rough ETA seed: train records processed per second (base model on GPU).
+    # A deliberate guess — recalibrated from phase 1's real duration.
+    eta_rec_per_s_guess: float = 40.0
 
     # -- Output --------------------------------------------------------------
-    runs_dir: str   = "runs"     # per-epoch logs + per-phase summaries
-    models_dir: str = "models"   # best_model/ goes here, gitignored
+    runs_dir: str   = "runs"
+    models_dir: str = "models"
 
     # -- Best-epoch selection ------------------------------------------------
     best_metric_classification: str = "macro_f1"    # | "accuracy" | "spearman"
@@ -232,17 +258,13 @@ class Config:
 
     # -- Preprocessing -------------------------------------------------------
     preprocess_batch_size: int  = 32
-    dataloader_num_workers: int = 16   # dataloader workers; drop to 0–2 on the CPU box if RAM-bound
-    map_num_proc: int = 8     # parallel workers for the .map() feature-extraction pass
-    
-    max_duration_s: float = 15.0   # drop instances longer than this (OOM guard)
+    dataloader_num_workers: int = 16   # drop to 0–2 on the CPU box if RAM-bound
+    map_num_proc: int = 8              # parallel workers for the .map() feature pass
+    max_duration_s: float = 15.0       # drop instances longer than this (OOM guard)
 
     # -- Hardware ------------------------------------------------------------
-    # Auto-set from the conda env below: "ssp-cuda" → GPU, anything else → CPU.
-    # GPU 2 is reserved for this project; never touch other GPUs.
+    # Honored from the GPU guard (cell above). GPU 2 reserved; never touch others.
     use_cuda: bool   = True
-    # cuda_device: str = "2"      # hardcoded — GPU 2 only
-    # auto_env_gpu: bool = True   # detect CONDA_DEFAULT_ENV and flip use_cuda
 
     # -- Test mode -----------------------------------------------------------
     test_mode: bool       = False
@@ -267,12 +289,12 @@ if cfg.test_mode:
     cfg.runs_dir   = "runs/test"
     cfg.models_dir = "models/test"
 
-# Device resolution. GPU selection + CUDA_VISIBLE_DEVICES already happened in
-# cell 1 (input-gated) BEFORE torch was imported — the only point where pinning
-# actually works. Here we just honor it; we do NOT touch CUDA_VISIBLE_DEVICES.
+# Device resolution. GPU selection + CUDA_VISIBLE_DEVICES already happened in the
+# setup cell (input-gated) BEFORE torch was imported — the only point where
+# pinning works. Here we just honor it; we do NOT touch CUDA_VISIBLE_DEVICES.
 cfg.use_cuda = USE_CUDA
 if cfg.use_cuda and torch.cuda.is_available():
-    DEVICE = "cuda"   # = cuda:0 in-process, pinned to physical GPU 2 via CUDA_VISIBLE_DEVICES
+    DEVICE = "cuda"   # = cuda:0 in-process, pinned to physical GPU 2
 elif cfg.use_cuda and not torch.cuda.is_available():
     print("⚠️  GPU selected but torch.cuda.is_available()==False; falling back to CPU")
     DEVICE = "cpu"
@@ -283,21 +305,16 @@ print(f"target      = {cfg.target}")
 print(f"jsonl_path  = {cfg.jsonl_path}")
 print(f"label_key   = {cfg.label_key}")
 print(f"task_type   = {cfg.task_type}")
-print(f"label_order = {cfg.label_order}")
+print(f"normalize   = {cfg.normalize}")
 print(f"device      = {DEVICE}")
 if DEVICE == "cuda":
-    # Confirm WHICH physical GPU we're actually on. With CUDA_VISIBLE_DEVICES=2,
-    # torch sees exactly one device and names it as physical GPU 2.
     print(f"✓ visible devices : {torch.cuda.device_count()}  (CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')})")
     print(f"✓ device name     : {torch.cuda.get_device_name(0)}")
 
-
 # %% [markdown]
-# ---
+# ## Validate the config
 #
-# ## 2. Validate the config before doing real work
-#
-# Fail loud here so you don't burn 4 hours of training only to learn `label_order` was missing.
+# Fail loud here so you don't burn hours of training only to learn a knob was wrong.
 
 # %%
 def validate_config(cfg: Config) -> None:
@@ -308,24 +325,32 @@ def validate_config(cfg: Config) -> None:
         raise ValueError(f"loss_function must be 'mse' or 'l1', got {cfg.loss_function!r}")
     if cfg.best_metric_regression not in ("spearman", "mse", "mae"):
         raise ValueError(f"best_metric_regression: invalid {cfg.best_metric_regression!r}")
+    if cfg.normalize not in ("none", "zscore"):
+        raise ValueError(f"normalize must be 'none' or 'zscore', got {cfg.normalize!r}")
 
 validate_config(cfg)
 print("✅ config valid")
 
 # %% [markdown]
-# ---
+# # Data
+
+# %% [markdown]
+# ## Load JSONL, filter to records that carry `label_key`
 #
-# ## 3. Load JSONL, filter to records that carry `label_key`
-#
-# Records missing the target label are silently dropped — chapter-2 sniff would have already alerted you if this is a big fraction.
+# Records missing the target label (or longer than `max_duration_s`) are dropped.
+# `DEMO_*` caps shrink TRAIN/DEV for a bounded demo run; TEST stays whole for a
+# trustworthy final number. Set a cap to `None` for the full run.
 
 # %%
-# ── Smoke-test knob ───────────────────────────────────────────────────────────
-# Cap TRAIN + DEV for a fast smoke run. Shuffle first (JSONL is speaker-grouped,
-# so a head-slice would skew gender balance). Set to None for the full corpus.
-SMOKE_TRAIN_CAP = 50_000
-SMOKE_DEV_CAP   = 10_000
-SMOKE_SEED      = 1234
+mark("data prep")
+
+# ── Demo-run caps ─────────────────────────────────────────────────────────────
+# Shuffle before slicing (JSONL is speaker-grouped, so a head-slice would skew
+# the speaker/label balance). None → use the whole split (full run).
+DEMO_TRAIN_CAP = 50_000
+DEMO_DEV_CAP   = 10_000
+DEMO_SEED      = 1234
+
 
 def load_split(jsonl_path: str, split: str, label_key: str) -> list[dict]:
     out, n_long = [], 0
@@ -349,17 +374,15 @@ train_records = load_split(cfg.jsonl_path, "train", cfg.label_key)
 dev_records   = load_split(cfg.jsonl_path, "dev",   cfg.label_key)
 test_records  = load_split(cfg.jsonl_path, "test",  cfg.label_key)
 
-# Shuffle + slice TRAIN and DEV for the smoke test (test stays whole for a
-# trustworthy final number).
 import random
-if SMOKE_TRAIN_CAP is not None and len(train_records) > SMOKE_TRAIN_CAP:
-    random.Random(SMOKE_SEED).shuffle(train_records)
-    train_records = train_records[:SMOKE_TRAIN_CAP]
-    print(f"🔬 smoke: train capped to {SMOKE_TRAIN_CAP} (shuffled, seed={SMOKE_SEED})")
-if SMOKE_DEV_CAP is not None and len(dev_records) > SMOKE_DEV_CAP:
-    random.Random(SMOKE_SEED).shuffle(dev_records)
-    dev_records = dev_records[:SMOKE_DEV_CAP]
-    print(f"🔬 smoke: dev capped to {SMOKE_DEV_CAP} (shuffled, seed={SMOKE_SEED})")
+if DEMO_TRAIN_CAP is not None and len(train_records) > DEMO_TRAIN_CAP:
+    random.Random(DEMO_SEED).shuffle(train_records)
+    train_records = train_records[:DEMO_TRAIN_CAP]
+    print(f"🔬 demo: train capped to {DEMO_TRAIN_CAP} (shuffled, seed={DEMO_SEED})")
+if DEMO_DEV_CAP is not None and len(dev_records) > DEMO_DEV_CAP:
+    random.Random(DEMO_SEED).shuffle(dev_records)
+    dev_records = dev_records[:DEMO_DEV_CAP]
+    print(f"🔬 demo: dev capped to {DEMO_DEV_CAP} (shuffled, seed={DEMO_SEED})")
 
 if cfg.test_mode:
     train_records = train_records[: cfg.test_n_train]
@@ -372,18 +395,28 @@ print(f"test:  {len(test_records)}")
 if not train_records or not dev_records or not test_records:
     raise ValueError("one of the splits is empty after filtering for label_key — check the JSONL")
 
+
+def rough_eta_seconds(n_train: int, n_dev: int, cfg: Config, rec_per_s: float) -> float:
+    """Coarse wall-clock estimate: both phases train (TRAIN, then TRAIN∪DEV) for
+    num_epochs at ~rec_per_s training records/second. Eval + preprocessing extra."""
+    train_recs = (n_train * cfg.num_epochs) + ((n_train + n_dev) * cfg.num_epochs)
+    return train_recs / max(1e-9, rec_per_s)
+
+
+_eta = rough_eta_seconds(len(train_records), len(dev_records), cfg, cfg.eta_rec_per_s_guess)
+print(f"\n⏱  rough ETA ~{fmt_mmss(_eta)} for {cfg.num_epochs} epoch(s) × 2 phases "
+      f"(guess {cfg.eta_rec_per_s_guess:.0f} train-rec/s — approximate; "
+      f"recalibrates after phase 1)")
+
 # %% [markdown]
-# ---
+# ## Labels & normalization
 #
-# ## 4. Build label mappings (classification) or scale labels (regression)
-#
-# For classification: `label_order` is the source of truth — `label2id[label] = index in label_order`. Any class encountered in the data that *isn't* in `label_order` is a hard error.
-#
-# For regression: if `label_scale` is set, map class → float; otherwise the label must already be numeric.
+# Regression has no label space, so we keep `(label2id, id2label, num_labels)` as
+# `(None, None, 1)` purely so `run_phase` stays identical to 31. We assert the
+# target is numeric (or `label_scale`-mappable), then fit the normalizer on the
+# **TRAIN labels only** — never dev/test, to avoid leakage.
 
 # %%
-# Regression has no label space. Validate labels are numeric (or scaleable),
-# and keep the same (label2id, id2label, num_labels) names so run_phase is identical.
 label2id, id2label, num_labels = None, None, 1
 
 for r in train_records + dev_records + test_records:
@@ -394,40 +427,94 @@ for r in train_records + dev_records + test_records:
         continue
     raise ValueError(
         f"{r['instance_id']}: regression label is {v!r} (type {type(v).__name__}), "
-        f"not numeric and no label_scale mapping. Either provide label_scale or fix the data."
+        f"not numeric and no label_scale mapping. Provide label_scale or fix the data."
     )
-print(f"Regression target: '{cfg.label_key}'")
 
 
-# %% [markdown]
-# ---
-#
-# ## 5. Audio loading and feature extraction
-#
-# `prepare_dataset_dict` reads a list of canonical records and produces the list-of-dicts that HuggingFace `Dataset.from_list` wants: `audio_path`, `label`, plus any provenance fields we want to thread through to predictions.json.
-#
-# `preprocess_function` (run via `.map(batched=True)`) loads each WAV, ensures mono + 16 kHz, and passes through the feature extractor without padding (collator handles padding).
-
-# %%
-def label_to_value(r: dict, cfg: Config, label2id: dict | None) -> float:
-    """Regression: numeric label, or mapped via label_scale if provided."""
+def raw_label(r: dict, cfg: Config) -> float:
+    """Raw target in real units, applying label_scale if present."""
     v = r["labels"][cfg.label_key]
     if cfg.label_scale is not None and v in cfg.label_scale:
         return float(cfg.label_scale[v])
     return float(v)
 
 
+@dataclass
+class LabelNormalizer:
+    """Standardize a regression target. encode(): real → training space;
+    decode(): training space → real. 'none' is the identity."""
+    kind: str = "none"
+    mean: float = 0.0
+    std: float = 1.0
+
+    @classmethod
+    def fit(cls, values, kind: str) -> "LabelNormalizer":
+        if kind == "none":
+            return cls("none", 0.0, 1.0)
+        if kind == "zscore":
+            arr = np.asarray(list(values), dtype=float)
+            mean = float(arr.mean())
+            std = float(arr.std())
+            if std < 1e-8:
+                std = 1.0   # guard against a constant target
+            return cls("zscore", mean, std)
+        raise ValueError(f"unknown normalize kind {kind!r}")
+
+    def encode(self, y):
+        if self.kind == "none":
+            return y
+        return (np.asarray(y, dtype=float) - self.mean) / self.std
+
+    def decode(self, y):
+        if self.kind == "none":
+            return y
+        return np.asarray(y, dtype=float) * self.std + self.mean
+
+
+# Fit on TRAIN ONLY (no dev/test leakage).
+normalizer = LabelNormalizer.fit((raw_label(r, cfg) for r in train_records), cfg.normalize)
+print(f"Regression target: '{cfg.label_key}'  | normalize: {normalizer.kind}"
+      + (f"  (train mean={normalizer.mean:.3f}, std={normalizer.std:.3f})"
+         if normalizer.kind != "none" else ""))
+
+# %% [markdown]
+# # Training engine
+#
+# Everything from here to just before the two phase calls is the shared engine:
+# feature extraction, collator, model, metrics, per-epoch artifacts, and
+# `run_phase`. This block is byte-identical to 31 except the task-specific bodies
+# (regression metrics / scatter plots / float labels), so it lifts cleanly to
+# utils in phase E.
+
+# %% [markdown]
+# ## Audio loading & feature extraction
+#
+# `prepare_dataset_dict` turns canonical records into the list-of-dicts
+# `Dataset.from_list` wants. Provenance (`file_id`, `start_t`, `end_t`,
+# `audio_length`) is read from `metadata.*` so it actually lands in predictions.json.
+# `label_to_value` emits the **normalized** training target.
+# `preprocess_function` loads each WAV (mono/16 kHz guaranteed by chapter 1) and
+# runs the feature extractor *without* padding — the collator pads per batch.
+
+# %%
+def label_to_value(r: dict, cfg: Config, label2id: dict | None) -> float:
+    """Real-unit label → normalized training target (identity if normalize='none')."""
+    return float(normalizer.encode(raw_label(r, cfg)))
+
+
 def prepare_dataset_dict(records: list[dict], cfg: Config, label2id: dict | None) -> list[dict]:
     items = []
     for r in records:
+        md = r.get("metadata", {})
         items.append({
-            "instance_id": r["instance_id"],
-            "file_id":     r.get("file_id", ""),
-            "start_t":     r.get("start_t"),
-            "end_t":       r.get("end_t"),
-            "audio_path":  str(udp.from_project_relative(r["audio_path"])),
-            "label":       label_to_value(r, cfg, label2id),
-            "label_class": r["labels"][cfg.label_key],   # original string/int for reporting
+            "instance_id":  r["instance_id"],
+            "file_id":      r.get("file_id", ""),
+            "start_t":      md.get("audio_start"),
+            "end_t":        md.get("audio_end"),
+            "audio_length": md.get("audio_length"),
+            "audio_path":   str(udp.from_project_relative(r["audio_path"])),
+            "label":        label_to_value(r, cfg, label2id),
+            "label_class":  r["labels"][cfg.label_key],   # original value for reporting
         })
     return items
 
@@ -441,7 +528,6 @@ def preprocess_function(examples, feature_extractor):
         if data.ndim == 2:
             data = data.mean(axis=1)
         if sr != 16000:
-            # Shouldn't happen if chapter 1 ran cleanly, but resample as a fallback.
             import librosa
             data = librosa.resample(data, orig_sr=sr, target_sr=16000)
         audio_arrays.append(data)
@@ -450,19 +536,20 @@ def preprocess_function(examples, feature_extractor):
     )
     return {"input_values": inputs["input_values"], "labels": examples["label"]}
 
-
 # %% [markdown]
-# ---
+# ## Data collator (pad audio within each batch)
 #
-# ## 6. Data collator (pad audio within each batch)
-#
-# The feature extractor doesn't pad; this does. Labels are floats for regression, longs for classification.
+# The feature extractor doesn't pad; this does — **and emits the `attention_mask`**
+# so the model's masked mean-pooling knows which frames are real vs padding.
+# (wav2vec2-base ships `return_attention_mask=False`; we force it on at load, and
+# pass it explicitly here. Without it the pooling silently averages over padding.)
+# Labels are floats for regression.
 
 # %%
 class DataCollatorForInstance:
-    """Pads audio within each batch. Regression labels are floats.
-    Keeps the `task_type` arg purely for signature parity with 31_classification so
-    `run_phase` stays byte-identical across the two notebooks."""
+    """Pads audio within each batch and threads the attention mask through.
+    Keeps the `task_type` arg for signature parity with 31_classification so
+    `run_phase` stays identical across the two notebooks."""
     def __init__(self, feature_extractor, task_type: str = "regression"):
         self.feature_extractor = feature_extractor
         self.task_type = task_type
@@ -471,22 +558,19 @@ class DataCollatorForInstance:
         input_values = [f["input_values"] for f in features]
         labels = [f["labels"] for f in features]
         batch = self.feature_extractor.pad(
-            {"input_values": input_values}, padding=True, return_tensors="pt"
+            {"input_values": input_values},
+            padding=True, return_attention_mask=True, return_tensors="pt",
         )
         batch["labels"] = torch.tensor(labels, dtype=torch.float32)
         return batch
 
-
 # %% [markdown]
-# ---
+# ## Model factory
 #
-# ## 7. Model factory
-#
-# Two branches:
-# - *Classification* → `AutoModelForAudioClassification.from_pretrained(...)`. Stock head, nothing custom.
-# - *Regression* → `Wav2Vec2ForRegression` with masked mean-pooling. Built from scratch and the pretrained `wav2vec2` submodule is loaded into it.
-#
-# `freeze_feature_encoder` flag freezes the CNN front-end in either case.
+# `Wav2Vec2ForRegression` = wav2vec2 + masked mean-pooling + `Linear(1)`. The
+# pretrained `wav2vec2` submodule is loaded into it. `freeze_feature_encoder`
+# freezes the CNN front-end. Pooling uses the collator's `attention_mask`, so
+# padded frames are excluded from the mean.
 
 # %%
 class Wav2Vec2ForRegression(Wav2Vec2PreTrainedModel):
@@ -535,20 +619,18 @@ def build_model(cfg: Config, num_labels: int, label2id, id2label):
         print("🔒 feature encoder (CNN) frozen")
     return model
 
-
 # %% [markdown]
-# ---
+# ## Metrics
 #
-# ## 8. Metrics dispatcher
-#
-# - *Classification*: macro-F1, accuracy, Spearman (computed on class indices in `label_order`; only interpretable for ordinal label spaces but always reported).
-# - *Regression*: MSE, MAE, Spearman + p-value.
+# MSE, MAE, Spearman (+ p-value), all in **real units** — preds and labels are
+# de-normalized via the fitted `normalizer` before scoring, so the numbers read
+# as years / sentiment points regardless of `normalize`.
 
 # %%
 def compute_regression_metrics(eval_pred):
     preds, labels = eval_pred
-    preds = preds.reshape(-1)
-    labels = labels.reshape(-1)
+    preds  = np.asarray(normalizer.decode(np.asarray(preds).reshape(-1)), dtype=float)
+    labels = np.asarray(normalizer.decode(np.asarray(labels).reshape(-1)), dtype=float)
     mse = float(mean_squared_error(labels, preds))
     mae = float(mean_absolute_error(labels, preds))
     if len(set(labels.tolist())) > 1 and len(set(preds.tolist())) > 1:
@@ -563,31 +645,28 @@ def compute_regression_metrics(eval_pred):
 def get_compute_metrics(cfg: Config):
     return compute_regression_metrics
 
-
 # %% [markdown]
-# ---
+# ## Per-epoch artifacts
 #
-# ## 9. Per-epoch artifacts
-#
-# - *Classification* → confusion matrix (absolute + relative) + `classification_report.txt`.
-# - *Regression* → scatter (gold vs pred) + distribution histograms.
+# `predictions.json` (real units, correct provenance), a gold-vs-pred scatter, and
+# gold/pred distribution histograms — one set per epoch.
 
 # %%
 def save_predictions_json(predictions, labels, items, out_path: Path, task_type: str,
                           id2label: dict | None):
     out = []
     for i, item in enumerate(items):
-        gold = labels[i]
-        pred = predictions[i]
+        gold = float(labels[i])
+        pred = float(predictions[i])
         out.append({
             "instance_id": item["instance_id"],
             "file_id":     item.get("file_id", ""),
             "start_t":     item.get("start_t"),
             "end_t":       item.get("end_t"),
-            "gold_label":  float(gold),
-            "pred_label":  float(pred),
-            "gold_raw":    float(gold),
-            "pred_raw":    float(pred),
+            "gold_label":  gold,
+            "pred_label":  pred,
+            "gold_raw":    gold,
+            "pred_raw":    pred,
         })
     out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False))
 
@@ -609,13 +688,12 @@ def plot_distribution(gold, pred, out_path: Path):
     ax.legend(); ax.set_title("label distribution: gold vs pred")
     plt.tight_layout(); fig.savefig(out_path); plt.close(fig)
 
-
 # %% [markdown]
-# ---
+# ## `EpochCheckpointCallback`
 #
-# ## 10. `EpochCheckpointCallback`
-#
-# Evaluates the eval set every epoch, writes per-epoch logs. Does **not** save model weights — only the best epoch's model is saved, and only in phase 2.
+# Evaluates the eval set every epoch and writes per-epoch logs. Predictions and
+# plots are de-normalized to real units. Does **not** save weights — only the best
+# epoch's model is saved, and only in phase 2.
 
 # %%
 class EpochCheckpointCallback(TrainerCallback):
@@ -658,14 +736,14 @@ class EpochCheckpointCallback(TrainerCallback):
         epoch_info = {"epoch": epoch, "train_loss": train_loss, **metrics}
         self.epoch_results.append(epoch_info)
 
+        # De-normalize to real units for saved predictions + plots.
+        gold = np.asarray(normalizer.decode(np.asarray(out.label_ids).reshape(-1)), dtype=float)
+        pred = np.asarray(normalizer.decode(np.asarray(out.predictions).reshape(-1)), dtype=float)
+
         save_predictions_json(
-            out.predictions, out.label_ids, self.eval_items,
-            epoch_dir / "predictions.json",
+            pred, gold, self.eval_items, epoch_dir / "predictions.json",
             task_type=self.cfg.task_type, id2label=self.id2label,
         )
-
-        gold = np.asarray(out.label_ids).reshape(-1)
-        pred = np.asarray(out.predictions).reshape(-1)
         plot_scatter(gold, pred, epoch_dir / "scatter_plot.png")
         plot_distribution(gold, pred, epoch_dir / "distribution_plot.png")
 
@@ -675,16 +753,12 @@ class EpochCheckpointCallback(TrainerCallback):
               f"mae={metrics.get('eval_mae', 0):.4f}  "
               f"rho={metrics.get('eval_spearman', float('nan')):.4f}")
 
-
 # %% [markdown]
-# ---
+# ## `run_phase` — train + evaluate + save logs
 #
-# ## 11. `run_phase` — train + evaluate + save logs
-#
-# One function used by both phases. The only differences between phase 1 and phase 2 are:
-# - Which records make up the train set.
-# - Which split is the eval set.
-# - Whether the best model is saved.
+# One function for both phases. Differences are only *which* records train, which
+# split evaluates, and whether the best model is saved. Frees the model + CUDA
+# cache on the way out so the next phase starts clean. **Identical across 31/32.**
 
 # %%
 def best_epoch_of(epoch_results: list[dict], cfg: Config) -> dict:
@@ -692,7 +766,9 @@ def best_epoch_of(epoch_results: list[dict], cfg: Config) -> dict:
     if m in ("mse", "mae"):
         return min(epoch_results, key=lambda r: r.get(f"eval_{m}", float("inf")))
     return max(epoch_results, key=lambda r: (r.get(f"eval_{m}", float("-inf"))
-                                             if r.get(f"eval_{m}") is not None else float("-inf")))
+                                             if r.get(f"eval_{m}") is not None
+                                             and not np.isnan(r.get(f"eval_{m}", float("nan")))
+                                             else float("-inf")))
 
 
 def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[dict],
@@ -709,41 +785,35 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
     train_ds = Dataset.from_list(train_items)
     eval_ds  = Dataset.from_list(eval_items)
 
-    # Preprocess (low batch_size keeps RAM predictable; HF datasets caches to arrow on disk)
     print(f"preprocessing {len(train_ds)} train + {len(eval_ds)} eval (batch_size={cfg.preprocess_batch_size})…")
     train_ds = train_ds.map(
         lambda x: preprocess_function(x, feature_extractor),
         batched=True, batch_size=cfg.preprocess_batch_size,
-        remove_columns=train_ds.column_names,
-        num_proc=cfg.map_num_proc, # Use more CPUs
+        remove_columns=train_ds.column_names, num_proc=cfg.map_num_proc,
     )
     eval_ds = eval_ds.map(
         lambda x: preprocess_function(x, feature_extractor),
         batched=True, batch_size=cfg.preprocess_batch_size,
-        remove_columns=eval_ds.column_names,
-        num_proc=cfg.map_num_proc, # Use more CPUs
+        remove_columns=eval_ds.column_names, num_proc=cfg.map_num_proc,
     )
     label_dtype = "torch.long" if cfg.task_type == "classification" else "torch.float32"
     train_ds.set_format(type="torch", columns=["input_values", "labels"])
     eval_ds.set_format(type="torch", columns=["input_values", "labels"])
 
-    # Model
     print(f"building model: {cfg.model_name}")
     model = build_model(cfg, num_labels=len(cfg.label_order) if cfg.task_type == "classification" else 1,
                         label2id=label2id, id2label=id2label)
 
-    # Collator
     data_collator = DataCollatorForInstance(feature_extractor, cfg.task_type)
     compute_metrics = get_compute_metrics(cfg)
 
-    # Warmup
     steps_per_epoch = max(1, len(train_ds) // (cfg.batch_size * cfg.grad_accum))
     total_steps = steps_per_epoch * cfg.num_epochs
     warmup_steps = int(total_steps * cfg.warmup_ratio)
 
     training_args = TrainingArguments(
         output_dir=str(phase_dir / "trainer_tmp"),
-        eval_strategy="no",     # we eval in the callback
+        eval_strategy="no",
         save_strategy="no",
         logging_strategy="steps",
         logging_steps=cfg.logging_steps,
@@ -760,7 +830,7 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
         remove_unused_columns=False,
         use_cpu=(DEVICE == "cpu"),
         bf16=(DEVICE == "cuda"),
-        tf32=True, # small free win, harmless it says.
+        tf32=True,
         dataloader_num_workers=cfg.dataloader_num_workers,
     )
 
@@ -780,7 +850,6 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
     print(f"🚀 training {cfg.num_epochs} epochs (bs={cfg.batch_size} ga={cfg.grad_accum} lr={cfg.learning_rate})")
     trainer.train()
 
-    # Save phase-level summary
     (phase_dir / "all_epochs_summary.json").write_text(
         json.dumps(callback.epoch_results, indent=2)
     )
@@ -792,18 +861,15 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
         else:
             print(f"   {k}: {v}")
 
-    # Save best model (phase 2 only) → models/<run_name>/best_model/
     if save_best_model:
         best_dir = model_dir / "best_model"
         best_dir.mkdir(parents=True, exist_ok=True)
         model.save_pretrained(best_dir)
         feature_extractor.save_pretrained(best_dir)
-        # Copy best epoch's artifacts (predictions.json, plots, summary)
         src = phase_dir / "epoch_logs" / f"epoch_{best['epoch']}"
         if src.exists():
             for f in src.iterdir():
                 shutil.copy(f, best_dir / f.name)
-        # Write a marker so you can see which run a model came from at a glance
         info_lines = [
             f"run_name: {run_dir.name}",
             f"run_dir:  {run_dir}",
@@ -816,15 +882,22 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
     # Clean up Trainer's tmp dir
     shutil.rmtree(phase_dir / "trainer_tmp", ignore_errors=True)
 
+    # Free model + CUDA cache before the next phase allocates a fresh one.
+    del trainer, model
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     return callback.epoch_results, best
 
+# %% [markdown]
+# # Run
 
 # %% [markdown]
-# ---
+# ## Run directory
 #
-# ## 12. Set up the run directory
-#
-# `runs/{dataset}_{label_key}_{task_type}_{timestamp}/`. The dataset is read from the first record (every record carries it).
+# `runs/{dataset}_{label_key}_{task_type}_{timestamp}/`. Also snapshots the
+# resolved Config and the fitted label-normalization stats for reproducibility.
 
 # %%
 dataset_name = train_records[0]["dataset"]
@@ -838,30 +911,32 @@ model_dir.mkdir(parents=True, exist_ok=True)
 print(f"run_dir   = {run_dir.relative_to(PROJECT_ROOT)}    (per-epoch logs)")
 print(f"model_dir = {model_dir.relative_to(PROJECT_ROOT)}  (best_model goes here)")
 
-# Save the resolved Config alongside the run for reproducibility
 from dataclasses import asdict as _asdict
 (run_dir / "config.json").write_text(json.dumps(_asdict(cfg), indent=2, default=str))
+(run_dir / "label_normalization.json").write_text(
+    json.dumps({"kind": normalizer.kind, "mean": normalizer.mean, "std": normalizer.std}, indent=2)
+)
 
 # %% [markdown]
-# ---
+# ## Feature extractor
 #
-# ## 13. Load the feature extractor
-#
-# Single load, reused across both phases.
+# Single load, reused across both phases. We force `return_attention_mask=True`
+# so the collator can hand the model a real mask (see the collator note above).
 
 # %%
 print(f"loading feature extractor: {cfg.model_name}")
 feature_extractor = AutoFeatureExtractor.from_pretrained(cfg.model_name)
-print(f"   sampling_rate = {feature_extractor.sampling_rate}")
+feature_extractor.return_attention_mask = True
+print(f"   sampling_rate         = {feature_extractor.sampling_rate}")
+print(f"   return_attention_mask = {feature_extractor.return_attention_mask}")
 
 # %% [markdown]
-# ---
-#
-# ## 14. Phase 1 — TRAIN → DEV (development)
+# ## Phase 1 — TRAIN → DEV (development)
 #
 # Train on TRAIN, evaluate on DEV every epoch. No model saved.
 
 # %%
+mark("model prep")
 phase1_results, phase1_best = run_phase(
     phase_name="phase1_dev",
     train_records=train_records, eval_records=dev_records,
@@ -870,15 +945,21 @@ phase1_results, phase1_best = run_phase(
     feature_extractor=feature_extractor,
     label2id=label2id, id2label=id2label,
 )
+mark("end phase 1")
 
 # %% [markdown]
-# ---
+# ## Phase 2 — TRAIN + DEV → TEST (final)
 #
-# ## 15. Phase 2 — TRAIN + DEV → TEST (final)
-#
-# Re-train on TRAIN ∪ DEV, evaluate on TEST every epoch. Best epoch's model is saved.
+# Re-train on TRAIN ∪ DEV, evaluate on TEST every epoch. Best epoch's model saved.
+# The ETA is recalibrated from phase 1's real training rate before kicking off.
 
 # %%
+_p1_secs = STAGE_TIMES["end phase 1"] - STAGE_TIMES["model prep"]
+_rate = (len(train_records) * cfg.num_epochs) / max(1e-9, _p1_secs)
+_p2_secs = (len(train_records) + len(dev_records)) * cfg.num_epochs / max(1e-9, _rate)
+print(f"⏱  phase 1 took {fmt_mmss(_p1_secs)} → ~{_rate:.0f} train-rec/s  |  "
+      f"phase 2 rough ETA ~{fmt_mmss(_p2_secs)} (approximate)\n")
+
 phase2_results, phase2_best = run_phase(
     phase_name="phase2_test",
     train_records=train_records + dev_records, eval_records=test_records,
@@ -887,18 +968,18 @@ phase2_results, phase2_best = run_phase(
     feature_extractor=feature_extractor,
     label2id=label2id, id2label=id2label,
 )
+mark("end phase 2")
 
 # %% [markdown]
-# ---
+# ## Run summary
 #
-# ## 16. Run summary
-#
-# Final report. The `phase2_best` numbers are the headline result; `phase1_best` is informational (how things looked on DEV).
+# `phase2_best` is the headline (TEST); `phase1_best` is informational (DEV).
 
 # %%
 udp.banner(f"RUN SUMMARY: {run_name}")
 print(f"task        : {cfg.task_type}")
 print(f"label_key   : {cfg.label_key}")
+print(f"normalize   : {normalizer.kind}")
 print(f"model       : {cfg.model_name}")
 print(f"epochs      : {cfg.num_epochs}")
 print(f"run_dir     : {run_dir.relative_to(PROJECT_ROOT)}    (logs)")
@@ -917,13 +998,10 @@ for k, v in phase2_best.items():
 print(f"\nbest model: {(model_dir / 'best_model').relative_to(PROJECT_ROOT)}")
 
 # %% [markdown]
-# ---
+# ## Inline scatter + distribution (TEST, best epoch)
 #
-# ## 17. Scatter + distribution — best epoch on TEST (inline)
-#
-# Render the best phase-2 epoch's predictions as a gold-vs-pred scatter and a
-# gold/pred distribution histogram. Reads `predictions.json` from disk so this
-# cell re-runs independently of training.
+# Reads `predictions.json` from disk (real units) so this re-runs independently of
+# training.
 
 # %%
 best_epoch_dir = run_dir / "phase2_test" / "epoch_logs" / f"epoch_{phase2_best['epoch']}"
@@ -935,7 +1013,6 @@ preds_data = json.loads(preds_path.read_text())
 gold = np.array([p["gold_raw"] for p in preds_data], dtype=float)
 pred = np.array([p["pred_raw"] for p in preds_data], dtype=float)
 
-# TEST scatter + distribution, side by side.
 fig, axes = plt.subplots(1, 2, figsize=(13, 6))
 axes[0].scatter(gold, pred, alpha=0.4)
 lo = float(min(gold.min(), pred.min())); hi = float(max(gold.max(), pred.max()))
@@ -955,10 +1032,47 @@ print(f"saved {plot_png.relative_to(PROJECT_ROOT)}")
 plt.show()
 
 # %% [markdown]
-# ---
+# ## Inference spot-check
 #
-# ## 18. What's next
+# Eyeball 5 random TEST predictions: provenance + gold vs pred (real units) + the
+# absolute error. A quick sanity read on what the model is actually doing —
+# complements the aggregate metrics above.
+
+# %%
+import random as _rnd
+
+_rows = json.loads(preds_path.read_text())
+_sample = _rnd.Random(0).sample(_rows, k=min(5, len(_rows)))
+
+udp.banner("INFERENCE SPOT-CHECK — 5 random TEST examples")
+for p in _sample:
+    g, pr = p.get("gold_raw"), p.get("pred_raw")
+    err = abs(g - pr) if (g is not None and pr is not None) else float("nan")
+    g_s  = f"{g:.3f}"  if g  is not None else "None"
+    pr_s = f"{pr:.3f}" if pr is not None else "None"
+    print(f"  {p['instance_id']}")
+    print(f"     file={p.get('file_id', '')}  span={p.get('start_t')}–{p.get('end_t')}")
+    print(f"     gold={g_s}   pred={pr_s}   |err|={err:.3f}")
+    print()
+
+# %% [markdown]
+# ## Stage timing
 #
-# This run wrote per-epoch logs + a saved best model under `runs/`. Chapter 5 (`5_analysis/`) loads run directories like this one and produces error-analysis CSVs and cross-run comparisons.
+# Wall-clock per stage (delta from the previous mark) + total, mm:ss. Prints
+# whatever marks exist, so a partial run still reports cleanly.
+
+# %%
+mark("end script")
+print_stage_breakdown(STAGE_TIMES)
+
+# %% [markdown]
+# ## What's next
 #
-# For a second target on the same dataset, change two lines of Config (`label_key`, maybe `label_order`) and re-run. For ROG sentiment as regression, set `task_type="regression"` and provide `label_scale={ "predominantlyNegative": -2, ..., "predominantlyPositive": 3 }` (or whatever ramp makes sense).
+# This run wrote per-epoch logs + a saved best model under `runs/`. Chapter 5
+# (`5_analysis/`) loads run directories like this one for error analysis and
+# cross-run comparison.
+#
+# Same dataset, second target: change `Config.target` and re-run. For ROG
+# sentiment as regression, set a target with `task_type="regression"` and provide
+# `label_scale={...}` mapping classes → a numeric ramp. `31_train_classification`
+# is the twin for gender / filled-pause classification.
