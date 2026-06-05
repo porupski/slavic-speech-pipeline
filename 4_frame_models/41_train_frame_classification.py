@@ -113,9 +113,10 @@ else:
 # %%
 import gc
 import json
+import random
 import shutil
-from collections import Counter
-from dataclasses import dataclass, field
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field, fields
 from datetime import datetime
 
 import numpy as np
@@ -149,58 +150,180 @@ IGNORE_INDEX = -100
 # entry here; `Config.target` is the only downstream knob.
 
 # %%
-TARGETS: dict = {
-    # ---- ParlaSpeech utterance_frame (FP frames, generated per lang below) ----
-}
+# What *task* this trainer handles (lang-agnostic). Pick one via `Config.target`;
+# `Config.langs` then selects which ParlaSpeech languages to pool (default: all the
+# task supports that have a JSONL on disk). The resolver fills `label_key`,
+# `task_type`, `label_order`, and the list of `jsonl_paths` to concatenate. Splits
+# are speaker-grouped within each lang and speakers never cross languages, so
+# pooling is leakage-free concatenation; the Trainer's shuffle interleaves langs.
+
+# %%
+TARGETS: dict = {}
 
 
-def _add_parlaspeech_frame_targets(targets: dict, langs=("hr", "rs")) -> None:
-    """FP-frame target per ParlaSpeech lang: binary per-frame filled_pause over
-    the whole utterance. `utterance_frame` JSONL is emitted by 11c."""
-    for l in langs:
-        path = f"data/processed_jsonl/parlaspeech_{l}_utterance_frame.jsonl"
-        targets[f"parlaspeech_{l}_fp_frames"] = {
-            "jsonl_path":  path,
-            "label_key":   "filled_pause",
-            "task_type":   "classification",
-            "level":       "frame",
-            "label_order": [0, 1],   # 0 = no FP, 1 = FP
-        }
+def _add_parlaspeech_frame_targets(targets: dict) -> None:
+    """Task-keyed frame targets (lang-agnostic):
+    - `fp_frames`: binary filled_pause over the whole utterance (`utterance_frame`);
+      HR/RS/PL/CZ — FP is acoustically comparable across all four.
+    - `primary_stress_frames`: rung 6, the north star — the WORD is the instance
+      (`word_frame`, sliced in memory via start_t/end_t). HR/RS only: they carry
+      `primary_stress` and are close Štokavian pitch-accent langs, so mixing is
+      sound. (Polish/Czech fixed stress would be a different phenomenon — but they
+      have no stress annotation anyway.)"""
+    targets["parlaspeech_fp_frames"] = {
+        "jsonl_template": "data/processed_jsonl/parlaspeech_{lang}_utterance_frame.jsonl",
+        "langs":       ("hr", "rs", "pl", "cz"),
+        "label_key":   "filled_pause",
+        "task_type":   "classification",
+        "level":       "frame",
+        "label_order": [0, 1],   # 0 = no FP, 1 = FP
+    }
+    targets["parlaspeech_primary_stress_frames"] = {
+        "jsonl_template": "data/processed_jsonl/parlaspeech_{lang}_word_frame.jsonl",
+        "langs":       ("hr", "rs"),
+        "label_key":   "primary_stress",
+        "task_type":   "classification",
+        "level":       "frame",
+        "label_order": [0, 1],   # 0 = unstressed frame, 1 = primary stress
+    }
 
 
 _add_parlaspeech_frame_targets(TARGETS)
 
-# ---- Rung 6 — primary-stress frames (HR/RS), the north star ------------------
-# The WORD is the instance; we frame over the word to mark primary-stress frames.
-# Requires un-commenting the `words_align` (+ `primary_stress`) tiers in 11c and
-# emitting a `word_frame` JSONL. Design lean: slice the loaded utterance WAV +
-# 50 Hz label sequence in memory by each word's bounds (no word WAVs on disk).
-# Left stubbed until the FP-frame rung is secured.
-#
-# TARGETS["parlaspeech_hr_primary_stress_frames"] = {
-#     "jsonl_path":  "data/processed_jsonl/parlaspeech_hr_word_frame.jsonl",
-#     "label_key":   "primary_stress",
-#     "task_type":   "classification",
-#     "level":       "frame",
-#     "label_order": [0, 1],
-# }
-
 
 def resolve_target(cfg, targets: dict) -> None:
-    """Overwrite jsonl_path/label_key/task_type/label_order from the picked
-    preset. Mutates cfg in place. Raises if cfg.target isn't a known key."""
+    """Fill label_key/task_type/label_order and `cfg.jsonl_paths` (the list of lang
+    JSONLs to pool) from the picked task preset and `cfg.langs`. Mutates cfg.
+
+    `cfg.langs=()` → every lang the task supports that has a JSONL on disk (missing
+    ones skipped with a note). `cfg.langs=("hr",)` → exactly those (must be
+    supported; a requested-but-missing JSONL is a hard error)."""
     if cfg.target not in targets:
         raise ValueError(
             f"Config.target={cfg.target!r} not in TARGETS. Known: {sorted(targets)}"
         )
     t = targets[cfg.target]
-    cfg.jsonl_path  = t["jsonl_path"]
     cfg.label_key   = t["label_key"]
     cfg.task_type   = t["task_type"]
     cfg.label_order = t["label_order"]
 
+    supported = t["langs"]
+    chosen = tuple(l.lower() for l in cfg.langs) if cfg.langs else supported
+    unknown = [l for l in chosen if l not in supported]
+    if unknown:
+        raise ValueError(
+            f"cfg.langs {unknown} not supported by {cfg.target!r} (supports {list(supported)})"
+        )
+    paths = []
+    for l in chosen:
+        p = t["jsonl_template"].format(lang=l)
+        if udp.from_project_relative(p).exists():
+            paths.append(p)
+        elif cfg.langs:                       # explicitly requested but absent → loud
+            raise FileNotFoundError(f"requested lang {l!r} but {p} is missing — run 11c")
+        else:                                 # auto (all): skip what isn't there yet
+            print(f"  ⏭  {l}: {p} not found — skipping")
+    if not paths:
+        raise FileNotFoundError(
+            f"no JSONL on disk for {cfg.target!r} (langs={list(chosen)}). Run 11c first."
+        )
+    cfg.jsonl_paths = paths
+
 
 print(f"available targets: {sorted(TARGETS)}")
+
+# %% [markdown]
+# # Run mode
+#
+# One knob decides how much work runs. `RUN_MODE` picks a tier; the base `Config`
+# below holds the real/full defaults, and `MODES` lists each tier's overrides on
+# top of it. `apply_mode` layers the active tier in. This is the one place to flip
+# between "does it even run" and "train for real".
+#
+# - **test** — plumbing only. Tiny random model, a handful of records, 1 epoch,
+#   writes under `runs/test` + `models/test`. Answers *"does it run end-to-end?"*
+# - **demo** — real model + real task, **all three splits capped** (train/dev/test
+#   = 20k/4k/4k), 2 epochs. A fast, semi-working model with a tangible curve.
+# - **full** — every cap off, real everything.
+#
+# `DEMO_SAMPLING` only matters when pooling >1 language: `proportional` keeps the
+# corpus balance (plain random sample across the pool); `balanced` draws ~equally
+# per language. Orthogonal to `cfg.langs`: mode = *how much*, langs = *which
+# languages*.
+
+# %%
+RUN_MODE = "demo"               # "test" | "demo" | "full"
+DEMO_SAMPLING = "proportional"  # "proportional" | "balanced" — only when pooling >1 lang
+
+# Each entry overrides the base (full) Config. Reading all three side by side
+# tells you exactly what each tier changes; everything unlisted stays at its full
+# default. (This block is a good candidate to lift to utils in phase E.)
+MODES: dict = {
+    "test": {
+        "model_name": "hf-internal-testing/tiny-random-wav2vec2",
+        "cap_train": 64, "cap_dev": 16, "cap_test": 16,
+        "num_epochs": 1, "batch_size": 2, "grad_accum": 1,
+        "runs_dir": "runs/test", "models_dir": "models/test",
+    },
+    "demo": {
+        "cap_train": 20_000, "cap_dev": 4_000, "cap_test": 4_000,
+        "num_epochs": 2, "batch_size": 128,
+    },
+    "full": {
+        "cap_train": None, "cap_dev": None, "cap_test": None,
+    },
+}
+
+
+def apply_mode(cfg, overrides: dict) -> None:
+    """Layer a mode's overrides onto the base (full) Config, in place. Every key
+    must name a real Config field — a typo'd knob is a hard error, not a silent
+    no-op."""
+    valid = {f.name for f in fields(cfg)}
+    unknown = set(overrides) - valid
+    if unknown:
+        raise ValueError(f"mode overrides name unknown Config fields: {sorted(unknown)}")
+    for k, v in overrides.items():
+        setattr(cfg, k, v)
+
+
+def cap_split(records: list[dict], n, seed: int, sampling: str = "proportional") -> list[dict]:
+    """Down-sample `records` to `n`, or return them unchanged when `n is None` or
+    the split is already small enough. Applied identically to train/dev/test.
+    JSONL is speaker-grouped, so we always shuffle before slicing.
+
+    `sampling` only bites when >1 language is pooled:
+      - proportional: plain random sample across the pool (true to corpus balance).
+      - balanced: round-robin per language → ~equal counts (draws whatever's left
+        once a smaller corpus is exhausted)."""
+    if n is None or len(records) <= n:
+        return records
+    rng = random.Random(seed)
+    if sampling == "proportional":
+        out = records[:]
+        rng.shuffle(out)
+        return out[:n]
+    if sampling == "balanced":
+        by_lang: dict = defaultdict(list)
+        for r in records:
+            by_lang[r["dataset"]].append(r)
+        for recs in by_lang.values():
+            rng.shuffle(recs)
+        langs = sorted(by_lang)
+        out: list = []
+        idx = {l: 0 for l in langs}
+        while len(out) < n:
+            progressed = False
+            for l in langs:
+                if idx[l] < len(by_lang[l]):
+                    out.append(by_lang[l][idx[l]]); idx[l] += 1; progressed = True
+                    if len(out) >= n:
+                        break
+            if not progressed:
+                break
+        return out
+    raise ValueError(f"DEMO_SAMPLING must be 'proportional' or 'balanced', got {sampling!r}")
+
 
 # %% [markdown]
 # # Config
@@ -226,10 +349,20 @@ print(f"available targets: {sorted(TARGETS)}")
 @dataclass
 class Config:
     # -- Target preset (resolver overwrites the data fields below) -----------
-    target: str = "parlaspeech_hr_fp_frames"
+    target: str = "parlaspeech_primary_stress_frames" #"parlaspeech_fp_frames"
+    # Languages to pool. () = all langs the target supports that have a JSONL on
+    # disk; e.g. ("hr",) for Croatian only, ("hr", "rs") for a HR+RS mix.
+    langs: tuple = ()
+
+    # -- Run-mode caps (set by apply_mode from MODES[RUN_MODE]) --------------
+    # None = no cap (full). cap_split applies these identically to train/dev/test,
+    # so a capped run never silently leaves TEST at full size.
+    cap_train: int | None = None
+    cap_dev:   int | None = None
+    cap_test:  int | None = None
 
     # -- Data (overwritten by resolve_target) -------------------------------
-    jsonl_path:  str = ""
+    jsonl_paths: list = field(default_factory=list)   # one per pooled lang
     label_key:   str = ""
     task_type:   str = "classification"   # classification-only in this notebook
     label_order: list = field(default_factory=lambda: [0, 1])
@@ -246,10 +379,10 @@ class Config:
     head_dropout: float          = 0.1
 
     # -- Training ------------------------------------------------------------
-    batch_size: int      = 8
-    grad_accum: int      = 2
+    batch_size: int      = 16
+    grad_accum: int      = 1
     learning_rate: float = 1e-5
-    num_epochs: int      = 1      # demo runs often use 2–3 for a tangible curve
+    num_epochs: int      = 3      # full-run default; modes override (test=1, demo=2)
     max_grad_norm: float = 1.0
     warmup_ratio: float  = 0.10
     logging_steps: int   = 50
@@ -284,28 +417,16 @@ class Config:
     # Honored from the GPU guard (cell above). GPU 2 reserved; never touch others.
     use_cuda: bool = True
 
-    # -- Test mode -----------------------------------------------------------
-    test_mode: bool       = False
-    test_n_train: int     = 64
-    test_n_dev: int       = 16
-    test_n_test: int      = 16
-    test_model_name: str  = "hf-internal-testing/tiny-random-wav2vec2"
-    test_num_epochs: int  = 1
-    test_batch_size: int  = 2
-
 
 cfg = Config()
 resolve_target(cfg, TARGETS)
 
-# Apply test-mode clamps
-if cfg.test_mode:
-    udp.banner("🧪 TEST MODE", char="-")
-    cfg.model_name = cfg.test_model_name
-    cfg.num_epochs = cfg.test_num_epochs
-    cfg.batch_size = cfg.test_batch_size
-    cfg.grad_accum = 1
-    cfg.runs_dir   = "runs/test"
-    cfg.models_dir = "models/test"
+# Layer the active run mode onto the base (full) config.
+if RUN_MODE not in MODES:
+    raise ValueError(f"RUN_MODE={RUN_MODE!r} not in {sorted(MODES)}")
+apply_mode(cfg, MODES[RUN_MODE])
+if RUN_MODE != "full":
+    udp.banner(f"🔧 RUN_MODE = {RUN_MODE}", char="-")
 
 # Device resolution. GPU selection + CUDA_VISIBLE_DEVICES already happened in the
 # setup cell (input-gated) BEFORE torch was imported — the only point where
@@ -320,7 +441,10 @@ else:
     DEVICE = "cpu"
 
 print(f"target      = {cfg.target}")
-print(f"jsonl_path  = {cfg.jsonl_path}")
+print(f"run_mode    = {RUN_MODE}  (caps train/dev/test = {cfg.cap_train}/{cfg.cap_dev}/{cfg.cap_test}, sampling={DEMO_SAMPLING})")
+print(f"langs       = {cfg.langs or '(all available)'} → {len(cfg.jsonl_paths)} JSONL(s)")
+for _p in cfg.jsonl_paths:
+    print(f"   • {_p}")
 print(f"label_key   = {cfg.label_key}")
 print(f"task_type   = {cfg.task_type}")
 print(f"label_order = {cfg.label_order}")
@@ -336,6 +460,10 @@ if DEVICE == "cuda":
 
 # %%
 def validate_config(cfg: Config) -> None:
+    if RUN_MODE not in MODES:
+        raise ValueError(f"RUN_MODE invalid: {RUN_MODE!r} (choose {sorted(MODES)})")
+    if DEMO_SAMPLING not in ("proportional", "balanced"):
+        raise ValueError(f"DEMO_SAMPLING invalid: {DEMO_SAMPLING!r} (proportional|balanced)")
     if cfg.task_type == "regression":
         raise NotImplementedError(
             "Frame-level regression is deferred to a future chapter. "
@@ -367,54 +495,56 @@ print("✅ config valid")
 # ## Load JSONL, filter to records that carry `label_key`
 #
 # A frame record qualifies only if `labels[label_key]` is a **non-empty list**.
-# `DEMO_*` caps shrink TRAIN/DEV for a bounded demo run; TEST stays whole for a
-# trustworthy final number. Set a cap to `None` for the full run.
+# `cap_split` then trims each split to the active mode's cap (`None` = whole
+# split) — applied identically to train, dev, **and** test, so a capped run never
+# leaves TEST at full size. Sampling (`DEMO_SAMPLING`) only matters when >1 lang
+# is pooled.
 
 # %%
 mark("data prep")
 
-# ── Demo-run caps ─────────────────────────────────────────────────────────────
-# Shuffle before slicing (JSONL is speaker-grouped, so a head-slice would skew
-# the speaker/label balance). None → use the whole split (full run).
-DEMO_TRAIN_CAP = 50_000
-DEMO_DEV_CAP   = 10_000
-DEMO_SEED      = 1234
+CAP_SEED = 1234   # deterministic shuffle seed for cap_split
 
 
-def load_split(jsonl_path: str, split: str, label_key: str) -> list[dict]:
+def load_split(jsonl_paths: list, split: str, label_key: str) -> list[dict]:
+    """Concatenate `split` records carrying a non-empty `label_key` sequence across
+    every pooled lang JSONL. Records keep their own `dataset` tag for per-lang
+    analysis downstream."""
     out = []
-    for r in udp.iter_jsonl(jsonl_path):
-        if r["split"] != split:
-            continue
-        v = r.get("labels", {}).get(label_key)
-        if v is None or not isinstance(v, list) or len(v) == 0:
-            continue
-        out.append(r)
+    for jp in jsonl_paths:
+        for r in udp.iter_jsonl(jp):
+            if r["split"] != split:
+                continue
+            v = r.get("labels", {}).get(label_key)
+            if v is None or not isinstance(v, list) or len(v) == 0:
+                continue
+            out.append(r)
     return out
 
 
-train_records = load_split(cfg.jsonl_path, "train", cfg.label_key)
-dev_records   = load_split(cfg.jsonl_path, "dev",   cfg.label_key)
-test_records  = load_split(cfg.jsonl_path, "test",  cfg.label_key)
+train_records = load_split(cfg.jsonl_paths, "train", cfg.label_key)
+dev_records   = load_split(cfg.jsonl_paths, "dev",   cfg.label_key)
+test_records  = load_split(cfg.jsonl_paths, "test",  cfg.label_key)
 
-import random
-if DEMO_TRAIN_CAP is not None and len(train_records) > DEMO_TRAIN_CAP:
-    random.Random(DEMO_SEED).shuffle(train_records)
-    train_records = train_records[:DEMO_TRAIN_CAP]
-    print(f"🔬 demo: train capped to {DEMO_TRAIN_CAP} (shuffled, seed={DEMO_SEED})")
-if DEMO_DEV_CAP is not None and len(dev_records) > DEMO_DEV_CAP:
-    random.Random(DEMO_SEED).shuffle(dev_records)
-    dev_records = dev_records[:DEMO_DEV_CAP]
-    print(f"🔬 demo: dev capped to {DEMO_DEV_CAP} (shuffled, seed={DEMO_SEED})")
+# One knob, applied identically to every split. None caps (full mode) are no-ops.
+_pre = (len(train_records), len(dev_records), len(test_records))
+train_records = cap_split(train_records, cfg.cap_train, CAP_SEED, DEMO_SAMPLING)
+dev_records   = cap_split(dev_records,   cfg.cap_dev,   CAP_SEED, DEMO_SAMPLING)
+test_records  = cap_split(test_records,  cfg.cap_test,  CAP_SEED, DEMO_SAMPLING)
 
-if cfg.test_mode:
-    train_records = train_records[: cfg.test_n_train]
-    dev_records   = dev_records[:   cfg.test_n_dev]
-    test_records  = test_records[:  cfg.test_n_test]
 
-print(f"train: {len(train_records)}")
-print(f"dev:   {len(dev_records)}")
-print(f"test:  {len(test_records)}")
+def _capline(name: str, pre: int, post: int, cap) -> None:
+    tag = f"capped→{cap}" if (cap is not None and post < pre) else "uncapped"
+    print(f"   {name:<6} {post:>9d}   (of {pre:>9d}, {tag})")
+
+
+print(f"run_mode={RUN_MODE}  sampling={DEMO_SAMPLING}")
+_capline("train", _pre[0], len(train_records), cfg.cap_train)
+_capline("dev",   _pre[1], len(dev_records),   cfg.cap_dev)
+_capline("test",  _pre[2], len(test_records),  cfg.cap_test)
+if len(cfg.jsonl_paths) > 1:
+    _mix = Counter(r["dataset"] for r in train_records)
+    print(f"   train lang mix: {dict(_mix)}")
 if not train_records or not dev_records or not test_records:
     raise ValueError("one of the splits is empty after filtering for label_key — check the JSONL")
 
@@ -594,6 +724,9 @@ def prepare_dataset_dict(records: list[dict], cfg: Config, label2id: dict) -> li
             "instance_id": r["instance_id"],
             "file_id":     r.get("file_id", ""),
             "audio_path":  str(udp.from_project_relative(r["audio_path"])),
+            # Sub-clip bounds within audio_path (word_frame); None → whole file.
+            "start_t":     r.get("start_t"),
+            "end_t":       r.get("end_t"),
             "labels":      [label2id[v] for v in raw],
         })
     return items
@@ -604,15 +737,21 @@ def make_preprocess_function(feature_extractor, conv_kernel: list, conv_stride: 
 
     def preprocess_function(examples):
         """Load each WAV, run the feature extractor (no pad), align labels to the
-        model's per-record frame count."""
+        model's per-record frame count. If a record carries start_t/end_t (e.g.
+        word_frame), slice that sub-clip from audio_path in memory first — no word
+        WAVs on disk."""
         audio_arrays = []
-        for path in examples["audio_path"]:
+        for path, st, et in zip(examples["audio_path"], examples["start_t"], examples["end_t"]):
             data, sr = sf.read(path, dtype="float32", always_2d=False)
             if data.ndim == 2:
                 data = data.mean(axis=1)
             if sr != 16000:
                 import librosa
                 data = librosa.resample(data, orig_sr=sr, target_sr=16000)
+            if st is not None and et is not None:
+                a = max(0, int(round(st * 16000)))
+                b = min(len(data), int(round(et * 16000)))
+                data = data[a:b]
             audio_arrays.append(data)
 
         inputs = feature_extractor(
@@ -764,14 +903,22 @@ def compute_frame_metrics(eval_pred):
 
 # %%
 def save_predictions_json(predictions, labels, items, out_path: Path, id2label: dict):
-    """predictions: (B, T, num_labels) logits → argmax. labels: (B, T) w/ -100 pad."""
+    """predictions: (B, T, num_labels) logits → argmax. labels: (B, T) w/ -100 pad.
+    Also stores per-frame positive-class probability (`prob_pos`, softmax of the
+    last/positive class) for QC: peak = max(prob_pos) tells you how confident the
+    model's chosen stress frame is, and the list shows where that peak sits."""
     pred_idx = np.argmax(predictions, axis=-1) if predictions.ndim == 3 else predictions
+    prob_pos_all = None
+    if predictions.ndim == 3:
+        z = predictions - predictions.max(axis=-1, keepdims=True)
+        ez = np.exp(z)
+        prob_pos_all = (ez / ez.sum(axis=-1, keepdims=True))[..., -1]   # positive = last class
     out = []
     for i, item in enumerate(items):
         valid = labels[i] != IGNORE_INDEX
         gold_seq = labels[i][valid].tolist()
         pred_seq = pred_idx[i][valid].tolist()
-        out.append({
+        rec = {
             "instance_id": item["instance_id"],
             "file_id":     item.get("file_id", ""),
             "n_frames":    int(len(gold_seq)),
@@ -779,7 +926,10 @@ def save_predictions_json(predictions, labels, items, out_path: Path, id2label: 
             "pred":        [id2label[int(p)] for p in pred_seq],
             "gold_raw":    [int(g) for g in gold_seq],
             "pred_raw":    [int(p) for p in pred_seq],
-        })
+        }
+        if prob_pos_all is not None:
+            rec["prob_pos"] = [round(float(x), 4) for x in prob_pos_all[i][valid]]
+        out.append(rec)
     out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False))
 
 
@@ -1037,7 +1187,8 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
 # `runs/{dataset}_{label_key}_frame_{timestamp}/`. Snapshots the resolved Config.
 
 # %%
-dataset_name = train_records[0]["dataset"]
+_langs_in_run = sorted({r["dataset"].split("-")[-1].lower() for r in train_records})
+dataset_name = "ParlaSpeech-" + "+".join(_langs_in_run)   # e.g. ParlaSpeech-hr+rs
 ts = datetime.now().strftime("%Y%m%d-%H%M%S")
 run_name = f"{dataset_name}_{cfg.label_key}_frame_{ts}"
 
@@ -1179,31 +1330,136 @@ plt.show()
 # %% [markdown]
 # ## Inference spot-check
 #
-# Eyeball 5 random TEST records: provenance, frame count, gold vs predicted
-# FP-frame counts, and per-record frame accuracy. A quick sanity read on what the
-# model is doing at the sequence level — complements the aggregate metrics + the
-# frame confusion matrix above.
+# A flat random sample is ~all negatives (FP frames are ~1–2% of frames), and a
+# positive-frame *count* says nothing about whether predictions land in the right
+# place. So instead: stratified selection — random positive- and negative-event
+# records, plus the best/worst positive-event predictions by `SPOTCHECK_RANK_BY`
+# — rendered as **gold-over-pred frame strips**, each stretched to equal width so
+# misalignment is visible at a glance. Best/worst are ranked among positive-event
+# records only (negatives are trivially near-perfect under the imbalance).
+#
+# `SPOTCHECK_RANK_BY` is a string switch over `_RANKERS` (`"pos_f1"` |
+# `"accuracy"`; add more by extending the dict). Note: accuracy is frame-aligned
+# but imbalance-dominated and barely moves under a few-frame shift — true
+# misalignment-aware (tolerance-windowed) scoring is ch5 `53_frame_event_metrics`.
 
 # %%
 import random as _rnd
 
-_rows = json.loads(preds_path.read_text())
-_sample = _rnd.Random(0).sample(_rows, k=min(5, len(_rows)))
+# ── Spot-check selection ──────────────────────────────────────────────────────
+SPOTCHECK_RANK_BY = "pos_f1"   # "pos_f1" | "accuracy"  — extend _RANKERS to add more
+N_POS, N_NEG, N_BEST, N_WORST = 3, 3, 2, 2
+SPOT_SEED = 0
+
 _pos_id = cfg.label_order[-1]   # positive class (1 for binary FP)
 
-udp.banner("INFERENCE SPOT-CHECK — 5 random TEST examples")
-for p in _sample:
-    gold_raw = np.array(p["gold_raw"]); pred_raw = np.array(p["pred_raw"])
-    n_fr = p["n_frames"]
-    gold_pos = int((np.array(p["gold"]) == _pos_id).sum() if p["gold"] else 0)
-    pred_pos = int((np.array(p["pred"]) == _pos_id).sum() if p["pred"] else 0)
-    frame_acc = float((gold_raw == pred_raw).mean()) if n_fr else float("nan")
-    hit = "✓" if gold_pos == pred_pos else "✗"
-    print(f"  {p['instance_id']}")
-    print(f"     file={p.get('file_id', '')}  frames={n_fr}")
-    print(f"     positive frames  gold={gold_pos}  pred={pred_pos}  {hit}")
-    print(f"     frame accuracy   {frame_acc:.4f}")
-    print()
+
+def _acc(g, p, pos):
+    return float((g == p).mean()) if len(g) else 0.0
+
+
+def _pos_f1(g, p, pos):
+    tp = int(((g == pos) & (p == pos)).sum())
+    fp = int(((g != pos) & (p == pos)).sum())
+    fn = int(((g == pos) & (p != pos)).sum())
+    denom = 2 * tp + fp + fn
+    return (2 * tp / denom) if denom else 0.0
+
+
+# Best/worst rankers (higher = better). NB: accuracy is frame-aligned but
+# imbalance-dominated — a few-frame shift barely moves it. Misalignment-aware
+# scoring (tolerance-windowed events) is ch5 (53_frame_event_metrics); this panel
+# is an eyeball aid, not a metric.
+_RANKERS = {"pos_f1": _pos_f1, "accuracy": _acc}
+if SPOTCHECK_RANK_BY not in _RANKERS:
+    raise ValueError(f"SPOTCHECK_RANK_BY={SPOTCHECK_RANK_BY!r} not in {sorted(_RANKERS)}")
+_rank = _RANKERS[SPOTCHECK_RANK_BY]
+
+_rows = json.loads(preds_path.read_text())
+for r in _rows:
+    r["_g"] = np.asarray(r["gold_raw"]); r["_p"] = np.asarray(r["pred_raw"])
+    r["_gold_pos"] = int((r["_g"] == _pos_id).sum())
+    r["_pred_pos"] = int((r["_p"] == _pos_id).sum())
+    r["_acc"] = _acc(r["_g"], r["_p"], _pos_id)
+    r["_score"] = _rank(r["_g"], r["_p"], _pos_id)
+
+pos_events = [r for r in _rows if r["_gold_pos"] > 0]
+neg_events = [r for r in _rows if r["_gold_pos"] == 0]
+
+_rng = _rnd.Random(SPOT_SEED)
+_order = {"POS": 0, "NEG": 1, "BEST": 2, "WORST": 3}
+picks: dict = {}   # instance_id -> {"rec": r, "tags": [...]}
+
+
+def _add(recs, tag):
+    for r in recs:
+        picks.setdefault(r["instance_id"], {"rec": r, "tags": []})["tags"].append(tag)
+
+
+_add(_rng.sample(pos_events, k=min(N_POS, len(pos_events))), "POS")
+_add(_rng.sample(neg_events, k=min(N_NEG, len(neg_events))), "NEG")
+_ranked = sorted(pos_events, key=lambda r: r["_score"], reverse=True)
+_add(_ranked[:N_BEST], "BEST")
+_add(_ranked[-N_WORST:], "WORST")
+
+selected = sorted(picks.values(), key=lambda d: min(_order[t] for t in d["tags"]))
+
+
+def _tagstr(tags):
+    return "+".join(sorted(set(tags), key=lambda t: _order[t]))
+
+
+udp.banner(f"INFERENCE SPOT-CHECK — {len(selected)} TEST examples "
+           f"(best/worst by {SPOTCHECK_RANK_BY}, among positive-events)")
+if not pos_events:
+    print("⚠️  no positive-event records in TEST — best/worst panel is empty")
+for d in selected:
+    r = d["rec"]
+    print(f"  [{_tagstr(d['tags']):<14}] {r['instance_id']}")
+    print(f"     file={r.get('file_id','')}  frames={r['n_frames']}  "
+          f"gold_pos={r['_gold_pos']}  pred_pos={r['_pred_pos']}  "
+          f"acc={r['_acc']:.4f}  {SPOTCHECK_RANK_BY}={r['_score']:.4f}")
+
+# ── Strips: gold (top) over pred (bottom), one record per row, equal width so
+# alignment is visible regardless of length. Reuses _row_to_image / _PALETTE.
+n = len(selected)
+if n:
+    n_classes = len(id2label)
+    fig, axes = plt.subplots(n, 1, figsize=(12, max(2, 0.85 * n)), squeeze=False)
+    axes = axes[:, 0]
+    # Row-specific palettes: negatives grey, gold positives orange, pred positives blue.
+    _GOLD_PAL = ["#dddddd", "#FFA500"]
+    _PRED_PAL = ["#dddddd", "#1f77b4"]
+
+    def _img(seq, pal):
+        rgba = np.zeros((1, len(seq), 4))
+        for t, v in enumerate(seq):
+            rgba[0, t] = mcolors.to_rgba(pal[int(v)])
+        return rgba
+
+    for i, d in enumerate(selected):
+        r = d["rec"]
+        gold_img = _img(r["_g"], _GOLD_PAL)
+        pred_img = _img(r["_p"], _PRED_PAL)
+        strip = np.concatenate([gold_img, pred_img], axis=0)   # (2, T, 4)
+        ax = axes[i]
+        ax.imshow(strip, aspect="auto", interpolation="nearest")
+        ax.set_yticks([0, 1]); ax.set_yticklabels(["gold", "pred"], fontsize=8)
+        ax.set_xticks([])
+        iid = r["instance_id"]
+        iid = ("..." + iid[-44:]) if len(iid) > 47 else iid
+        ax.set_title(f"[{_tagstr(d['tags'])}] {iid}  · {r['n_frames']}f · "
+                     f"{SPOTCHECK_RANK_BY}={r['_score']:.3f}", fontsize=8, loc="left")
+    
+    handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c in ("#FFA500", "#1f77b4", "#dddddd")]
+    fig.legend(handles, ["gold positive", "pred positive", "negative"],
+               loc="lower center", ncol=3, fontsize=8, bbox_to_anchor=(0.5, -0.03))
+    
+    plt.tight_layout(rect=[0, 0.04, 1, 1])
+    strips_png = run_dir / "spot_check_strips.png"
+    fig.savefig(strips_png, dpi=120, bbox_inches="tight")
+    print(f"\nsaved {strips_png.relative_to(PROJECT_ROOT)}")
+    plt.show()
 
 # %% [markdown]
 # ## Stage timing

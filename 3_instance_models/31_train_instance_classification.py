@@ -24,12 +24,12 @@
 # **Two-phase training:** phase 1 trains TRAIN→DEV every epoch (no model saved);
 # phase 2 retrains TRAIN∪DEV→TEST and saves the best epoch's model.
 #
-# **Run tiers**
-# - **test mode** (`cfg.test_mode`) — tiny random model, 1 epoch, a couple dozen
-#   records. Proves the plumbing end-to-end; produces no real result.
-# - **demo run** — real model, real-but-capped data (`DEMO_*` caps), ~1–2 h.
-#   A tangible number, trivial (gender) or not (filled-pause count).
-# - **full run** — caps off (`None`), whole corpus. You and the GPU.
+# **Run tiers** — one knob, `RUN_MODE` (see the Run-mode cell below):
+# - **test** — tiny random model, a handful of records, 1 epoch. Proves the
+#   plumbing end-to-end; produces no real result.
+# - **demo** — real model, all three splits capped (20k/4k/4k), 2 epochs. A fast,
+#   tangible result.
+# - **full** — caps off, whole corpus. You and the GPU.
 #
 # Target normalization is **regression-only** (lives in 32); classification has a
 # label space, so there's nothing to normalize here.
@@ -119,9 +119,10 @@ else:
 # %%
 import gc
 import json
+import random
 import shutil
-from collections import Counter
-from dataclasses import dataclass, field
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field, fields
 from datetime import datetime
 
 import numpy as np
@@ -245,6 +246,99 @@ def resolve_target(cfg, targets: dict) -> None:
 print(f"available targets: {sorted(TARGETS)}")
 
 # %% [markdown]
+# # Run mode
+#
+# One knob decides how much work runs. `RUN_MODE` picks a tier; the base `Config`
+# below holds the real/full defaults, and `MODES` lists each tier's overrides on
+# top of it. `apply_mode` layers the active tier in. This is the one place to flip
+# between "does it even run" and "train for real".
+#
+# - **test** — plumbing only. Tiny random model, a handful of records, 1 epoch,
+#   writes under `runs/test` + `models/test`. Answers *"does it run end-to-end?"*
+# - **demo** — real model + real task, **all three splits capped** (train/dev/test
+#   = 20k/4k/4k), 2 epochs. A fast, semi-working model with a tangible curve.
+# - **full** — every cap off, real everything.
+#
+# `DEMO_SAMPLING` only matters when pooling >1 language: `proportional` keeps the
+# corpus balance (plain random sample across the pool); `balanced` draws ~equally
+# per language. (Chapter 3 targets are single-language, so it's inert here until
+# multi-lang pooling lands — kept for parity with the frame trainer / phase-E utils.)
+
+# %%
+RUN_MODE = "demo"               # "test" | "demo" | "full"
+DEMO_SAMPLING = "proportional"  # "proportional" | "balanced" — only when pooling >1 lang
+
+# Each entry overrides the base (full) Config. Reading all three side by side
+# tells you exactly what each tier changes; everything unlisted stays at its full
+# default. (This block is a good candidate to lift to utils in phase E.)
+MODES: dict = {
+    "test": {
+        "model_name": "hf-internal-testing/tiny-random-wav2vec2",
+        "cap_train": 64, "cap_dev": 16, "cap_test": 16,
+        "num_epochs": 1, "batch_size": 2, "grad_accum": 1,
+        "runs_dir": "runs/test", "models_dir": "models/test",
+    },
+    "demo": {
+        "cap_train": 20_000, "cap_dev": 4_000, "cap_test": 4_000,
+        "num_epochs": 2,
+    },
+    "full": {
+        "cap_train": None, "cap_dev": None, "cap_test": None,
+    },
+}
+
+
+def apply_mode(cfg, overrides: dict) -> None:
+    """Layer a mode's overrides onto the base (full) Config, in place. Every key
+    must name a real Config field — a typo'd knob is a hard error, not a silent
+    no-op."""
+    valid = {f.name for f in fields(cfg)}
+    unknown = set(overrides) - valid
+    if unknown:
+        raise ValueError(f"mode overrides name unknown Config fields: {sorted(unknown)}")
+    for k, v in overrides.items():
+        setattr(cfg, k, v)
+
+
+def cap_split(records: list[dict], n, seed: int, sampling: str = "proportional") -> list[dict]:
+    """Down-sample `records` to `n`, or return them unchanged when `n is None` or
+    the split is already small enough. Applied identically to train/dev/test.
+    JSONL is speaker-grouped, so we always shuffle before slicing.
+
+    `sampling` only bites when >1 language is pooled:
+      - proportional: plain random sample across the pool (true to corpus balance).
+      - balanced: round-robin per language -> ~equal counts (draws whatever's left
+        once a smaller corpus is exhausted)."""
+    if n is None or len(records) <= n:
+        return records
+    rng = random.Random(seed)
+    if sampling == "proportional":
+        out = records[:]
+        rng.shuffle(out)
+        return out[:n]
+    if sampling == "balanced":
+        by_lang: dict = defaultdict(list)
+        for r in records:
+            by_lang[r["dataset"]].append(r)
+        for recs in by_lang.values():
+            rng.shuffle(recs)
+        langs = sorted(by_lang)
+        out: list = []
+        idx = {l: 0 for l in langs}
+        while len(out) < n:
+            progressed = False
+            for l in langs:
+                if idx[l] < len(by_lang[l]):
+                    out.append(by_lang[l][idx[l]]); idx[l] += 1; progressed = True
+                    if len(out) >= n:
+                        break
+            if not progressed:
+                break
+        return out
+    raise ValueError(f"DEMO_SAMPLING must be 'proportional' or 'balanced', got {sampling!r}")
+
+
+# %% [markdown]
 # # Config
 #
 # All knobs are here.
@@ -283,6 +377,13 @@ class Config:
     # Regression-only (kept for Config parity with 32; ignored here).
     label_scale: dict | None = None
 
+    # -- Run-mode caps (set by apply_mode from MODES[RUN_MODE]) --------------
+    # None = no cap (full). cap_split applies these identically to train/dev/test,
+    # so a capped run never silently leaves TEST at full size.
+    cap_train: int | None = None
+    cap_dev:   int | None = None
+    cap_test:  int | None = None
+
     # -- Model ---------------------------------------------------------------
     model_name: str              = "facebook/wav2vec2-base"
     freeze_feature_encoder: bool = True
@@ -292,7 +393,7 @@ class Config:
     batch_size: int      = 16
     grad_accum: int      = 1
     learning_rate: float = 1e-5
-    num_epochs: int      = 1      # demo runs often use 2–3 for a tangible curve
+    num_epochs: int      = 3      # full-run default; modes override (test=1, demo=2)
     max_grad_norm: float = 1.0
     warmup_ratio: float  = 0.10
     logging_steps: int   = 100
@@ -319,28 +420,15 @@ class Config:
     # Honored from the GPU guard (cell above). GPU 2 reserved; never touch others.
     use_cuda: bool   = True
 
-    # -- Test mode -----------------------------------------------------------
-    test_mode: bool       = False
-    test_n_train: int     = 200
-    test_n_dev: int       = 24
-    test_n_test: int      = 24
-    test_model_name: str  = "hf-internal-testing/tiny-random-wav2vec2"
-    test_num_epochs: int  = 1
-    test_batch_size: int  = 2
-
-
 cfg = Config()
 resolve_target(cfg, TARGETS)
 
-# Apply test-mode clamps
-if cfg.test_mode:
-    udp.banner("🧪 TEST MODE", char="-")
-    cfg.model_name = cfg.test_model_name
-    cfg.num_epochs = cfg.test_num_epochs
-    cfg.batch_size = cfg.test_batch_size
-    cfg.grad_accum = 1
-    cfg.runs_dir   = "runs/test"
-    cfg.models_dir = "models/test"
+# Layer the active run mode onto the base (full) config.
+if RUN_MODE not in MODES:
+    raise ValueError(f"RUN_MODE={RUN_MODE!r} not in {sorted(MODES)}")
+apply_mode(cfg, MODES[RUN_MODE])
+if RUN_MODE != "full":
+    udp.banner(f"🔧 RUN_MODE = {RUN_MODE}", char="-")
 
 # Device resolution. GPU selection + CUDA_VISIBLE_DEVICES already happened in the
 # setup cell (input-gated) BEFORE torch was imported — the only point where
@@ -355,6 +443,7 @@ else:
     DEVICE = "cpu"
 
 print(f"target      = {cfg.target}")
+print(f"run_mode    = {RUN_MODE}  (caps train/dev/test = {cfg.cap_train}/{cfg.cap_dev}/{cfg.cap_test}, sampling={DEMO_SAMPLING})")
 print(f"jsonl_path  = {cfg.jsonl_path}")
 print(f"label_key   = {cfg.label_key}")
 print(f"task_type   = {cfg.task_type}")
@@ -371,6 +460,10 @@ if DEVICE == "cuda":
 
 # %%
 def validate_config(cfg: Config) -> None:
+    if RUN_MODE not in MODES:
+        raise ValueError(f"RUN_MODE invalid: {RUN_MODE!r} (choose {sorted(MODES)})")
+    if DEMO_SAMPLING not in ("proportional", "balanced"):
+        raise ValueError(f"DEMO_SAMPLING invalid: {DEMO_SAMPLING!r} (proportional|balanced)")
     if cfg.task_type != "classification":
         raise ValueError(f"31_ is classification-only; got task_type={cfg.task_type!r}. "
                          f"Use 32_train_regression for regression targets.")
@@ -396,12 +489,7 @@ print("✅ config valid")
 # %%
 mark("data prep")
 
-# ── Demo-run caps ─────────────────────────────────────────────────────────────
-# Shuffle before slicing (JSONL is speaker-grouped, so a head-slice would skew
-# the speaker/label balance). None → use the whole split (full run).
-DEMO_TRAIN_CAP = 50_000
-DEMO_DEV_CAP   = 10_000
-DEMO_SEED      = 1234
+CAP_SEED = 1234   # deterministic shuffle seed for cap_split
 
 
 def load_split(jsonl_path: str, split: str, label_key: str) -> list[dict]:
@@ -426,24 +514,22 @@ train_records = load_split(cfg.jsonl_path, "train", cfg.label_key)
 dev_records   = load_split(cfg.jsonl_path, "dev",   cfg.label_key)
 test_records  = load_split(cfg.jsonl_path, "test",  cfg.label_key)
 
-import random
-if DEMO_TRAIN_CAP is not None and len(train_records) > DEMO_TRAIN_CAP:
-    random.Random(DEMO_SEED).shuffle(train_records)
-    train_records = train_records[:DEMO_TRAIN_CAP]
-    print(f"🔬 demo: train capped to {DEMO_TRAIN_CAP} (shuffled, seed={DEMO_SEED})")
-if DEMO_DEV_CAP is not None and len(dev_records) > DEMO_DEV_CAP:
-    random.Random(DEMO_SEED).shuffle(dev_records)
-    dev_records = dev_records[:DEMO_DEV_CAP]
-    print(f"🔬 demo: dev capped to {DEMO_DEV_CAP} (shuffled, seed={DEMO_SEED})")
+# One knob, applied identically to every split. None caps (full mode) are no-ops.
+_pre = (len(train_records), len(dev_records), len(test_records))
+train_records = cap_split(train_records, cfg.cap_train, CAP_SEED, DEMO_SAMPLING)
+dev_records   = cap_split(dev_records,   cfg.cap_dev,   CAP_SEED, DEMO_SAMPLING)
+test_records  = cap_split(test_records,  cfg.cap_test,  CAP_SEED, DEMO_SAMPLING)
 
-if cfg.test_mode:
-    train_records = train_records[: cfg.test_n_train]
-    dev_records   = dev_records[:   cfg.test_n_dev]
-    test_records  = test_records[:  cfg.test_n_test]
 
-print(f"train: {len(train_records)}")
-print(f"dev:   {len(dev_records)}")
-print(f"test:  {len(test_records)}")
+def _capline(name: str, pre: int, post: int, cap) -> None:
+    tag = f"capped→{cap}" if (cap is not None and post < pre) else "uncapped"
+    print(f"   {name:<6} {post:>9d}   (of {pre:>9d}, {tag})")
+
+
+print(f"run_mode={RUN_MODE}  sampling={DEMO_SAMPLING}")
+_capline("train", _pre[0], len(train_records), cfg.cap_train)
+_capline("dev",   _pre[1], len(dev_records),   cfg.cap_dev)
+_capline("test",  _pre[2], len(test_records),  cfg.cap_test)
 if not train_records or not dev_records or not test_records:
     raise ValueError("one of the splits is empty after filtering for label_key — check the JSONL")
 
