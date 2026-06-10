@@ -1,0 +1,68 @@
+{
+  "_readme": [
+    "All user-facing knobs for the chapter-3 instance trainers (31/32 notebooks + runners).",
+    "You should never need to edit the .py files — change values here instead.",
+    "Layering: Config defaults -> 'shared' -> 'classification'/'regression' -> 'modes'[run_mode].",
+    "Every key must name a real Config field in utils_instance_train.py (typos are hard errors).",
+    "run_mode: 'test' (plumbing only) | 'demo' (capped, tangible) | 'full' (whole corpus).",
+    "Targets are preset names from the TARGETS registry; list them with available_targets()."
+  ],
+
+  "run_mode": "demo",
+
+  "shared": {
+    "model_name": "facebook/wav2vec2-base",
+    "freeze_feature_encoder": true,
+
+    "batch_size": 16,
+    "grad_accum": 1,
+    "learning_rate": 1e-5,
+    "num_epochs": 3,
+    "max_grad_norm": 1.0,
+    "warmup_ratio": 0.10,
+    "logging_steps": 100,
+
+    "eta_rec_per_s_guess": 40.0,
+
+    "runs_dir": "runs",
+    "models_dir": "models",
+
+    "preprocess_batch_size": 32,
+    "dataloader_num_workers": 16,
+    "map_num_proc": 8,
+    "max_duration_s": 15.0,
+
+    "demo_sampling": "proportional",
+    "cap_seed": 1234,
+    "reserved_gpu": "2"
+  },
+
+  "classification": {
+    "target": "parlaspeech_hr_gender",
+    "best_metric_classification": "macro_f1"
+  },
+
+  "regression": {
+    "target": "parlaspeech_hr_age",
+    "best_metric_regression": "spearman",
+    "normalize": "zscore",
+    "loss_function": "mse",
+    "label_scale": null
+  },
+
+  "modes": {
+    "test": {
+      "model_name": "hf-internal-testing/tiny-random-wav2vec2",
+      "cap_train": 64, "cap_dev": 16, "cap_test": 16,
+      "num_epochs": 1, "batch_size": 2, "grad_accum": 1,
+      "runs_dir": "runs/test", "models_dir": "models/test"
+    },
+    "demo": {
+      "cap_train": 20000, "cap_dev": 4000, "cap_test": 4000,
+      "num_epochs": 2
+    },
+    "full": {
+      "cap_train": null, "cap_dev": null, "cap_test": null
+    }
+  }
+}
