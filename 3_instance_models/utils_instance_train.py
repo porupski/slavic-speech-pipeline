@@ -196,6 +196,35 @@ def _add_parlaspeech_targets(targets: dict, langs=("hr", "rs", "pl", "cz")) -> N
 _add_parlaspeech_targets(TARGETS)
 
 
+def _add_hr_benchmark_targets(targets: dict) -> None:
+    """ParlaSpeech-HR-benchmark-v3 presets (11d output): one JSONL per task,
+    splits baked in by the benchmark construction."""
+    base = "data/processed_jsonl/parlaspeech_hr_bench_"
+    targets["hr_bench_gender"] = {
+        "jsonl_path": f"{base}gender.jsonl", "label_key": "speaker_gender",
+        "task_type": "classification", "label_order": ["M", "F"],
+    }
+    targets["hr_bench_speaker_id"] = {
+        "jsonl_path": f"{base}speaker_id.jsonl", "label_key": "speaker_name",
+        "task_type": "classification", "label_order": None,  # 50 classes, built from data
+    }
+    targets["hr_bench_power_status"] = {
+        "jsonl_path": f"{base}power_status.jsonl", "label_key": "power_status",
+        "task_type": "classification", "label_order": ["Coalition", "Opposition"],
+    }
+    targets["hr_bench_age"] = {
+        "jsonl_path": f"{base}age.jsonl", "label_key": "speaker_age",
+        "task_type": "regression", "label_order": None,
+    }
+    targets["hr_bench_orientation"] = {
+        "jsonl_path": f"{base}orientation.jsonl", "label_key": "orientation",
+        "task_type": "regression", "label_order": None,
+    }
+
+
+_add_hr_benchmark_targets(TARGETS)
+
+
 def available_targets(task_type: str | None = None) -> list[str]:
     """Sorted preset names, optionally filtered to one task_type."""
     if task_type is None:
