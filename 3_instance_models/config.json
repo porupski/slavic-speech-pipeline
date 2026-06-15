@@ -38,12 +38,12 @@
   },
 
   "classification": {
-    "target": "hr_bench_speaker_id",
+    "target": "hr_bench_v1_gender",
     "best_metric_classification": "macro_f1"
   },
 
   "regression": {
-    "target": "hr_bench_age",
+    "target": "hr_bench_v3_age",
     "best_metric_regression": "spearman",
     "normalize": "zscore",
     "loss_function": "mse",

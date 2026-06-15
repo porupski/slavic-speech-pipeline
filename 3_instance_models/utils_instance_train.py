@@ -195,34 +195,60 @@ def _add_parlaspeech_targets(targets: dict, langs=("hr", "rs", "pl", "cz")) -> N
 
 _add_parlaspeech_targets(TARGETS)
 
-
-def _add_hr_benchmark_targets(targets: dict) -> None:
-    """ParlaSpeech-HR-benchmark-v3 presets (11d output): one JSONL per task,
-    splits baked in by the benchmark construction."""
-    base = "data/processed_jsonl/parlaspeech_hr_bench_"
-    targets["hr_bench_gender"] = {
+def _add_hr_benchmark_v1_targets(targets: dict) -> None:
+    """ParlaSpeech-HR-benchmark-v1 presets (11e output): one JSONL per task,
+    splits baked in by the benchmark construction. ALL FOUR are classification —
+    v1's age is a young/old group, not a continuous value (and there's no
+    orientation tier). Labels are normalized to v3's casing in 11e, so M/F and
+    Coalition/Opposition orders are shared with the v3 family."""
+    base = "data/processed_jsonl/parlaspeech_hr_bench_v1_"
+    targets["hr_bench_v1_gender"] = {
         "jsonl_path": f"{base}gender.jsonl", "label_key": "speaker_gender",
         "task_type": "classification", "label_order": ["M", "F"],
     }
-    targets["hr_bench_speaker_id"] = {
+    targets["hr_bench_v1_speaker_id"] = {
         "jsonl_path": f"{base}speaker_id.jsonl", "label_key": "speaker_name",
         "task_type": "classification", "label_order": None,  # 50 classes, built from data
     }
-    targets["hr_bench_power_status"] = {
+    targets["hr_bench_v1_power_status"] = {
         "jsonl_path": f"{base}power_status.jsonl", "label_key": "power_status",
         "task_type": "classification", "label_order": ["Coalition", "Opposition"],
     }
-    targets["hr_bench_age"] = {
+    targets["hr_bench_v1_age"] = {
+        "jsonl_path": f"{base}age.jsonl", "label_key": "speaker_age_group",
+        "task_type": "classification", "label_order": ["young", "old"],
+    }
+
+_add_hr_benchmark_v1_targets(TARGETS)
+
+
+def _add_hr_benchmark_v3_targets(targets: dict) -> None:
+    """ParlaSpeech-HR-benchmark-v3 presets (11d output): one JSONL per task,
+    splits baked in by the benchmark construction. gender/speaker_id/power_status
+    are classification; age/orientation are regression (v3 ships continuous age)."""
+    base = "data/processed_jsonl/parlaspeech_hr_bench_v3_"
+    targets["hr_bench_v3_gender"] = {
+        "jsonl_path": f"{base}gender.jsonl", "label_key": "speaker_gender",
+        "task_type": "classification", "label_order": ["M", "F"],
+    }
+    targets["hr_bench_v3_speaker_id"] = {
+        "jsonl_path": f"{base}speaker_id.jsonl", "label_key": "speaker_name",
+        "task_type": "classification", "label_order": None,  # 50 classes, built from data
+    }
+    targets["hr_bench_v3_power_status"] = {
+        "jsonl_path": f"{base}power_status.jsonl", "label_key": "power_status",
+        "task_type": "classification", "label_order": ["Coalition", "Opposition"],
+    }
+    targets["hr_bench_v3_age"] = {
         "jsonl_path": f"{base}age.jsonl", "label_key": "speaker_age",
         "task_type": "regression", "label_order": None,
     }
-    targets["hr_bench_orientation"] = {
+    targets["hr_bench_v3_orientation"] = {
         "jsonl_path": f"{base}orientation.jsonl", "label_key": "orientation",
         "task_type": "regression", "label_order": None,
     }
 
-
-_add_hr_benchmark_targets(TARGETS)
+_add_hr_benchmark_v3_targets(TARGETS)
 
 
 def available_targets(task_type: str | None = None) -> list[str]:
