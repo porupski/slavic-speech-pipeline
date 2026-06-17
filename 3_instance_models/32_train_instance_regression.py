@@ -150,12 +150,12 @@ print_rough_eta(len(train_records), len(dev_records), cfg)
 # ## Target normalization
 #
 # Regression targets are **z-scored on TRAIN-only** statistics (`normalize:
-# "zscore"` in config.json) — raw `speaker_age` magnitudes (~20–90) once gave
-# mae≈37 and a NaN Spearman before normalization. `fit_normalizer` validates that
-# every label is numeric (or covered by `label_scale`), fits on TRAIN with no
-# dev/test leakage, and everything downstream **decodes back to real units**
-# before metrics, saved predictions, and plots — so MSE/MAE read in years or
-# logits, not z-scores.
+# "zscore"` in config.json) — raw magnitudes (e.g. `speaker_age` in the 20–90
+# range) blow MSE/MAE up and can drive Spearman to NaN. `fit_normalizer`
+# validates that every label is numeric (or covered by `label_scale`), fits on
+# TRAIN with no dev/test leakage, and everything downstream **decodes back to
+# real units** before metrics, saved predictions, and plots — so MSE/MAE read in
+# years or logits, not z-scores.
 
 # %%
 from utils_instance_train import fit_normalizer
@@ -196,10 +196,10 @@ run_dir, model_dir, run_name = make_run_dirs(cfg, train_records, normalizer=norm
 # %% [markdown]
 # ## Feature extractor
 #
-# `load_feature_extractor` forces `return_attention_mask=True` — wav2vec2-base
-# ships with it **off**, and without the mask the model mean-pools over batch
-# padding, which once collapsed predictions to near-constants. The fix lives in
-# utils so it can never be forgotten again.
+# `load_feature_extractor` forces `return_attention_mask=True`. wav2vec2-base
+# ships with it **off**; without the mask the model mean-pools over batch
+# padding, which collapses predictions toward a constant. The fix is forced
+# inside utils.
 
 # %%
 from utils_instance_train import load_feature_extractor
@@ -268,9 +268,9 @@ print_run_summary(cfg, run_name, run_dir, model_dir, phase1_best, phase2_best, n
 # ## Scatter & distribution (TEST, best epoch)
 #
 # The best phase-2 epoch on TEST: gold-vs-pred scatter (the dashed diagonal is
-# perfection) next to the gold/pred distribution overlay — a collapsed pred
-# histogram is the classic symptom of the attention-mask bug this pipeline
-# guards against.
+# perfection) next to the gold/pred distribution overlay. A pred histogram that
+# collapses to a spike usually means the attention mask was off — the engine
+# forces it on, so this should look spread.
 
 # %%
 from utils_instance_train import plot_test_scatter

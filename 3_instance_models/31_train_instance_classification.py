@@ -153,7 +153,7 @@ print_rough_eta(len(train_records), len(dev_records), cfg)
 # class gets which index (presets with `label_order: None` build it from the data
 # union). `build_label_maps` constructs `label2id`/`id2label`, hard-fails on any
 # label the order doesn't know, and prints the per-split class distribution —
-# glance at it; a brutal imbalance here explains a brutal macro-F1 later.
+# glance at it; a steep imbalance here is the usual culprit when macro-F1 lags.
 
 # %%
 from utils_instance_train import build_label_maps
@@ -193,10 +193,10 @@ run_dir, model_dir, run_name = make_run_dirs(cfg, train_records, normalizer=norm
 # %% [markdown]
 # ## Feature extractor
 #
-# `load_feature_extractor` forces `return_attention_mask=True` — wav2vec2-base
-# ships with it **off**, and without the mask the model mean-pools over batch
-# padding, which once collapsed predictions to near-constants. The fix lives in
-# utils so it can never be forgotten again.
+# `load_feature_extractor` forces `return_attention_mask=True`. wav2vec2-base
+# ships with it **off**; without the mask the model mean-pools over batch
+# padding, which collapses predictions toward a constant. The fix is forced
+# inside utils.
 
 # %%
 from utils_instance_train import load_feature_extractor
