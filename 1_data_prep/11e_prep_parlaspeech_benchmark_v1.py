@@ -14,12 +14,12 @@
 # %% [markdown]
 # # Prep ParlaSpeech-HR benchmark **v1** — chapter 1 (variant e)
 #
-# Parse the pre-built **ParlaSpeech-HR-benchmark-v1** (made against ParlaSpeech-HR
-# **v1.0** by the throwaway `make_parlaspeechHR_benchmark_v1.py`; later hosted +
-# fetched by `10_download_data`) into canonical pipeline JSONLs — **one small file
-# per task**, because the benchmark's splits are *per-task*: the same utterance can
-# be gender/train and age/dev, so a shared top-level `split` cannot exist. Within
-# each task file the canonical shape holds and `31` consumes it unchanged.
+# Parse the pre-built **ParlaSpeech-HR-benchmark-v1** (built against ParlaSpeech-HR
+# **v1.0**, placed under `data/benchmarking/`) into canonical pipeline JSONLs —
+# **one small file per task**, because the benchmark's splits are *per-task*: the
+# same utterance can be gender/train and age/dev, so a shared top-level `split`
+# cannot exist. Within each task file the canonical shape holds and `31` consumes
+# it unchanged.
 #
 # **Sibling to `11d` (the v3 benchmark prep), with v1's quirks:**
 # - splits come from the `benchmark` key — **no `assign_splits`** (the benchmark
@@ -91,9 +91,8 @@ from tqdm.auto import tqdm
 # ## 1. Config
 #
 # - `benchmark_dir` — where the pre-built benchmark lives (jsonl + `audio/`).
-#   When `10_download_data` later learns to fetch the hosted tarball, it lands
-#   in the same place and nothing here changes. **Read-only** — this notebook
-#   never writes back into it; the derived files go to `output_dir`.
+#   **Read-only** — this notebook never writes back into it; the derived files
+#   go to `output_dir`.
 # - `tasks` — which task files to emit.
 # - `check_audio` — verify every referenced WAV exists on disk (cheap; the
 #   benchmark is small).
@@ -166,8 +165,8 @@ for p, what in ((BENCH_JSONL, "benchmark jsonl"), (AUDIO_DIR, "audio dir")):
     if not p.exists():
         raise FileNotFoundError(
             f"{what} not found: {p}\n"
-            "Build it with make_parlaspeechHR_benchmark_v1.py "
-            "(or, once hosted, fetch via 10_download_data).")
+            f"Place the ParlaSpeech-HR-benchmark-v1 bundle under "
+            f"{cfg.benchmark_dir} and re-run.")
 print(f"✅ {BENCH_JSONL.relative_to(PROJECT_ROOT)}  "
       f"({BENCH_JSONL.stat().st_size/1e6:.0f} MB)")
 
@@ -377,12 +376,6 @@ print_stage_breakdown(STAGE_TIMES)
 #
 # ## Next
 #
-# - **Chapter 3** — add `TARGETS` presets in `utils_instance_train.py` (all four
-#   **classification**): `parlaspeech_hr_bench_v1_{gender,speaker_id,power_status,age}.jsonl`
-#   with `label_key` = `speaker_gender` / `speaker_name` / `power_status` /
-#   `speaker_age_group`. Mirror v3's `_add_hr_benchmark_targets` with a
-#   `_v1`-suffixed family.
-# - **Hosting** — the benchmark folder (master jsonl + `audio/`) is the hosted
-#   artifact; tar it as-is, upload, teach `10_download_data` to fetch + unpack it
-#   into `data/benchmarking/`. The processed JSONLs above are regenerated locally
-#   by re-running this notebook — they are **not** shipped in the tarball.
+# - **Chapter 3** — `31` trains on these files via the existing `hr_bench_v1_*`
+#   presets in `utils_instance_train.py`'s `TARGETS` (gender, speaker_id,
+#   power_status, age — all classification).

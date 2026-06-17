@@ -14,9 +14,8 @@
 # %% [markdown]
 # # Prep ParlaSpeech-HR benchmark — chapter 1 (variant d)
 #
-# Parse the pre-built **ParlaSpeech-HR-benchmark-v3** (made by
-# `data/benchmarking/03_make_benchmark_v3.ipynb`, later hosted + fetched by
-# `10_download_data`) into canonical pipeline JSONLs — **one small file per
+# Parse the pre-built **ParlaSpeech-HR-benchmark-v3** (placed under
+# `data/benchmarking/`) into canonical pipeline JSONLs — **one small file per
 # task**, because the benchmark's splits are *per-task*: the same utterance can
 # be gender/train and age/dev, so a shared top-level `split` cannot exist.
 # Within each task file, the canonical shape holds and 31/32 consume it
@@ -85,8 +84,6 @@ from tqdm.auto import tqdm
 # ## 1. Config
 #
 # - `benchmark_dir` — where the pre-built benchmark lives (jsonl + `audio/`).
-#   When `10_download_data` later learns to fetch the hosted tarball, it lands
-#   in the same place and nothing here changes.
 # - `tasks` — which task files to emit.
 # - `check_audio` — verify every referenced WAV exists on disk (cheap; the
 #   benchmark is small).
@@ -161,8 +158,8 @@ for p, what in ((BENCH_JSONL, "benchmark jsonl"), (AUDIO_DIR, "audio dir")):
     if not p.exists():
         raise FileNotFoundError(
             f"{what} not found: {p}\n"
-            "Build it with data/benchmarking/03_make_benchmark_v3.ipynb "
-            "(or, once hosted, fetch via 10_download_data).")
+            f"Place the ParlaSpeech-HR-benchmark-v3 bundle under "
+            f"{cfg.benchmark_dir} and re-run.")
 print(f"✅ {BENCH_JSONL.relative_to(PROJECT_ROOT)}  "
       f"({BENCH_JSONL.stat().st_size/1e6:.0f} MB)")
 
@@ -358,10 +355,7 @@ print_stage_breakdown(STAGE_TIMES)
 #
 # ## Next
 #
-# - **Chapter 3** — add `TARGETS` presets in `utils_instance_train.py`:
-#   classification → `parlaspeech_hr_bench_{gender,speaker_id,power_status}.jsonl`
-#   (`label_key` = `speaker_gender` / `speaker_name` / `power_status`);
-#   regression → `parlaspeech_hr_bench_{age,orientation}.jsonl`
-#   (`label_key` = `speaker_age` / `orientation`).
-# - **Hosting** — tar the benchmark folder, upload, teach `10_download_data` to
-#   fetch + unpack it into `data/benchmarking/`.
+# - **Chapter 3** — `31`/`32` train on these files via the existing
+#   `hr_bench_v3_*` presets in `utils_instance_train.py`'s `TARGETS`
+#   (gender, speaker_id, power_status — classification; age, orientation —
+#   regression).

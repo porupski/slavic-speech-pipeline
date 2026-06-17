@@ -34,9 +34,8 @@
 # Both share the same WAVs and speaker-grouped splits, so nothing leaks and the
 # splits agree across flavors.
 #
-# **Not done here** (future recipes, registry stubs below): `event_instance`
-# (FP-quality, needs the annotator deliverable) and `word_frame` (primary stress,
-# HR/RS only).
+# **Not done here** (future recipe, registry stub below): `event_instance`
+# (FP-quality, needs the annotator deliverable).
 #
 # ---
 #
@@ -118,7 +117,7 @@ class Config:
 
     min_duration_s: float = 0.1
 
-    test_mode:      bool = False                                       ############ TEST MODE
+    test_mode:      bool = False    # parse a small slice; outputs go under data/test_processed_jsonl/
     test_n_records: int  = 500
 
 cfg = Config()
@@ -165,7 +164,8 @@ def configure(lang: str) -> dict:
 #
 # A *recipe* is an instance-shape: `(unit × cut × instance|frame)`. Multiple label
 # keys can live in one recipe — task type is a downstream parameter, not a reason
-# to split files. This mirrors the `TARGETS` dict in `30_train_instance.ipynb`.
+# to split files. This mirrors the `TARGETS` dict in `utils_instance_train.py`
+# (chapter 3).
 #
 # `requires` gates corpus-specific tiers (e.g. `primary_stress` is HR/RS only) so a
 # recipe fails loudly on a corpus that lacks them rather than emitting garbage.
@@ -243,8 +243,9 @@ def preflight(jsonl_path: Path) -> None:
 # "not available for this utterance" (FP inference failed, or gender `"-"`); the
 # trainer drops `None` per-task, so one failed tier never costs the others.
 #
-# Keeps the `words` tier (needed for future word-level recipes). The two `_align`
-# tiers are large and HR/RS-only — extraction lines present but commented out.
+# Keeps the `words` tier (needed for word-level recipes). `words_align` (HR/RS
+# only) is captured as scratch for the `word_frame` recipe and stripped on
+# write; `chars_align` is bulky and unused — kept commented in the parser.
 
 # %%
 def gender_label(si):
@@ -608,8 +609,9 @@ print_stage_breakdown(STAGE_TIMES)
 #
 # ## Next
 #
-# - **Chapter 2** — `20_sniff_dataset.ipynb` at either JSONL.
-# - **Chapter 3** — add a `TARGETS` entry: `parlaspeech_{lang}_utterance_instance.jsonl`,
-#   `label_key` ∈ `{speaker_gender, filled_pause_present, filled_pause_count}`
-#   (classification) or `sentiment_logit` (regression).
-# - **Chapter 4** — frame trainer at `..._utterance_frame.jsonl`.
+# - **Chapter 2** — `20_sniff_dataset.ipynb` at any of the emitted JSONLs.
+# - **Chapter 3** — `31`/`32` train on `..._utterance_instance.jsonl` via the
+#   ParlaSpeech presets in `utils_instance_train.py`'s `TARGETS` registry
+#   (gender, filled-pause presence/count, sentiment, age).
+# - **Chapter 4** — `41` trains the frame head on `..._utterance_frame.jsonl`
+#   (filled-pause frames) and `..._word_frame.jsonl` (primary stress, HR/RS).
