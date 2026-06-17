@@ -108,6 +108,11 @@ def print_stage_breakdown(times: dict[str, float] | None = None) -> None:
 # Union of the twins' registries: classification (31) + regression (32) presets
 # in one dict; each entry carries its task_type, and load_config() enforces
 # that the picked preset matches the notebook/runner you're in.
+#
+# A preset MAY optionally declare per-target constraints (see
+# TARGET_CONSTRAINT_FIELDS below) — currently just `max_duration_s`. When
+# present, the value overrides the Config default and any shared/task-block
+# value in config.json; mode-level overrides still win.
 
 TARGETS: dict = {
     # ---- ROG-Art (rog_instance.jsonl) ----------------------------------
@@ -258,9 +263,18 @@ def available_targets(task_type: str | None = None) -> list[str]:
     return sorted(k for k, t in TARGETS.items() if t["task_type"] == task_type)
 
 
+# Optional per-target constraint fields. If a TARGETS entry sets one,
+# resolve_target applies it to cfg in addition to the data fields above —
+# mode-level overrides in config.json still win (they apply later in
+# load_config). Add to this tuple to wire more constraints through.
+TARGET_CONSTRAINT_FIELDS: tuple = ("max_duration_s",)
+
+
 def resolve_target(cfg, targets: dict = TARGETS) -> None:
     """Overwrite jsonl_path/label_key/task_type/label_order from the picked
-    preset. Mutates cfg in place. Raises if cfg.target isn't a known key."""
+    preset, and apply any optional per-target constraints declared by the preset
+    (see ``TARGET_CONSTRAINT_FIELDS``). Mutates cfg in place. Raises if
+    cfg.target isn't a known key."""
     if cfg.target not in targets:
         raise ValueError(
             f"Config.target={cfg.target!r} not in TARGETS. Known: {sorted(targets)}"
@@ -270,6 +284,9 @@ def resolve_target(cfg, targets: dict = TARGETS) -> None:
     cfg.label_key   = t["label_key"]
     cfg.task_type   = t["task_type"]
     cfg.label_order = t["label_order"]   # may be None — built from data later
+    for key in TARGET_CONSTRAINT_FIELDS:
+        if key in t:
+            setattr(cfg, key, t[key])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
