@@ -35,9 +35,9 @@
 import time
 
 # ── Stage timing ───────────────────────────────────────────────────────────────
-# Identical harness across 31/32/41 (lifts to utils in phase E). mark() stamps a
-# milestone; the final cell prints a per-stage breakdown. Stdlib-only, cheap,
-# partial-run safe (prints whatever marks exist).
+# Identical harness across 31/32/41. mark() stamps a milestone; the final cell
+# prints a per-stage breakdown. Stdlib-only, cheap, partial-run safe (prints
+# whatever marks exist).
 STAGE_TIMES: dict[str, float] = {}
 
 def mark(stage: str) -> None:
@@ -143,19 +143,15 @@ IGNORE_INDEX = -100
 # %% [markdown]
 # # Targets
 #
-# What combinations of *(dataset, frame label)* this trainer can handle. Pick one
-# via `Config.target`; the resolver fills `jsonl_path`, `label_key`, `task_type`,
-# `label_order`. This is the frame-flavored mirror of the chapter-3 `TARGETS`
-# registry — same shape, plus a `level: "frame"` tag. To add a target, add an
-# entry here; `Config.target` is the only downstream knob.
-
-# %%
-# What *task* this trainer handles (lang-agnostic). Pick one via `Config.target`;
-# `Config.langs` then selects which ParlaSpeech languages to pool (default: all the
-# task supports that have a JSONL on disk). The resolver fills `label_key`,
-# `task_type`, `label_order`, and the list of `jsonl_paths` to concatenate. Splits
-# are speaker-grouped within each lang and speakers never cross languages, so
-# pooling is leakage-free concatenation; the Trainer's shuffle interleaves langs.
+# What this trainer can handle — lang-agnostic. Pick a task via `Config.target`;
+# `Config.langs` then selects which ParlaSpeech languages to pool (default: all
+# supported langs that have a JSONL on disk). The resolver fills `label_key`,
+# `task_type`, `label_order`, and the list of `jsonl_paths` to concatenate.
+# Splits are speaker-grouped within each lang and speakers never cross languages,
+# so pooling is leakage-free concatenation; the Trainer's shuffle interleaves
+# langs. Frame-flavored mirror of the chapter-3 `TARGETS` registry — same shape,
+# plus a `level: "frame"` tag. To add a target, add an entry below;
+# `Config.target` is the only downstream knob.
 
 # %%
 TARGETS: dict = {}
@@ -257,7 +253,7 @@ DEMO_SAMPLING = "proportional"  # "proportional" | "balanced" — only when pool
 
 # Each entry overrides the base (full) Config. Reading all three side by side
 # tells you exactly what each tier changes; everything unlisted stays at its full
-# default. (This block is a good candidate to lift to utils in phase E.)
+# default.
 MODES: dict = {
     "test": {
         "model_name": "hf-internal-testing/tiny-random-wav2vec2",
@@ -673,8 +669,7 @@ print(f"   {'TOTAL':>10}  {sum(ftr.values()):>12d}  {sum(fdv.values()):>12d}  {s
 # label alignment, feature extraction, collator, the per-frame head, metrics,
 # per-epoch artifacts, and `run_phase`. The run-loop scaffolding (`run_phase`,
 # two-phase split, GPU flush, timer) matches 31/32; the task-specific bodies are
-# the per-frame head + token-CE + frame metrics/plots. Lifts to
-# `utils_instance_train.py` (and a frame sibling) in phase E.
+# the per-frame head + token-CE + frame metrics/plots.
 
 # %% [markdown]
 # ## Label alignment to model frames
@@ -1341,7 +1336,7 @@ plt.show()
 # `SPOTCHECK_RANK_BY` is a string switch over `_RANKERS` (`"pos_f1"` |
 # `"accuracy"`; add more by extending the dict). Note: accuracy is frame-aligned
 # but imbalance-dominated and barely moves under a few-frame shift — true
-# misalignment-aware (tolerance-windowed) scoring is ch5 `53_frame_event_metrics`.
+# misalignment-aware (tolerance-windowed) scoring is deferred to a later chapter.
 
 # %%
 import random as _rnd
@@ -1368,7 +1363,7 @@ def _pos_f1(g, p, pos):
 
 # Best/worst rankers (higher = better). NB: accuracy is frame-aligned but
 # imbalance-dominated — a few-frame shift barely moves it. Misalignment-aware
-# scoring (tolerance-windowed events) is ch5 (53_frame_event_metrics); this panel
+# scoring (tolerance-windowed events) is deferred to a later chapter; this panel
 # is an eyeball aid, not a metric.
 _RANKERS = {"pos_f1": _pos_f1, "accuracy": _acc}
 if SPOTCHECK_RANK_BY not in _RANKERS:
@@ -1474,13 +1469,13 @@ print_stage_breakdown(STAGE_TIMES)
 # %% [markdown]
 # ## What's next
 #
-# This run wrote per-epoch logs + a saved best model under `runs/`. Chapter 5
-# (`5_analysis/`) loads run directories like this one — `53_frame_event_metrics`
-# adds boundary/event-level scoring on top of the frame metrics here.
+# This run wrote per-epoch logs + a saved best model under `runs/`.
 #
-# - Same task, second language: set `Config.target = "parlaspeech_rs_fp_frames"`.
-# - **Rung 6 (north star):** primary-stress frames — un-comment the
-#   `primary_stress`/`words_align` tiers in `11c`, emit `word_frame`, then
-#   un-comment the stubbed `parlaspeech_hr_primary_stress_frames` target above.
+# - **Different target:** change `Config.target` — `parlaspeech_fp_frames` for
+#   filled-pause frames, `parlaspeech_primary_stress_frames` (rung 6, the north
+#   star) for HR/RS primary stress. The full menu prints from the Targets cell.
+# - **Subset of languages:** set `cfg.langs = ("hr",)` (or any tuple of supported
+#   codes); `()` pools every language the target supports that has a JSONL on
+#   disk.
 # - `42_train_frame_regression` is the deferred twin (no continuous per-frame
 #   target yet).
