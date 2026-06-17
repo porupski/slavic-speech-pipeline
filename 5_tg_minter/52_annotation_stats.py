@@ -30,15 +30,15 @@
 from pathlib import Path
 
 # --- WHERE ------------------------------------------------------------------
-IN_DIR = Path("/cache/ivanp/projects/slavic-speech-pipeline/data/"
-              "workshop_examples/merged")     # folder of annotated *.merged.TextGrid
+# Point this at your folder of annotated *.merged.TextGrid. Absolute path is safest.
+IN_DIR = Path("path/to/your/merged_textgrids")     # folder of annotated *.merged.TextGrid
 
 # --- WHICH TIER(S) TO ANALYZE -----------------------------------------------
 #   "auto"              -> every tier found
 #   ["fp-annotation"]   -> only these named tiers
 ANALYZE_TIERS = ["fp-annotation"]
 
-# --- LABEL INTERPRETATION (adaptive; nothing is hardcoded away) -------------
+# --- LABEL INTERPRETATION (adaptive) ----------------------------------------
 EMPTY_VALUES   = {""}        # texts counted as "no mark at all"
 PENDING_LABELS = {"?"}       # marked but not yet classified
 INVALID_LABELS = {"FalsePositive", "F"}   # machine false-positives (still listed)

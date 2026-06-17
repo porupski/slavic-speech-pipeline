@@ -35,10 +35,9 @@
 from pathlib import Path
 
 # --- WHERE ------------------------------------------------------------------
-IN_DIR  = Path("/cache/ivanp/projects/slavic-speech-pipeline/data/"
-               "workshop_examples/files")            # raw <base>.<layer>.TextGrid live here
-OUT_DIR = Path("/cache/ivanp/projects/slavic-speech-pipeline/data/"
-               "workshop_examples/merged")           # <base>.merged.TextGrid written here
+# Point these at your own folders. Absolute paths are safest.
+IN_DIR  = Path("path/to/your/textgrid_layers")     # raw <base>.<layer>.TextGrid live here
+OUT_DIR = Path("path/to/your/merged_textgrids")    # <base>.merged.TextGrid written here
 
 # --- WHAT TO COMBINE  (top-to-bottom = tier order in the output) ------------
 #   Each row names a layer, then which tiers to take from it. Accepted forms:
