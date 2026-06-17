@@ -1,48 +1,44 @@
 # slavic-speech-pipeline
 
-A modular, plug-and-play pipeline for fine-tuning speech models on instance- and frame-level classification and regression tasks. Built around Slavic speech corpora (Slovenian ROG and GOS, ParlaSpeech for HR / RS / CZ / PL), but every component is dataset-agnostic.
+A modular pipeline for fine-tuning Wav2Vec2 on Slavic speech corpora. Instance- and frame-level classification and regression share the same engine — one config flag switches task type. The working corpus is **ParlaSpeech** (HR / RS / CZ / PL); ROG-Art and ROG-Dialog are still supported. The north star is a primary-stress frame model: feed one word, the model marks which frames carry the primary stress.
 
-## What this is
-
-- **Lego, not monolith.** Each stage (data prep, analysis, training, inference, post-hoc analysis) is a self-contained module connected through a single canonical JSONL format.
-- **One job per script.** No script does two things.
-- **`.py` + `.ipynb` pairs.** Notebooks for step-by-step development and learning. `.py` runners for production once a notebook is stable. Both import from the same `utils_<chapter>.py`, so logic is never duplicated.
-- **Task type is a parameter.** Classification and regression share the same trainer; one config flag switches between them.
-
-## Repository layout
-
-```
-slavic-speech-pipeline/
-├── BLUEPRINT.md             ← the design doc, read this first
-├── README.md                ← you are here
-├── requirements.txt
-│
-├── 1_data_prep/             ← any source format → canonical JSONL
-├── 2_data_analysis/         ← descriptive stats + sniff reports
-├── 3_instance_models/       ← train instance-level classifier / regressor
-├── 4_frame_models/          ← train frame-level classifier / regressor
-└── 5_analysis/              ← post-hoc analysis of trained runs
-```
-
-Each chapter has its own `README.md` with run order and gotchas.
+Design and rationale live in `BLUEPRINT.md` — read it once end-to-end before touching code.
 
 ## Quick start
 
-1. Clone the repo.
-2. Create a venv and `pip install -r requirements.txt`.
-3. Read `BLUEPRINT.md` once end-to-end.
-4. Pick a chapter and read its `README.md`.
-5. Open the matching notebook in that chapter and run cells.
+```bash
+# Install the CPU env (data prep, light development):
+bash 0_env_setup/setup_env_cpu.sh
+mamba activate ssp
 
-## Status
+# Or the CUDA env on a GPU server (training):
+bash 0_env_setup/setup_env_cuda.sh
+mamba activate ssp-cuda
+```
 
-Work in progress. See `BLUEPRINT.md` section 7 for the execution order and current focus.
+Then walk the chapters in order; each has its own `README.md` and one-knob notebooks.
+
+## Chapters
+
+- **`0_env_setup/`** — CPU and CUDA conda envs, pinned requirements.
+- **`1_data_prep/`** — source corpora → canonical JSONL. ParlaSpeech (HR / RS / CZ / PL) and ROG (Art / Dialog), plus the ParlaSpeech-HR v1 and v3 benchmark preps.
+- **`2_data_analysis/`** — describe a canonical JSONL. Semi-stub; full overhaul pending.
+- **`3_instance_models/`** — train an instance classifier (gender, filled pauses, benchmark tasks) or regressor (age, sentiment). Phase-E lifted: shared `utils_instance_train.py` + `config.json` + py runners.
+- **`4_frame_models/`** — train a frame classifier (filled-pause frames; primary-stress frames).
+- **`5_tg_minter/`** — turn ParlaSpeech v3 utterances into TextGrids for annotation, read annotated TGs back.
+
+The ladder (instance → frame, secure each rung) is in `BLUEPRINT.md` §1.
+
+## What you need on disk
+
+`data/` (gitignored) holds raw downloads, unpacked corpora, cut 16 kHz mono WAVs, and the canonical JSONLs. Chapter 1 lays that out. Disk costs are real — ParlaSpeech-HR audio alone is ~207 GB across six tarballs; pick languages deliberately.
 
 ## Datasets
 
-- **ROG 1.1** — Slovenian spoken corpus with sentiment and dialogue-act annotations. [CLARIN handle](http://hdl.handle.net/11356/2062).
-- **GOS 2.1** — Slovenian reference speech corpus, used here for word-aligned primary-stress annotations. [CLARIN handle](http://hdl.handle.net/11356/1863).
-- **ParlaSpeech 3.0** — Croatian, Serbian, Czech, Polish parliamentary speech. Filled-pause and primary-stress layers. [Project page](https://clarinsi.github.io/parlaspeech/) · [CLARIN handle](http://hdl.handle.net/11356/1833).
+- **ParlaSpeech 3.0** — Croatian, Serbian, Czech, Polish parliamentary speech. Filled-pause and (HR/RS) primary-stress layers. [Project page](https://clarinsi.github.io/parlaspeech/) · CLARIN handle `http://hdl.handle.net/11356/1833`.
+- **ROG 1.1** — Slovenian spoken corpus, sentiment + dialogue acts. CLARIN handle `http://hdl.handle.net/11356/2062`.
+
+Per-language ParlaSpeech audio handles and citations are in `1_data_prep/README.md`.
 
 ## License
 
