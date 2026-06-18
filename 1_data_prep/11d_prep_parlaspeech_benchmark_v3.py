@@ -118,23 +118,23 @@ def build_tasks(out_dir: str) -> dict:
         "gender": dict(
             label_key="speaker_gender", task_type="classification",
             transform=str,
-            out=f"{out_dir}/parlaspeech_hr_bench_gender.jsonl"),
+            out=f"{out_dir}/parlaspeech_hr_bench_v3_gender.jsonl"),
         "speaker_id": dict(
             label_key="speaker_name", task_type="classification",
             transform=str,
-            out=f"{out_dir}/parlaspeech_hr_bench_speaker_id.jsonl"),
+            out=f"{out_dir}/parlaspeech_hr_bench_v3_speaker_id.jsonl"),
         "power_status": dict(
             label_key="power_status", task_type="classification",
             transform=str,
-            out=f"{out_dir}/parlaspeech_hr_bench_power_status.jsonl"),
+            out=f"{out_dir}/parlaspeech_hr_bench_v3_power_status.jsonl"),
         "age": dict(
             label_key="speaker_age", task_type="regression",
             transform=int,
-            out=f"{out_dir}/parlaspeech_hr_bench_age.jsonl"),
+            out=f"{out_dir}/parlaspeech_hr_bench_v3_age.jsonl"),
         "orientation": dict(
             label_key="orientation", task_type="regression",
             transform=float,
-            out=f"{out_dir}/parlaspeech_hr_bench_orientation.jsonl"),
+            out=f"{out_dir}/parlaspeech_hr_bench_v3_orientation.jsonl"),
     }
 
 TASKS = build_tasks(cfg.output_dir)

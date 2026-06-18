@@ -140,7 +140,7 @@ def build_tasks(out_dir: str) -> dict:
             out=f"{out_dir}/parlaspeech_hr_bench_v1_power_status.jsonl"),
         "age": dict(
             label_key="speaker_age_group", task_type="classification",
-            transform=str,                               # young / old verbatim
+            transform=lambda x: None if x is None else str(x),   # young / old; None passes through, load_split filters
             out=f"{out_dir}/parlaspeech_hr_bench_v1_age.jsonl"),
     }
 
