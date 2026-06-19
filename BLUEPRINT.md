@@ -4,7 +4,7 @@ A modular, plug-and-play pipeline for fine-tuning Wav2Vec2 models on Slavic spee
 
 **Mission for v1:** a clean **instance → frame ladder** on Slavic speech, secured one rung at a time, culminating in a **primary-stress frame model** (feed one word, the model marks which frames carry the primary stress). Clone the repo → run the notebooks in order → a working model at each rung.
 
-> **Active path:** the working corpus is **ParlaSpeech** (RS first — it carries the `filled_pauses`, `words`, and stress/align tiers we need), and the north star is **primary stress**. ROG-Art/ROG-Dialog remain supported corpora and their prep notebooks still work, but the live path is the ParlaSpeech ladder below.
+> **Active path:** the working corpus is **ParlaSpeech** (HR first — it carries the `filled_pauses`, `words`, and stress/align tiers we need; RS/PL/CZ slot in via the same prep), and the north star is **primary stress**. On top of the full corpora, two **ParlaSpeech-HR benchmark** bundles (v1 and v3) provide pre-built, speaker-disjoint splits for gender / speaker-id / power-status / age (and v3: orientation). The benchmark archives are pre-publication — not yet on CLARIN — so they ship out-of-band into `data/benchmarking/`. ROG-Art/ROG-Dialog remain supported corpora and their prep notebooks still work, but the live path is the ParlaSpeech ladder below.
 
 ### The ladder (secure the instance pipeline before the frame pipeline)
 
@@ -20,9 +20,9 @@ A modular, plug-and-play pipeline for fine-tuning Wav2Vec2 models on Slavic spee
 
 ## 1. Guiding principles
 
-1. **Lego, not monolith.** Each stage is a self-contained notebook connected via canonical JSONL.
+1. **Modular, not monolith.** Each stage is a self-contained notebook connected via canonical JSONL.
 2. **One job per notebook.**
-3. **Notebook-first, py runners last.** Standalone notebooks are the production artifact until a chapter is secured. Then the **phase-E lift** turns each secured chapter into four artifacts: a frozen **legacy notebook** (`legacy/`, never edited again), a shared **`utils_<chapter>.py`**, a **light tutorial notebook** (per-cell imports from utils, prose-guided), and a **py runner** — all driven by one **`config.json`**. Chapter 3 is the first lift. (Genuinely shared cross-prep helpers were the early exception — see §5.)
+3. **Notebook-first, py runners last.** Standalone notebooks are the production artifact until a chapter is secured. Then the **next-stage lift** turns each secured chapter into four artifacts: a frozen **legacy notebook** (`legacy/`, never edited again), a shared **`utils_<chapter>.py`**, a **light tutorial notebook** (per-cell imports from utils, prose-guided), and a **py runner** — all driven by one **`config.json`**. Chapter 3 has been lifted; chapter 4 is next. (Genuinely shared cross-prep helpers were the early exception — see §5.)
 4. **Task type is a parameter.** Classification and regression share the pipeline; one config flag switches. Instance regression is live (sentiment, age); frame regression is the only deferred flavor.
 5. **Dataset is a parameter.** Each corpus has one prep notebook; downstream is dataset-agnostic.
 6. **Config dataclass at the top of every notebook.** No buried constants.
@@ -44,12 +44,12 @@ So gender, filled-pause presence/count, sentiment, and age all live in **one** `
 **Instance record:**
 ```json
 {
-  "instance_id": "ParlaMint-RS_2019-06-20-0.u55735_953-975",
-  "dataset": "ParlaSpeech-RS",
-  "file_id": "ouafo6IB8GY",
-  "audio_path": "data/cut_audio/ParlaSpeech-RS/ouafo6IB8GY/<file>.wav",
+  "instance_id": "ParlaMint-HR_2019-06-20-0.u55735_953-975",
+  "dataset": "ParlaSpeech-HR",
+  "file_id": "<youtube-id>",
+  "audio_path": "data/cut_audio/ParlaSpeech-HR/<youtube-id>/<file>.wav",
   "split": "train",
-  "speaker": "ArsicVeroljub",
+  "speaker": "JandrokovicGordan",
   "text": "To odmah da raščistimo.",
   "labels": {
     "speaker_gender": "M",
@@ -59,7 +59,7 @@ So gender, filled-pause presence/count, sentiment, and age all live in **one** `
     "sentiment_logit": 3.428,
     "sentiment_6": "Neutral Positive"
   },
-  "metadata": {"source_audio": "ouafo6IB8GY/<file>.flac", "audio_length": 2.04, "words": [...], "speaker_info": {...}}
+  "metadata": {"source_audio": "<youtube-id>/<file>.flac", "audio_length": 2.04, "words": [...], "speaker_info": {...}}
 }
 ```
 
@@ -67,9 +67,9 @@ So gender, filled-pause presence/count, sentiment, and age all live in **one** `
 ```json
 {
   "instance_id": "...",
-  "dataset": "ParlaSpeech-RS",
-  "file_id": "ouafo6IB8GY",
-  "audio_path": "data/cut_audio/ParlaSpeech-RS/<hash>/<file>.wav",
+  "dataset": "ParlaSpeech-HR",
+  "file_id": "<youtube-id>",
+  "audio_path": "data/cut_audio/ParlaSpeech-HR/<youtube-id>/<file>.wav",
   "split": "train",
   "frame_rate_hz": 50,
   "labels": {"filled_pause": [0, 0, 1, 1, 0, ...]},
@@ -99,12 +99,24 @@ data/
 ├── cut_audio/
 │   ├── ParlaSpeech-<LANG>/<hash>/*.wav # per-utterance 16 kHz mono (clean layout)
 │   └── <CORPUS>-Full/                  # normalized full-file 16 kHz mono (frame input)
+├── benchmarking/
+│   ├── ParlaSpeech-HR-benchmark-v1/
+│   │   ├── ParlaSpeech-HR-benchmark-v1.jsonl         # source benchmark JSONL
+│   │   └── audio/<hash>/<hash>_<start>-<end>.wav     # pre-cut 16 kHz mono WAVs
+│   └── ParlaSpeech-HR-benchmark-v3/
+│       ├── ParlaSpeech-HR-benchmark-v3.jsonl
+│       └── audio/<hash>/<hash>_<start>-<end>.wav
 ├── processed_jsonl/
 │   ├── parlaspeech_<lang>_utterance_instance.jsonl   # one recipe = one file
 │   ├── parlaspeech_<lang>_utterance_frame.jsonl
-│   └── parlaspeech_<lang>_audio_index.json           # persistent {basename → path} scan
+│   ├── parlaspeech_<lang>_word_frame.jsonl
+│   ├── parlaspeech_<lang>_audio_index.json           # persistent {basename → path} scan
+│   ├── parlaspeech_hr_bench_v1_<task>.jsonl          # 11e output, one file per benchmark task
+│   └── parlaspeech_hr_bench_v3_<task>.jsonl          # 11d output, one file per benchmark task
 └── reports/                            # sniff_dataset outputs
 ```
+
+**Benchmark layout.** The two ParlaSpeech-HR benchmark bundles drop in pre-built under `data/benchmarking/`: one JSONL with per-task splits + an `audio/` tree of 16 kHz mono WAVs already keyed by the YouTube hash. The benchmark archives are not on CLARIN yet — they ship out-of-band. `11d`/`11e` parse them into one canonical pipeline JSONL per task (the benchmark's splits are per-task, so the same utterance can be gender/train and age/dev — no shared top-level `split` is possible).
 
 **Audio-source resolution.** Unpacked ParlaSpeech audio is nested under `*.part*/` trees that differ by corpus (HR/RS: `partX/{hash}/`; CZ: `partX/audio/psp/Y/M/D/`) and the nesting is **not** reproducible from the JSONL `audio` field. `utils_audio_splitter` solves this with one recursive scan keyed by **basename** (the filename `{hash}_{start}-{end}.flac` is unique per corpus), cached to `..._audio_index.json` so re-runs skip the scan. After prep, downstream only ever touches the clean `cut_audio/` WAVs.
 
@@ -116,39 +128,48 @@ data/
 slavic-speech-pipeline/
 ├── README.md
 ├── BLUEPRINT.md                          ← this file, the activity log
-├── requirements.txt
+│
+├── 0_env_setup/                          ← CPU and CUDA env install scripts + pinned requirements
+│   ├── ENV_SETUP.md
+│   ├── requirements_cpu.txt
+│   ├── requirements_cuda.txt
+│   ├── setup_env_cpu.sh
+│   └── setup_env_cuda.sh
 │
 ├── 1_data_prep/
 │   ├── README.md
-│   ├── utils_dataprep.py                 ← JSONL I/O, schema, splits, ids, audio helpers
-│   ├── utils_audio_splitter.py           ← shared cutter/converter (resolver-driven, multicore)
+│   ├── utils_dataprep.py                          ← JSONL I/O, schema, splits, ids, audio helpers
+│   ├── utils_audio_splitter.py                    ← shared cutter/converter (resolver-driven, multicore)
 │   ├── 10_download_data.ipynb
-│   ├── 11a_prep_ROG.ipynb                ← ROG-Art (EXB, dual output)
-│   ├── 11b_prep_ROG_dia.ipynb            ← ROG-Dialog
-│   ├── 11c_prep_ParlaSpeech.ipynb        ← ParlaSpeech (recipe registry; built)
-│   └── 12_audio_splitter.ipynb           ← RETIRED for new preps; standalone re-cut tool only
+│   ├── 11a_prep_ROG-art.ipynb                     ← ROG-Art (EXB, dual output)
+│   ├── 11b_prep_ROG-dia.ipynb                     ← ROG-Dialog
+│   ├── 11c_prep_parlaspeech.ipynb                 ← ParlaSpeech (recipe registry; built)
+│   ├── 11d_prep_parlaspeech_benchmark_v3.ipynb    ← ParlaSpeech-HR benchmark v3 → one JSONL per task
+│   └── 11e_prep_parlaspeech_benchmark_v1.ipynb    ← ParlaSpeech-HR benchmark v1 → one JSONL per task
 │
-├── 2_data_analysis/   └── 20_sniff_dataset.ipynb
-├── 3_instance_models/
-│   ├── legacy/                                    ← frozen standalone twins (planned, phase E)
+├── 2_data_analysis/   └── 20_sniff_dataset.ipynb   (semi-stub; full overhaul pending — see §6)
+├── 3_instance_models/                             ← next-stage lift complete
+│   ├── legacy/                                    ← frozen standalone twins (pre-lift)
 │   │   ├── 31_train_instance_classification.ipynb
 │   │   └── 32_train_instance_regression.ipynb
-│   ├── utils_instance_train.py                    ← shared engine + task logic (planned)
-│   ├── config.json                                ← all user-facing knobs (planned)
-│   ├── 31_train_instance_classification.ipynb     ← light tutorial twin (gender, FP presence/count)
-│   ├── 32_train_instance_regression.ipynb         ← light tutorial twin (sentiment_logit, age)
-│   ├── run_31_classification.py                   ← py runner (planned)
-│   └── run_32_regression.py                       ← py runner (planned)
+│   ├── utils_instance_train.py                    ← shared engine + TARGETS registry
+│   ├── config.json                                ← all user-facing knobs
+│   ├── 31_train_instance_classification.ipynb     ← light tutorial twin (gender, FP presence/count, hr_bench_v1/v3)
+│   ├── 32_train_instance_regression.ipynb         ← light tutorial twin (sentiment_logit, age, hr_bench_v3 age/orientation)
+│   ├── run_31_classification.py                   ← py runner
+│   └── run_32_regression.py                       ← py runner
 ├── 4_frame_models/
 │   ├── 41_train_frame_classification.ipynb        ← FP frames / primary-stress frames
 │   └── 42_train_frame_regression.ipynb            ← planned, completeness twin (no data yet)
-├── 5_analysis/        └── README.md  (stub; see §6)
-└── data/                                 ← gitignored
+├── 5_tg_minter/
+│   ├── 51_tg_minter.ipynb                         ← ParlaSpeech v3 TextGrids → annotation-ready bundles
+│   └── 52_annotation_stats.ipynb                  ← read annotated TGs back, surface stats
+└── data/                                          ← gitignored
 ```
 
-> `30_train_instance.ipynb` was **split into the twins `31`/`32`** — one clean pile per task. They share a byte-identical run engine (see §5); only task-specific cells differ. Phase E (active for chapter 3) lifts that engine to `utils_instance_train.py`; the standalone twins freeze into `legacy/` after a final confirming demo run.
+> `30_train_instance.ipynb` was **split into the twins `31`/`32`** — one clean pile per task. They share a byte-identical run engine (see §5); only task-specific cells differ. The chapter-3 next-stage lift extracted that engine into `utils_instance_train.py`; the standalone pre-lift twins are frozen in `legacy/`.
 
-**Two utils files now.** `utils_dataprep.py` and `utils_audio_splitter.py`. The splitter is genuinely shared by every prep notebook (one cutter, many corpora), so it lives as a module from the start — this is the sanctioned exception to "no utils until phase E." **Phase E is now open for chapter 3**: the next utils file is `utils_instance_train.py` (the chapter-3 engine lift); chapter 4 gets `utils_frame_train.py` once 41/42 are secured.
+**Three utils files now.** `utils_dataprep.py`, `utils_audio_splitter.py`, and `utils_instance_train.py`. The splitter is genuinely shared by every prep notebook (one cutter, many corpora), so it lived as a module from the start — the early sanctioned exception. `utils_instance_train.py` is the chapter-3 lift; **next up is chapter 4** — `utils_frame_train.py` once 41/42 are secured.
 
 **Naming.** `<chapter><step><variant?>_<verb_noun>.ipynb`. No separator between chapter and step (`31`, not `3_1`). Variant letter `a/b/c` for "same step, different dataset". Folders `<n>_<name>/`.
 
@@ -160,7 +181,7 @@ Every notebook follows the same shape: title/overview → setup (`PROJECT_ROOT` 
 
 **Standalone-ish.** Project imports are limited to `utils_dataprep` and `utils_audio_splitter`. No cross-*notebook* imports. Logic duplicated across notebooks is factored only after it stabilizes across ≥2 of them.
 
-**Twin notebooks.** `31_train_instance_classification` and `32_train_instance_regression` are deliberate **twins**: the run engine — `run_phase`, the two-phase TRAIN→DEV / TRAIN+DEV→TEST loop, run-directory setup, the run-mode cell, and the stage-timing harness — is **byte-identical** across the two (md5-confirmed); only the task-specific cells differ (label handling, metrics, per-epoch artifacts, model factory). `41` shares the same engine cells where applicable. Keep them identical until the phase-E lift to `utils_instance_train.py`.
+**Twin notebooks.** `31_train_instance_classification` and `32_train_instance_regression` are deliberate **twins**: post-lift they import the same `utils_instance_train.py` engine — `run_phase`, the two-phase TRAIN→DEV / TRAIN+DEV→TEST loop, run-directory setup, the run-mode cell, and the stage-timing harness — and only task-specific cells differ (label handling, metrics, per-epoch artifacts, model factory). `41` still carries its own inline engine (chapter 4 has not been lifted yet); its shared cells stay byte-identical with the pre-lift twins frozen in `legacy/` until `utils_frame_train.py` lands.
 
 **Stage-timing harness.** Both training notebooks carry an identical tiny timer (`STAGE_TIMES` + `mark()` + `print_stage_breakdown`, stdlib-only) stamping `literal start → data prep → model prep → end phase 1 → end phase 2 → end script`, plus a rough ETA after the demo-cap counts that recalibrates from phase 1's real rate. Partial-run safe. Also lifts to utils.
 
@@ -176,24 +197,35 @@ Every notebook follows the same shape: title/overview → setup (`PROJECT_ROOT` 
 
 ## 6. Chapter-by-chapter plan
 
+### Chapter 0 — Env setup
+**Goal:** one-shot install of either the CPU or the CUDA Python environment used by every downstream notebook.
+
+- `setup_env_cpu.sh` — creates the `ssp` mamba env (CPU / dev / data prep).
+- `setup_env_cuda.sh` — creates the `ssp-cuda` mamba env (GPU training; CUDA 12.4).
+- `requirements_cpu.txt` / `requirements_cuda.txt` — pinned dependencies per env.
+- `ENV_SETUP.md` — prerequisites (miniforge / micromamba), activation, GPU verification.
+
 ### Chapter 1 — Data prep
 **Goal:** every dataset → canonical JSONL(s), one file per instance-shape.
 
 - `10_download_data.ipynb` — fetch + unpack.
-- `11a_prep_ROG.ipynb` / `11b_prep_ROG_dia.ipynb` — EXB corpora, dual output.
-- `11c_prep_ParlaSpeech.ipynb` — recipe registry; emits `utterance_instance` (gender, age, filled_pause_present, filled_pause_count, sentiment_logit, sentiment_6), `utterance_frame` (50 Hz FP sequence), and `word_frame` (primary stress, HR/RS — carries the utterance `audio_path` + `start_t`/`end_t` word bounds; the trainer slices in memory, no word WAVs on disk). Converts FLAC→WAV via the splitter (whole-file, multicore process pool, cached index). Per-language loop with stage timer. Still stubbed: `event_instance` (FP-type, needs annotator).
-- `12_audio_splitter.ipynb` — retired for new preps (cutting moved into prep via the module); kept as a standalone re-cut tool.
+- `11a_prep_ROG-art.ipynb` / `11b_prep_ROG-dia.ipynb` — EXB corpora, dual output.
+- `11c_prep_parlaspeech.ipynb` — recipe registry; emits `utterance_instance` (gender, age, filled_pause_present, filled_pause_count, sentiment_logit, sentiment_6), `utterance_frame` (50 Hz FP sequence), and `word_frame` (primary stress, HR/RS — carries the utterance `audio_path` + `start_t`/`end_t` word bounds; the trainer slices in memory, no word WAVs on disk). Converts FLAC→WAV via the splitter (whole-file, multicore process pool, cached index). Per-language loop with stage timer. Still stubbed: `event_instance` (FP-type, needs annotator).
+- `11d_prep_parlaspeech_benchmark_v3.ipynb` — parse the pre-built ParlaSpeech-HR benchmark v3 (under `data/benchmarking/`) into one JSONL per task (`gender` / `speaker_id` / `power_status` / `age` / `orientation`). Splits come from the benchmark's per-task `benchmark` key (no `assign_splits`); audio is already 16 kHz mono — `audio_path` points straight at it. v3's `age` and `orientation` are regression; the other three are classification.
+- `11e_prep_parlaspeech_benchmark_v1.ipynb` — sibling to `11d` for the ParlaSpeech-HR benchmark v1. Same per-task-file layout (`gender` / `speaker_id` / `power_status` / `age`), all four classification (v1's age is a `young`/`old` group, not a continuous value). Labels are normalized to v3's casing where they overlap so a single chapter-3 target family spans both benchmarks.
 
-### Chapter 2 — Sniff dataset
-`20_sniff_dataset.ipynb` — point at any canonical JSONL → stats + markdown report. Works for instance and frame.
+### Chapter 2 — Dataset analysis (semi-stub, overhaul pending)
+`20_sniff_dataset.ipynb` — current state: point at any canonical JSONL → stats + markdown report. Works for instance and frame. Kept as a semi-stub until the planned overhaul: full label distributions, audio-duration histograms, speaker/split summaries. The replacement chapter will not carry the "sniff" framing.
 
-### Chapter 3 — Instance models (twins)
-Wav2Vec2-base + a task head, two-phase (TRAIN→DEV, then TRAIN+DEV→TEST). Identical engine across the two notebooks; per-task cells differ.
+### Chapter 3 — Instance models (twins, lifted)
+Wav2Vec2-base + a task head, two-phase (TRAIN→DEV, then TRAIN+DEV→TEST). Engine in `utils_instance_train.py`, knobs in `config.json`; the notebooks are tutorial twins.
 
-- `31_train_instance_classification.ipynb` — `AutoModelForAudioClassification`. Targets: ParlaSpeech `speaker_gender` (demo), `filled_pause_present` / `_count`; plus ROG sentiment / FP. Confusion matrices (stacked counts + row-norm %).
-- `32_train_instance_regression.ipynb` — `Wav2Vec2ForRegression` (masked mean-pool + `Linear(1)`). Targets: `sentiment_logit`, `speaker_age`. Scatter + distribution plots. **Target normalization** (`cfg.normalize="zscore"`, fit TRAIN-only, inverted before metrics + saved predictions) — regression-only.
+- `31_train_instance_classification.ipynb` — `AutoModelForAudioClassification`. Targets: ParlaSpeech `speaker_gender`, `filled_pause_present` / `_count`; ROG sentiment / FP; ParlaSpeech-HR benchmark v1 (`hr_bench_v1_gender` / `_speaker_id` / `_power_status` / `_age`) and v3 (`hr_bench_v3_gender` / `_speaker_id` / `_power_status`). Confusion matrices (stacked counts + row-norm %).
+- `32_train_instance_regression.ipynb` — `Wav2Vec2ForRegression` (masked mean-pool + `Linear(1)`). Targets: `sentiment_logit`, `speaker_age`, plus ParlaSpeech-HR benchmark v3 (`hr_bench_v3_age`, `hr_bench_v3_orientation`). Scatter + distribution plots. **Target normalization** (`cfg.normalize="zscore"`, fit TRAIN-only, inverted before metrics + saved predictions) — regression-only.
 
-**Shared engine details:** input-gated GPU guard (**GPU 2 reserved**, never touch another), configurable CPU workers, `attention_mask` returned by the feature extractor + passed by the collator (so pooling excludes padding), GPU flush between phases (`del`/`gc`/`empty_cache`), stage timer + ETA, and an inference spot-check (5 random TEST examples, real units / class + hit-marker). Predictions carry full provenance (`file_id`, `start_t`/`end_t` from `metadata.audio_*`) and a populated `pred_raw`.
+**Py runners** (`run_31_classification.py` / `run_32_regression.py`) drive the same engine without prompts — `--mode`, `--target`, `--use_gpu`. This is the tool for full-corpus runs.
+
+**Shared engine details:** input-gated GPU guard for notebooks / `--use_gpu` flag for runners (**reserved GPU from `shared.reserved_gpu`** in `config.json`, never touch another), configurable CPU workers, `attention_mask` returned by the feature extractor + passed by the collator (so pooling excludes padding), GPU flush between phases (`del`/`gc`/`empty_cache`), stage timer + ETA, and an inference spot-check (5 random TEST examples, real units / class + hit-marker). Predictions carry full provenance (`file_id`, `start_t`/`end_t` from `metadata.audio_*`) and a populated `pred_raw`. The `TARGETS` registry supports optional per-target constraint overrides (`TARGET_CONSTRAINT_FIELDS`, currently `max_duration_s`) so a preset can self-declare benchmark caps.
 
 ### Chapter 4 — Frame models
 `41_train_frame_classification.ipynb` — built to engine parity with the chapter-3 twins (run-mode cell, timer, attention-mask, GPU flush, spot-check). Custom frame head → `(B, T, num_labels)`, token-CE with `ignore_index=-100`, per-record label alignment to the model's actual CNN output length. `frame_rate_hz == 50` only. **Task-keyed `TARGETS`** (`parlaspeech_fp_frames`, `parlaspeech_primary_stress_frames`) with `jsonl_template` + supported langs; `cfg.langs` is an orthogonal language knob (`()` = all available). `save_predictions_json` stores per-frame `prob_pos` (softmax positive-class probability) for downstream QC thresholding. Reference: parlastress (Croatian FP/stress). Two v1 frame tasks, in order:
@@ -203,8 +235,11 @@ Wav2Vec2-base + a task head, two-phase (TRAIN→DEV, then TRAIN+DEV→TEST). Ide
 
 Frame regression (rung 7): `42_train_frame_regression.ipynb` will be built as the completeness twin of `41` (same engine, regression head), with a prominent note that **no annotated data exists yet** for a continuous per-frame target — code for future work, not runnable on real data.
 
-### Chapter 5 — Post-hoc analysis (stub)
-`50_find_best_epoch.ipynb`, `51_error_analysis.ipynb`, `52_compare_runs.ipynb`, `53_frame_event_metrics.ipynb`. Operate on saved run dirs; no GPUs/models.
+### Chapter 5 — TG minter
+**Goal:** turn ParlaSpeech v3 utterances into TextGrids an annotator can edit, then read the annotated TGs back into the canonical JSONL space.
+
+- `51_tg_minter.ipynb` — slices ParlaSpeech v3 records into annotation-ready TextGrid bundles (audio + TG, one per utterance), seeded with the existing tiers.
+- `52_annotation_stats.ipynb` — reads annotated TGs back and surfaces stats for downstream consumers.
 
 ---
 
@@ -212,25 +247,28 @@ Frame regression (rung 7): `42_train_frame_regression.ipynb` will be built as th
 
 Follow the ladder; secure each rung before the next, and the whole **instance** pipeline before the **frame** pipeline.
 
-**Phase A — foundation** ✅
+**Stage A — foundation** ✅
 1. Download + unpack (`10`).
-2. Prep ParlaSpeech-RS (`11c`) → `utterance_instance` + `utterance_frame`.
+2. Prep ParlaSpeech-HR (`11c`) → `utterance_instance` + `utterance_frame` (+ `word_frame` for HR/RS).
 3. Sniff (`20`) the instance JSONL.
 
-**Phase B — instance pipeline (rungs 1–4)** ✅ *secured*
+**Stage B — instance pipeline (rungs 1–4)** ✅ *secured*
 4. `31` gender (demo) → filled-pause presence/count; `32` sentiment / age (regression).
 5. (rung 3 FP-type slots in once the annotator deliverable lands.)
 
-**Phase C — frame pipeline (rungs 5–6)** ✅ *engine secured (demo)*
+**Stage C — frame pipeline (rungs 5–6)** ✅ *engine secured (demo)*
 6. `41` FP frames (ParlaSpeech) — built, demo-verified.
 7. `41` primary-stress frames (HR/RS) — the north star; 11c `word_frame` recipe confirmed on real HR.
 
-**Phase D — breadth**
-8. Other languages (`cfg.langs`); ROG corpora; combined runs. **Full training runs** happen here — via the py runners, not notebooks (kernel memory limits under full load).
+**Stage D — benchmarks** ← *active*
+8. ParlaSpeech-HR benchmark v1 / v3 prep (`11d`/`11e`) → `31`/`32` targets `hr_bench_v1_*` and `hr_bench_v3_*`. Numbers come back here.
 
-**Phase E — abstraction & polish** ← **active for chapter 3**
-9. Per secured chapter: final demo run → freeze standalone notebooks into `legacy/` → lift engine to `utils_<chapter>.py` + `config.json` → light tutorial notebooks (per-cell imports) → py runners (`--mode`, `--config`, `--use_gpu` overriding the interactive GPU guard). Order: chapter 3 (`utils_instance_train.py`) first, then 41 + the new `42` (chapter 4).
-10. Remaining chapter-5 notebooks.
+**Stage E — breadth**
+9. Other languages (`cfg.langs`); ROG corpora; combined runs. **Full training runs** happen here — via the py runners, not notebooks (kernel memory limits under full load).
+
+**Next stage — abstraction & polish** (chapter 3 ✅ done, chapter 4 next)
+10. Per secured chapter: final demo run → freeze standalone notebooks into `legacy/` → lift engine to `utils_<chapter>.py` + `config.json` → light tutorial notebooks (per-cell imports) → py runners (`--mode`, `--config`, `--use_gpu` overriding the interactive GPU guard). Chapter 3 (`utils_instance_train.py`) is complete; chapter 4 (`utils_frame_train.py`) is next, with `41` lifted and `42` built as its completeness twin.
+11. Chapter 5 (TG minter) follow-ups as the annotator deliverable matures; chapter 2 overhaul (distributions/durations/speaker summaries) lands alongside.
 
 ---
 
@@ -258,29 +296,29 @@ Mark items ✅ when done and working **end-to-end on real data**. Ask Claude to 
 
 **Done (real data)**
 - ✅ `utils_dataprep.py` — JSONL I/O, validation, splits, instance id
-- ✅ `utils_audio_splitter.py` — resolver-driven cutter/converter (stem-scan, record-path, FLAC basename-index + cache); **process-pool multicore** (`parallel_backend="process"`, thread fallback); confirmed via 11c on real RS
+- ✅ `utils_audio_splitter.py` — resolver-driven cutter/converter (stem-scan, record-path, FLAC basename-index + cache); **process-pool multicore** (`parallel_backend="process"`, thread fallback); confirmed via 11c on real HR and RS
 - ✅ `10_download_data.ipynb`
-- ✅ `11b_prep_ROG_dia.ipynb` — ROG-Dialog instance JSONL (frame output pending re-pass)
-- ✅ `12_audio_splitter.ipynb` — ROG-Dialog only (now retired for new preps)
+- ✅ `11b_prep_ROG-dia.ipynb` — ROG-Dialog instance JSONL (frame output pending re-pass)
 - ✅ `20_sniff_dataset.ipynb`
-- ✅ `11c_prep_ParlaSpeech.ipynb` — recipe registry, `utterance_instance` + `utterance_frame` + **`word_frame`** (utterance path + word bounds, in-memory slicing downstream), speaker-grouped splits, multicore convert + stage timer; **confirmed on real RS and HR**
-- ✅ `31_train_instance_classification.ipynb` — gender on real ParlaSpeech-HR; attention-mask pooling, GPU flush, timer/ETA, spot-check, populated `pred_raw`
-- ✅ `32_train_instance_regression.ipynb` — age on real data; train-only z-score normalization (real-unit metrics), attention-mask pooling fix, GPU flush, timer/ETA, spot-check
+- ✅ `11c_prep_parlaspeech.ipynb` — recipe registry, `utterance_instance` + `utterance_frame` + **`word_frame`** (utterance path + word bounds, in-memory slicing downstream), speaker-grouped splits, multicore convert + stage timer; **confirmed on real HR and RS** (HR first)
+- ✅ `11d_prep_parlaspeech_benchmark_v3.ipynb` — ParlaSpeech-HR benchmark v3 → one JSONL per task (gender/speaker_id/power_status/age/orientation); splits baked in by the benchmark, audio already 16 kHz mono
+- ✅ `11e_prep_parlaspeech_benchmark_v1.ipynb` — ParlaSpeech-HR benchmark v1 → one JSONL per task (all classification; v1's age is young/old), label casing normalized to v3
+- ✅ `31_train_instance_classification.ipynb` — gender on real ParlaSpeech-HR; attention-mask pooling, GPU flush, timer/ETA, spot-check, populated `pred_raw`; lifted to engine import
+- ✅ `32_train_instance_regression.ipynb` — age on real data; train-only z-score normalization (real-unit metrics), attention-mask pooling fix, GPU flush, timer/ETA, spot-check; lifted to engine import
 - ✅ `41_train_frame_classification.ipynb` — frame head, per-record label alignment, task-keyed `TARGETS` + `cfg.langs`, `prob_pos` in saved predictions; engine parity with the twins; demo-verified
 - ✅ **Run-mode refactor (31/32/41)** — `RUN_MODE`/`MODES`/`apply_mode`/`cap_split` replaces `test_mode` + `DEMO_*`; caps now apply to train/dev/test identically (fixed TEST-leak in demo runs); run-mode cell byte-identical across all three (md5-confirmed)
-- ✅ `30_train_instance.ipynb` — **split into `31`/`32`** (historical: ran ROG-Dialog sentiment end-to-end)
+- ✅ **Chapter-3 lift complete** — `utils_instance_train.py` (engine + `TARGETS` + `TARGET_CONSTRAINT_FIELDS`), `config.json` (all user-facing knobs), light tutorial notebooks `31`/`32`, py runners `run_31_classification.py` / `run_32_regression.py` (`--mode`, `--target`, `--use_gpu`); pre-lift standalone twins frozen in `3_instance_models/legacy/`
+- ✅ `0_env_setup/` — CPU and CUDA env install scripts + pinned requirements + `ENV_SETUP.md`
+- ✅ `5_tg_minter/` — `51_tg_minter.ipynb` (ParlaSpeech v3 → annotation-ready TextGrids) and `52_annotation_stats.ipynb` (read annotated TGs back)
 
 **Verified on fixture, pending real-data run**
-- 🧪 `11a_prep_ROG.ipynb` — dual output, fixture-verified, needs run on real ROG-Art
+- 🧪 `11a_prep_ROG-art.ipynb` — dual output, fixture-verified, needs run on real ROG-Art
 
-**Next up — phase-E lift, chapter 3**
-- [ ] Final demo runs on standalone 31/32 → freeze into `3_instance_models/legacy/`
-- [ ] `utils_instance_train.py` + `config.json` (extracted from the twins, fixture-verified against legacy)
-- [ ] Light tutorial notebooks 31/32 (per-cell imports from utils, config-loading cell)
-- [ ] Py runners `run_31_classification.py` / `run_32_regression.py` (`--mode`, `--config`, `--use_gpu`)
-- [ ] Then the same treatment for chapter 4: 41 + build `42_train_frame_regression` (completeness twin, no data yet)
-- [ ] `50_find_best_epoch.ipynb`
-- [ ] Pending decision: small "demo ParlaSpeech" dataset in the `10` download registry as the default for demo runs (needs benchmark JSONLs)
+**Next up**
+- [ ] Chapter 4 lift: extract the `41` engine into `utils_frame_train.py` + `config.json` + `run_41_frame_classification.py`; freeze pre-lift `41` into `4_frame_models/legacy/`; build `42_train_frame_regression.ipynb` as the completeness twin (no annotated continuous frame target exists yet — code for future work)
+- [ ] Chapter 2 overhaul — full label distributions, audio-duration histograms, speaker/split summaries; drop the "sniff" framing
+- [ ] Public release of the ParlaSpeech-HR benchmark archives (currently dropped into `data/benchmarking/` out-of-band, pre-publication)
+- [ ] Pending decision: small "demo ParlaSpeech" dataset in the `10` download registry as the default for demo runs
 
 ---
 
