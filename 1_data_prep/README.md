@@ -15,7 +15,7 @@ Then, in order:
 
 1. `10_download_data.ipynb` — fetch + unpack the corpora you need. `cfg.datasets` selects; the cell is idempotent and skips what's already on disk.
 2. The matching prep notebook for each corpus (see below).
-3. Optional: `2_data_analysis/20_sniff_dataset.ipynb` to eyeball the output.
+3. Optional: `2_data_analysis/20_explore_dataset.ipynb` to eyeball the output.
 
 Each prep notebook writes one or more files under `data/processed_jsonl/` and cut 16 kHz mono WAVs under `data/cut_audio/`.
 

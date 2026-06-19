@@ -10,7 +10,7 @@ A modular, plug-and-play pipeline for fine-tuning Wav2Vec2 models on Slavic spee
 
 1. **gender** — utterance instance classification. *Proof of work / pipeline demo* (audio gender is near-trivial; if the model can't learn it, the wiring is broken). ✅ **secured**
 2. **filled-pause presence** — utterance instance classification (also `filled_pause_count`). The first real target. ✅ pipeline ready
-3. **FP type** — per-FP-event instance classification (vowel / vowel+nasal / nasal / other / NA). *Needs the annotator deliverable.* `cut=True` (event clips).
+3. **FP type** — per-FP-event instance classification (Vocal / Nasal / V-N / Other / FalsePositive). `cut=True` (event clips, emitted by `53_tg_to_jsonl` from the annotated TextGrids). ✅ pipeline ready; waiting on annotator throughput.
 4. **sentiment / age** — utterance instance **regression** (`sentiment_logit`; `speaker_age`). ✅ **secured** (age demo run)
 5. **filled-pause frames** — frame classification: per-frame FP / not-FP over the whole utterance. ✅ pipeline ready (`41`, demo-verified)
 6. **primary stress frames** — frame classification, **word as the instance**. **HR/RS only** (`primary_stress` + `words_align`, via 11c `word_frame`). ← north star
@@ -113,7 +113,7 @@ data/
 │   ├── parlaspeech_<lang>_audio_index.json           # persistent {basename → path} scan
 │   ├── parlaspeech_hr_bench_v1_<task>.jsonl          # 11e output, one file per benchmark task
 │   └── parlaspeech_hr_bench_v3_<task>.jsonl          # 11d output, one file per benchmark task
-└── reports/                            # sniff_dataset outputs
+└── reports/                            # 20_explore_dataset outputs (markdown + PNGs)
 ```
 
 **Benchmark layout.** The two ParlaSpeech-HR benchmark bundles drop in pre-built under `data/benchmarking/`: one JSONL with per-task splits + an `audio/` tree of 16 kHz mono WAVs already keyed by the YouTube hash. The benchmark archives are not on CLARIN yet — they ship out-of-band. `11d`/`11e` parse them into one canonical pipeline JSONL per task (the benchmark's splits are per-task, so the same utterance can be gender/train and age/dev — no shared top-level `split` is possible).
@@ -147,7 +147,7 @@ slavic-speech-pipeline/
 │   ├── 11d_prep_parlaspeech_benchmark_v3.ipynb    ← ParlaSpeech-HR benchmark v3 → one JSONL per task
 │   └── 11e_prep_parlaspeech_benchmark_v1.ipynb    ← ParlaSpeech-HR benchmark v1 → one JSONL per task
 │
-├── 2_data_analysis/   └── 20_sniff_dataset.ipynb   (semi-stub; full overhaul pending — see §6)
+├── 2_data_analysis/   └── 20_explore_dataset.ipynb  (data-science sanity report; instance-shape only)
 ├── 3_instance_models/                             ← next-stage lift complete
 │   ├── legacy/                                    ← frozen standalone twins (pre-lift)
 │   │   ├── 31_train_instance_classification.ipynb
@@ -163,7 +163,8 @@ slavic-speech-pipeline/
 │   └── 42_train_frame_regression.ipynb            ← planned, completeness twin (no data yet)
 ├── 5_tg_minter/
 │   ├── 51_tg_minter.ipynb                         ← ParlaSpeech v3 TextGrids → annotation-ready bundles
-│   └── 52_annotation_stats.ipynb                  ← read annotated TGs back, surface stats
+│   ├── 52_annotation_stats.ipynb                  ← read annotated TGs back, surface stats
+│   └── 53_tg_to_jsonl.ipynb                       ← annotated TGs → canonical event-instance JSONL (rung 3)
 └── data/                                          ← gitignored
 ```
 
@@ -210,12 +211,12 @@ Every notebook follows the same shape: title/overview → setup (`PROJECT_ROOT` 
 
 - `10_download_data.ipynb` — fetch + unpack.
 - `11a_prep_ROG-art.ipynb` / `11b_prep_ROG-dia.ipynb` — EXB corpora, dual output.
-- `11c_prep_parlaspeech.ipynb` — recipe registry; emits `utterance_instance` (gender, age, filled_pause_present, filled_pause_count, sentiment_logit, sentiment_6), `utterance_frame` (50 Hz FP sequence), and `word_frame` (primary stress, HR/RS — carries the utterance `audio_path` + `start_t`/`end_t` word bounds; the trainer slices in memory, no word WAVs on disk). Converts FLAC→WAV via the splitter (whole-file, multicore process pool, cached index). Per-language loop with stage timer. Still stubbed: `event_instance` (FP-type, needs annotator).
+- `11c_prep_parlaspeech.ipynb` — recipe registry; emits `utterance_instance` (gender, age, filled_pause_present, filled_pause_count, sentiment_logit, sentiment_6), `utterance_frame` (50 Hz FP sequence), and `word_frame` (primary stress, HR/RS — carries the utterance `audio_path` + `start_t`/`end_t` word bounds; the trainer slices in memory, no word WAVs on disk). Converts FLAC→WAV via the splitter (whole-file, multicore process pool, cached index). Per-language loop with stage timer. `event_instance` (FP-type) is produced by chapter 5's `53_tg_to_jsonl` from the annotated TextGrids — not a recipe here.
 - `11d_prep_parlaspeech_benchmark_v3.ipynb` — parse the pre-built ParlaSpeech-HR benchmark v3 (under `data/benchmarking/`) into one JSONL per task (`gender` / `speaker_id` / `power_status` / `age` / `orientation`). Splits come from the benchmark's per-task `benchmark` key (no `assign_splits`); audio is already 16 kHz mono — `audio_path` points straight at it. v3's `age` and `orientation` are regression; the other three are classification.
 - `11e_prep_parlaspeech_benchmark_v1.ipynb` — sibling to `11d` for the ParlaSpeech-HR benchmark v1. Same per-task-file layout (`gender` / `speaker_id` / `power_status` / `age`), all four classification (v1's age is a `young`/`old` group, not a continuous value). Labels are normalized to v3's casing where they overlap so a single chapter-3 target family spans both benchmarks.
 
-### Chapter 2 — Dataset analysis (semi-stub, overhaul pending)
-`20_sniff_dataset.ipynb` — current state: point at any canonical JSONL → stats + markdown report. Works for instance and frame. Kept as a semi-stub until the planned overhaul: full label distributions, audio-duration histograms, speaker/split summaries. The replacement chapter will not carry the "sniff" framing.
+### Chapter 2 — Explore dataset
+`20_explore_dataset.ipynb` (jupytext-paired with `.py`) — point at any canonical instance JSONL → a data-science sanity report: splits, speakers (uniques + cross-split overlap + top-N + utterances-per-speaker histogram), audio durations (header read, hist + box, `max_duration_s` impact), per-label distributions (numeric histograms / categorical bars + imbalance warnings), and a missing-field sweep. Tables inline, PNGs saved, everything stitched into one `<stem>_report.md` under `data/reports/`. Frame-shape files are detected and the notebook stops with a clear message — frame analysis is its own beast. The pre-overhaul notebook is preserved as `20_sniff_dataset.BACKUP.ipynb`.
 
 ### Chapter 3 — Instance models (twins, lifted)
 Wav2Vec2-base + a task head, two-phase (TRAIN→DEV, then TRAIN+DEV→TEST). Engine in `utils_instance_train.py`, knobs in `config.json`; the notebooks are tutorial twins.
@@ -240,6 +241,7 @@ Frame regression (rung 7): `42_train_frame_regression.ipynb` will be built as th
 
 - `51_tg_minter.ipynb` — slices ParlaSpeech v3 records into annotation-ready TextGrid bundles (audio + TG, one per utterance), seeded with the existing tiers.
 - `52_annotation_stats.ipynb` — reads annotated TGs back and surfaces stats for downstream consumers.
+- `53_tg_to_jsonl.ipynb` — emits annotated TGs as a canonical **event-instance** JSONL (rung 3: per-FP-event classification). Default **merge mode** joins each TG against the chapter-1 canonical JSONL by `audio_path` basename and inherits the utterance's `file_id` / `speaker` / `speaker_info` / `split` / session bounds; **as-is mode** emits minimal records from the TG + sibling audio alone. Cuts one 16 kHz mono WAV per annotated interval (`utils_dataprep.resample_to_16k_mono`); pending `?` intervals come through with `labels.fp_type = null`.
 
 ---
 
@@ -250,7 +252,7 @@ Follow the ladder; secure each rung before the next, and the whole **instance** 
 **Stage A — foundation** ✅
 1. Download + unpack (`10`).
 2. Prep ParlaSpeech-HR (`11c`) → `utterance_instance` + `utterance_frame` (+ `word_frame` for HR/RS).
-3. Sniff (`20`) the instance JSONL.
+3. Explore (`20`) the instance JSONL.
 
 **Stage B — instance pipeline (rungs 1–4)** ✅ *secured*
 4. `31` gender (demo) → filled-pause presence/count; `32` sentiment / age (regression).
@@ -299,7 +301,7 @@ Mark items ✅ when done and working **end-to-end on real data**. Ask Claude to 
 - ✅ `utils_audio_splitter.py` — resolver-driven cutter/converter (stem-scan, record-path, FLAC basename-index + cache); **process-pool multicore** (`parallel_backend="process"`, thread fallback); confirmed via 11c on real HR and RS
 - ✅ `10_download_data.ipynb`
 - ✅ `11b_prep_ROG-dia.ipynb` — ROG-Dialog instance JSONL (frame output pending re-pass)
-- ✅ `20_sniff_dataset.ipynb`
+- ✅ `20_explore_dataset.ipynb` — data-science sanity report (splits / speakers / durations / per-label distributions / missing-field sweep), markdown export + PNGs; pre-overhaul kept as `20_sniff_dataset.BACKUP.ipynb`
 - ✅ `11c_prep_parlaspeech.ipynb` — recipe registry, `utterance_instance` + `utterance_frame` + **`word_frame`** (utterance path + word bounds, in-memory slicing downstream), speaker-grouped splits, multicore convert + stage timer; **confirmed on real HR and RS** (HR first)
 - ✅ `11d_prep_parlaspeech_benchmark_v3.ipynb` — ParlaSpeech-HR benchmark v3 → one JSONL per task (gender/speaker_id/power_status/age/orientation); splits baked in by the benchmark, audio already 16 kHz mono
 - ✅ `11e_prep_parlaspeech_benchmark_v1.ipynb` — ParlaSpeech-HR benchmark v1 → one JSONL per task (all classification; v1's age is young/old), label casing normalized to v3
@@ -309,14 +311,14 @@ Mark items ✅ when done and working **end-to-end on real data**. Ask Claude to 
 - ✅ **Run-mode refactor (31/32/41)** — `RUN_MODE`/`MODES`/`apply_mode`/`cap_split` replaces `test_mode` + `DEMO_*`; caps now apply to train/dev/test identically (fixed TEST-leak in demo runs); run-mode cell byte-identical across all three (md5-confirmed)
 - ✅ **Chapter-3 lift complete** — `utils_instance_train.py` (engine + `TARGETS` + `TARGET_CONSTRAINT_FIELDS`), `config.json` (all user-facing knobs), light tutorial notebooks `31`/`32`, py runners `run_31_classification.py` / `run_32_regression.py` (`--mode`, `--target`, `--use_gpu`); pre-lift standalone twins frozen in `3_instance_models/legacy/`
 - ✅ `0_env_setup/` — CPU and CUDA env install scripts + pinned requirements + `ENV_SETUP.md`
-- ✅ `5_tg_minter/` — `51_tg_minter.ipynb` (ParlaSpeech v3 → annotation-ready TextGrids) and `52_annotation_stats.ipynb` (read annotated TGs back)
+- ✅ `5_tg_minter/` — `51_tg_minter.ipynb` (ParlaSpeech v3 → annotation-ready TextGrids), `52_annotation_stats.ipynb` (read annotated TGs back), and `53_tg_to_jsonl.ipynb` (annotated TGs → canonical event-instance JSONL, with optional merge against 11c)
 
 **Verified on fixture, pending real-data run**
 - 🧪 `11a_prep_ROG-art.ipynb` — dual output, fixture-verified, needs run on real ROG-Art
 
 **Next up**
 - [ ] Chapter 4 lift: extract the `41` engine into `utils_frame_train.py` + `config.json` + `run_41_frame_classification.py`; freeze pre-lift `41` into `4_frame_models/legacy/`; build `42_train_frame_regression.ipynb` as the completeness twin (no annotated continuous frame target exists yet — code for future work)
-- [ ] Chapter 2 overhaul — full label distributions, audio-duration histograms, speaker/split summaries; drop the "sniff" framing
+- [ ] Frame-shape companion for chapter 2 (per-record sequence stats, positive-fraction distribution, length histograms) — `20_explore_dataset` covers instance-shape only
 - [ ] Public release of the ParlaSpeech-HR benchmark archives (currently dropped into `data/benchmarking/` out-of-band, pre-publication)
 - [ ] Pending decision: small "demo ParlaSpeech" dataset in the `10` download registry as the default for demo runs
 
