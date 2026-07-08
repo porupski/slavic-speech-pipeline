@@ -1,0 +1,198 @@
+{
+  "_readme": {
+    "purpose": "Single source of truth for what 10_download_data.py can fetch. Split out so it doesn't dominate the notebook.",
+    "sources": {
+      "clarin": "Direct HTTP from the CLARIN.SI repository. `files` lists individual archives, each with size_mb + is_large flag.",
+      "hf":     "Hugging Face Hub. `hf_repo` + `hf_repo_type`. `allow_patterns`/`ignore_patterns` filter what snapshot_download grabs. `size_mb`/`is_large` describe the whole snapshot."
+    },
+    "shorthands": "Expand to lists of registry keys — e.g. 'ParlaSpeech' → all four annotation sets."
+  },
+
+  "shorthands": {
+    "ParlaSpeech":            ["ParlaSpeech-HR", "ParlaSpeech-RS", "ParlaSpeech-PL", "ParlaSpeech-CZ"],
+    "ParlaSpeech-audio":      ["ParlaSpeech-HR-audio", "ParlaSpeech-RS-audio", "ParlaSpeech-PL-audio", "ParlaSpeech-CZ-audio"],
+    "ParlaSpeech-benchmarks": ["ParlaSpeech-HR-benchmark-v1", "ParlaSpeech-HR-benchmark-v3"]
+  },
+
+  "datasets": {
+    "ROG-Dialog": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/2073",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/2073",
+      "target_dir": "data/raw/ROG-Dialog",
+      "unpack_dir": "data/unpacked/ROG-Dialog",
+      "files": [
+        {"name": "ROG-Dialog.zip",       "size_mb": 5,    "is_large": true},
+        {"name": "ROG-Dialog_audio.zip", "size_mb": 1220, "is_large": true}
+      ],
+      "note": "Slovenian dialogue corpus — sentiment, dialogue-act, filled-pause. 25 speakers, 5.2 h, EXB/TRS/TXT. The _audio.zip (~1.2 GB) is required for audio tasks."
+    },
+
+    "ROG": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/2062",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/2062",
+      "target_dir": "data/raw/ROG",
+      "unpack_dir": "data/unpacked/ROG",
+      "files": [
+        {"name": "ROG.zip",         "size_mb": 30,   "is_large": false},
+        {"name": "ROG-Art.wav.zip", "size_mb": 1400, "is_large": true}
+      ],
+      "note": "Slovenian read-speech + arts subcorpora. ROG-Art.wav.zip (~1.4 GB) is required for audio."
+    },
+
+    "GOS": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1863",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1863",
+      "target_dir": "data/raw/GOS",
+      "unpack_dir": "data/unpacked/GOS",
+      "files": [
+        {"name": "Gos.TEI.zip",  "size_mb": 60, "is_large": false},
+        {"name": "Gos.TRS.zip",  "size_mb": 50, "is_large": false},
+        {"name": "Gos.TXT.zip",  "size_mb": 10, "is_large": false},
+        {"name": "Gos.vert.zip", "size_mb": 30, "is_large": false}
+      ],
+      "note": "Slovenian spontaneous speech — transcriptions only. Audio is on restricted handle http://hdl.handle.net/11356/1973 and needs a manual step."
+    },
+
+    "ParlaSpeech-HR": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1833",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1833",
+      "target_dir": "data/raw/ParlaSpeech-HR",
+      "unpack_dir": "data/unpacked/ParlaSpeech-HR",
+      "files": [
+        {"name": "ParlaSpeech-HR.v3.0.jsonl.gz",     "size_mb": 2580, "is_large": false},
+        {"name": "ParlaSpeech-HR.v3.0.vert.gz",      "size_mb": 260,  "is_large": false},
+        {"name": "ParlaSpeech-HR.v3.0.textgrid.tgz", "size_mb": 4330, "is_large": true}
+      ],
+      "note": "Croatian parliamentary speech — v3.0 annotations only. Pair with ParlaSpeech-HR-audio for the actual audio."
+    },
+
+    "ParlaSpeech-RS": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1833",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1833",
+      "target_dir": "data/raw/ParlaSpeech-RS",
+      "unpack_dir": "data/unpacked/ParlaSpeech-RS",
+      "files": [
+        {"name": "ParlaSpeech-RS.v3.0.jsonl.gz",     "size_mb": 586,  "is_large": false},
+        {"name": "ParlaSpeech-RS.v3.0.vert.gz",      "size_mb": 73,   "is_large": false},
+        {"name": "ParlaSpeech-RS.v3.0.textgrid.tgz", "size_mb": 1270, "is_large": true}
+      ],
+      "note": "Serbian parliamentary speech — v3.0 annotations. Smallest of the four ParlaSpeech corpora. Pair with ParlaSpeech-RS-audio."
+    },
+
+    "ParlaSpeech-PL": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1833",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1833",
+      "target_dir": "data/raw/ParlaSpeech-PL",
+      "unpack_dir": "data/unpacked/ParlaSpeech-PL",
+      "files": [
+        {"name": "ParlaSpeech-PL.v3.0.jsonl.gz", "size_mb": 393, "is_large": false},
+        {"name": "ParlaSpeech-PL.v3.0.vert.gz",  "size_mb": 103, "is_large": false}
+      ],
+      "note": "Polish parliamentary speech — v3.0 annotations. No TextGrid ships with this release. Pair with ParlaSpeech-PL-audio."
+    },
+
+    "ParlaSpeech-CZ": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1833",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1833",
+      "target_dir": "data/raw/ParlaSpeech-CZ",
+      "unpack_dir": "data/unpacked/ParlaSpeech-CZ",
+      "files": [
+        {"name": "ParlaSpeech-CZ.v3.0.jsonl.gz", "size_mb": 565, "is_large": false},
+        {"name": "ParlaSpeech-CZ.v3.0.vert.gz",  "size_mb": 129, "is_large": false}
+      ],
+      "note": "Czech parliamentary speech — v3.0 annotations. No TextGrid. Pair with ParlaSpeech-CZ-audio."
+    },
+
+    "ParlaSpeech-HR-audio": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1914",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1914",
+      "target_dir": "data/raw/ParlaSpeech-HR-audio",
+      "unpack_dir": "data/unpacked/ParlaSpeech-HR-audio",
+      "files": [
+        {"name": "ParlaSpeech-HR.v2.0.part1.tgz", "size_mb": 30480, "is_large": true},
+        {"name": "ParlaSpeech-HR.v2.0.part2.tgz", "size_mb": 42370, "is_large": true},
+        {"name": "ParlaSpeech-HR.v2.0.part3.tgz", "size_mb": 37610, "is_large": true},
+        {"name": "ParlaSpeech-HR.v2.0.part4.tgz", "size_mb": 41480, "is_large": true},
+        {"name": "ParlaSpeech-HR.v2.0.part5.tgz", "size_mb": 50130, "is_large": true},
+        {"name": "ParlaSpeech-HR.v2.0.part6.tgz", "size_mb": 4910,  "is_large": true},
+        {"name": "README.txt",                    "size_mb": 1,     "is_large": false}
+      ],
+      "note": "Croatian FLAC audio — ~207 GB across 6 parts. Pair with ParlaSpeech-HR (v3.0 annotations)."
+    },
+
+    "ParlaSpeech-RS-audio": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1834",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1834",
+      "target_dir": "data/raw/ParlaSpeech-RS-audio",
+      "unpack_dir": "data/unpacked/ParlaSpeech-RS-audio",
+      "files": [
+        {"name": "ParlaSpeech-RS.v1.0.part1.tgz", "size_mb": 36410, "is_large": true},
+        {"name": "ParlaSpeech-RS.v1.0.part2.tgz", "size_mb": 26620, "is_large": true},
+        {"name": "README.txt",                    "size_mb": 1,     "is_large": false}
+      ],
+      "note": "Serbian FLAC audio — ~63 GB across 2 parts. Smallest full ParlaSpeech audio release. Pair with ParlaSpeech-RS."
+    },
+
+    "ParlaSpeech-PL-audio": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1686",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1686",
+      "target_dir": "data/raw/ParlaSpeech-PL-audio",
+      "unpack_dir": "data/unpacked/ParlaSpeech-PL-audio",
+      "files": [
+        {"name": "ParlaSpeech-PL.v1.0.part1.tgz", "size_mb": 27870, "is_large": true},
+        {"name": "ParlaSpeech-PL.v1.0.part2.tgz", "size_mb": 30740, "is_large": true},
+        {"name": "README.txt",                    "size_mb": 1,     "is_large": false}
+      ],
+      "note": "Polish FLAC audio — ~59 GB across 2 parts. Pair with ParlaSpeech-PL."
+    },
+
+    "ParlaSpeech-CZ-audio": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1785",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1785",
+      "target_dir": "data/raw/ParlaSpeech-CZ-audio",
+      "unpack_dir": "data/unpacked/ParlaSpeech-CZ-audio",
+      "files": [
+        {"name": "ParlaSpeech-CZ.v1.0.part1.tgz", "size_mb": 46330, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v1.0.part2.tgz", "size_mb": 40610, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v1.0.part3.tgz", "size_mb": 43620, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v1.0.part4.tgz", "size_mb": 22070, "is_large": true}
+      ],
+      "note": "Czech FLAC audio — ~153 GB across 4 parts. Pair with ParlaSpeech-CZ."
+    },
+
+    "ParlaSpeech-HR-benchmark-v1": {
+      "source":       "hf",
+      "hf_repo":      "porupski/ParlaSpeech-HR-benchmark_v1",
+      "hf_repo_type": "dataset",
+      "target_dir":   "data/benchmarking/ParlaSpeech-HR-benchmark-v1",
+      "allow_patterns":  ["*.jsonl", "audio/**"],
+      "ignore_patterns": ["*.parquet", "data/*.parquet"],
+      "size_mb":  9200,
+      "is_large": true,
+      "note": "ParlaSpeech-HR benchmark v1 — pre-built speaker-disjoint splits for gender / speaker-id / power-status / age (all classification). Ships with 16 kHz mono audio ready to train on. ~9 GB. Feeds 11d_prep_parlaspeech_benchmark_v1."
+    },
+
+    "ParlaSpeech-HR-benchmark-v3": {
+      "source":       "hf",
+      "hf_repo":      "porupski/ParlaSpeech-HR-benchmark_v3",
+      "hf_repo_type": "dataset",
+      "target_dir":   "data/benchmarking/ParlaSpeech-HR-benchmark-v3",
+      "allow_patterns":  ["*.jsonl", "audio/**", "textgrids/**"],
+      "ignore_patterns": ["*.parquet", "data/*.parquet"],
+      "size_mb":  9100,
+      "is_large": true,
+      "note": "ParlaSpeech-HR benchmark v3 — pre-built speaker-disjoint splits for gender / speaker-id / power-status (classification) and age / orientation (regression). Ships with 16 kHz mono audio; also includes align/pause/stress TextGrids where available. ~9 GB. Default download target. Feeds 11e_prep_parlaspeech_benchmark_v3."
+    }
+  }
+}

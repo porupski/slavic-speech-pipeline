@@ -6,6 +6,9 @@ stock_models/
 test_runs/
 test_processed_jsonl/
 
+# --- internal-only docs (kept locally, not shipped to users) -----------------
+BLUEPRINT.md
+
 # --- local backups (created before risky edits) ------------------------------
 *.BACKUP.*
 *.wav

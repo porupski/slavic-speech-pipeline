@@ -43,7 +43,7 @@ mamba run -n "${ENV_NAME}" pip install torch --index-url https://download.pytorc
 
 echo
 echo "→ Installing pip-only packages..."
-mamba run -n "${ENV_NAME}" pip install praatio transformers datasets accelerate jupytext
+mamba run -n "${ENV_NAME}" pip install praatio transformers datasets accelerate jupytext huggingface_hub
 
 echo
 echo "→ Registering Jupyter kernel..."

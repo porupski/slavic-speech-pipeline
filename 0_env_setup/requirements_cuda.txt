@@ -17,6 +17,7 @@ praatio>=6.0
 # --- HTTP / downloads ---------------------------------------------------------
 requests>=2.31
 tqdm>=4.66
+huggingface_hub>=0.24     # HF-hosted benchmark bundles (see 10a_dataset_registry.json)
 
 # --- plotting -----------------------------------------------------------------
 matplotlib>=3.7

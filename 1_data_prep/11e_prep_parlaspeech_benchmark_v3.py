@@ -12,7 +12,7 @@
 # ---
 
 # %% [markdown]
-# # Prep ParlaSpeech-HR benchmark — chapter 1 (variant d)
+# # Prep ParlaSpeech-HR benchmark **v3** — chapter 1 (variant e)
 #
 # Parse the pre-built **ParlaSpeech-HR-benchmark-v3** (placed under
 # `data/benchmarking/`) into canonical pipeline JSONLs — **one small file per
@@ -163,6 +163,25 @@ for p, what in ((BENCH_JSONL, "benchmark jsonl"), (AUDIO_DIR, "audio dir")):
 print(f"✅ {BENCH_JSONL.relative_to(PROJECT_ROOT)}  "
       f"({BENCH_JSONL.stat().st_size/1e6:.0f} MB)")
 
+
+def _detect_audio_ext(audio_root: Path) -> str:
+    """Return the dominant audio extension on disk (`.wav` or `.flac`).
+
+    The JSONL's `audio` field lists an extension, but the bundle's on-disk
+    files may differ (v1 lists `.flac`, ships `.wav`). One scan settles it.
+    """
+    for hash_dir in audio_root.iterdir():
+        if not hash_dir.is_dir():
+            continue
+        for f in hash_dir.iterdir():
+            suf = f.suffix.lower()
+            if suf in (".wav", ".flac"):
+                return suf
+    return ".wav"
+
+AUDIO_EXT = _detect_audio_ext(AUDIO_DIR)
+print(f"  audio extension on disk: {AUDIO_EXT}")
+
 # %% [markdown]
 # ---
 #
@@ -202,7 +221,7 @@ def parse_rows(path: Path) -> dict[str, list[dict]]:
                 "instance_id": r["id"],
                 "dataset":     cfg.dataset_name,
                 "file_id":     file_hash,
-                "audio_path":  f"{cfg.benchmark_dir}/audio/{file_hash}/{stem}.wav",
+                "audio_path":  f"{cfg.benchmark_dir}/audio/{file_hash}/{stem}{AUDIO_EXT}",
                 "speaker":     si.get("Speaker_ID", "unknown"),
                 "text":        r.get("text"),
                 "metadata": {

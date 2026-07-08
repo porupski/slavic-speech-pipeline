@@ -12,7 +12,7 @@
 # ---
 
 # %% [markdown]
-# # Prep ParlaSpeech-HR benchmark **v1** — chapter 1 (variant e)
+# # Prep ParlaSpeech-HR benchmark **v1** — chapter 1 (variant d)
 #
 # Parse the pre-built **ParlaSpeech-HR-benchmark-v1** (built against ParlaSpeech-HR
 # **v1.0**, placed under `data/benchmarking/`) into canonical pipeline JSONLs —
@@ -21,7 +21,7 @@
 # cannot exist. Within each task file the canonical shape holds and `31` consumes
 # it unchanged.
 #
-# **Sibling to `11d` (the v3 benchmark prep), with v1's quirks:**
+# **Sibling to `11e` (the v3 benchmark prep), with v1's quirks:**
 # - splits come from the `benchmark` key — **no `assign_splits`** (the benchmark
 #   construction already guarantees speaker-disjointness, and hash-disjointness
 #   for `speaker_id`);
@@ -170,6 +170,25 @@ for p, what in ((BENCH_JSONL, "benchmark jsonl"), (AUDIO_DIR, "audio dir")):
 print(f"✅ {BENCH_JSONL.relative_to(PROJECT_ROOT)}  "
       f"({BENCH_JSONL.stat().st_size/1e6:.0f} MB)")
 
+
+def _detect_audio_ext(audio_root: Path) -> str:
+    """Return the dominant audio extension on disk (`.wav` or `.flac`).
+
+    v1's `path` field lists `.flac`, but the bundled files are often `.wav` on
+    disk. One scan settles it, so downstream paths point at what actually exists.
+    """
+    for hash_dir in audio_root.iterdir():
+        if not hash_dir.is_dir():
+            continue
+        for f in hash_dir.iterdir():
+            suf = f.suffix.lower()
+            if suf in (".wav", ".flac"):
+                return suf
+    return ".wav"
+
+AUDIO_EXT = _detect_audio_ext(AUDIO_DIR)
+print(f"  audio extension on disk: {AUDIO_EXT}")
+
 # %% [markdown]
 # ---
 #
@@ -226,7 +245,7 @@ def parse_rows(path: Path) -> dict[str, list[dict]]:
                 "instance_id": stem,
                 "dataset":     cfg.dataset_name,
                 "file_id":     file_hash,
-                "audio_path":  f"{cfg.benchmark_dir}/audio/{file_hash}/{stem}.wav",
+                "audio_path":  f"{cfg.benchmark_dir}/audio/{file_hash}/{stem}{AUDIO_EXT}",
                 "speaker":     si.get("Speaker_name", "unknown"),
                 "text":        " ".join(r.get("words", [])),
                 "metadata": {

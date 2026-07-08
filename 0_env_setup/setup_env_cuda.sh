@@ -44,7 +44,7 @@ mamba run -n "${ENV_NAME}" pip install torch torchaudio \
 echo
 echo "→ Installing pip-only packages..."
 mamba run -n "${ENV_NAME}" pip install \
-    praatio transformers datasets accelerate jupytext
+    praatio transformers datasets accelerate jupytext huggingface_hub
 
 echo
 echo "→ Registering Jupyter kernel..."

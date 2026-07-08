@@ -41,8 +41,8 @@ from typing import Any, Callable, Iterable, Iterator
 def find_project_root(start: Path | None = None) -> Path:
     """
     Walk up from `start` (default: this file's location) looking for the
-    project root, identified by the presence of `BLUEPRINT.md` or `README.md`
-    next to a `data/` directory.
+    project root, identified by a `README.md` next to a `data/` directory,
+    or a `0_env_setup/` directory (the chapter numbering anchor).
 
     Falls back to `Path.cwd()` if nothing matches — useful for notebooks
     started in odd places.
@@ -50,9 +50,8 @@ def find_project_root(start: Path | None = None) -> Path:
     start = (start or Path(__file__).resolve()).resolve()
     candidates = [start] + list(start.parents)
     for p in candidates:
-        if (p / "BLUEPRINT.md").exists() or ((p / "README.md").exists() and (p / "data").exists()):
+        if (p / "0_env_setup").is_dir() or ((p / "README.md").exists() and (p / "data").exists()):
             return p
-    # Last-resort fallback: cwd. Notebook users should set this explicitly.
     return Path.cwd().resolve()
 
 
