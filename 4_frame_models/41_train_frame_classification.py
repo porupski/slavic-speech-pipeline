@@ -1115,7 +1115,7 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
         remove_unused_columns=False,
         use_cpu=(DEVICE == "cpu"),
         bf16=(DEVICE == "cuda"),
-        tf32=True,
+        tf32=(DEVICE == "cuda"),
         dataloader_num_workers=cfg.dataloader_num_workers,
     )
 

@@ -28,5 +28,5 @@ Run cells top-to-bottom. First cell is the same GPU guard pattern as chapter 3 �
 
 ## What's missing
 
-- **The phase-E lift** — chapter 4 is still standalone. The chapter-3 pattern (`utils_frame_train.py` + `config.json` + py runners) is planned. Full runs should wait for that lift.
+- **The shared-engine refactor** — chapter 4 is still standalone (the whole engine lives inline in `41`). The chapter-3 pattern (`utils_frame_train.py` + `config.json` + py runner) is planned. Full runs should wait for that refactor.
 - **`42_train_frame_regression.ipynb`** — completeness twin for scalar-per-frame regression. No annotated continuous target exists yet; the twin will be code for future work.

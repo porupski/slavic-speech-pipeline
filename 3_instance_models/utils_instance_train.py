@@ -1,4 +1,4 @@
-"""utils_instance_train — the chapter-3 instance-training engine (phase-E lift).
+"""utils_instance_train — the chapter-3 instance-training engine.
 
 Shared by:
   * 31_train_instance_classification.ipynb / run_31_classification.py
@@ -1108,7 +1108,7 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
         remove_unused_columns=False,
         use_cpu=(device == "cpu"),
         bf16=(device == "cuda"),
-        tf32=True,
+        tf32=(device == "cuda"),
         dataloader_num_workers=cfg.dataloader_num_workers,
     )
 

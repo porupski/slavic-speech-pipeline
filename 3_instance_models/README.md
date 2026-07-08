@@ -49,4 +49,4 @@ In `test` mode both mirror under `runs/test/` and `models/test/` so test outputs
 
 ## `legacy/`
 
-Holds the frozen standalone `31`/`32` notebooks from before the phase-E lift — the whole engine inline, kept for reference. **Never edited.**
+Holds the frozen standalone `31`/`32` notebooks from before the shared-engine refactor — the whole engine inline, kept for reference. **Never edited.**
