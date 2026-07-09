@@ -27,7 +27,15 @@ from pathlib import Path
 from typing import Any
 
 import requests
-from tqdm.auto import tqdm
+
+# Force text-mode progress bars everywhere, including inside huggingface_hub.
+# tqdm.auto defaults to ipywidgets in a Jupyter kernel, which VS Code's Jupyter
+# frontend rejects with "Cannot read properties of undefined
+# (reading 'ipywidgetsKernel')" — annoying, and it hides the actual progress.
+import tqdm.auto as _tqdm_auto
+from tqdm.std import tqdm as _std_tqdm
+_tqdm_auto.tqdm = _std_tqdm
+from tqdm.auto import tqdm  # noqa: E402  — text-mode via the patch above
 
 
 # --------------------------------------------------------------------------- #
@@ -93,16 +101,41 @@ def iter_files(spec: dict[str, Any]) -> list[dict[str, Any]]:
 # CLARIN downloads
 # --------------------------------------------------------------------------- #
 
-def download_clarin_file(url: str, dest: Path, *, chunk_size: int = 1 << 20) -> Path:
-    """Stream ``url`` to ``dest`` via a ``.part`` sibling for atomicity."""
+def download_clarin_file(url: str, dest: Path, *,
+                         force: bool = False, chunk_size: int = 1 << 20) -> Path:
+    """Stream ``url`` to ``dest`` via a ``.part`` sibling for atomicity.
+
+    Resume-friendly: if ``dest.part`` already exists and ``force`` is False, an
+    HTTP ``Range`` request continues from the partial file's current size. If
+    the server ignores ``Range`` (returns 200 instead of 206), we discard the
+    partial and restart. ``force=True`` deletes both the partial and the final
+    file first.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_suffix(dest.suffix + ".part")
 
-    with requests.get(url, stream=True, timeout=60) as r:
+    if force:
+        part.unlink(missing_ok=True)
+        dest.unlink(missing_ok=True)
+
+    resume_from = part.stat().st_size if part.exists() else 0
+    headers = {"Range": f"bytes={resume_from}-"} if resume_from > 0 else {}
+
+    with requests.get(url, headers=headers, stream=True, timeout=60) as r:
         r.raise_for_status()
-        total = int(r.headers.get("content-length", 0))
-        with part.open("wb") as f, tqdm(
-            total=total, unit="B", unit_scale=True, unit_divisor=1024,
+
+        # Server ignored our Range and served the whole file → discard partial.
+        if resume_from > 0 and r.status_code == 200:
+            print(f"   ⚠️  server didn't honor Range on {dest.name}; restarting from scratch")
+            part.unlink(missing_ok=True)
+            resume_from = 0
+
+        remaining = int(r.headers.get("content-length", 0))
+        total = remaining + resume_from
+        mode  = "ab" if resume_from > 0 else "wb"
+        with part.open(mode) as f, tqdm(
+            initial=resume_from, total=total,
+            unit="B", unit_scale=True, unit_divisor=1024,
             desc=dest.name, leave=True,
         ) as bar:
             for chunk in r.iter_content(chunk_size=chunk_size):
@@ -118,11 +151,19 @@ def download_clarin_file(url: str, dest: Path, *, chunk_size: int = 1 << 20) -> 
 # Hugging Face downloads
 # --------------------------------------------------------------------------- #
 
-def download_hf_snapshot(spec: dict[str, Any], project_root: Path) -> Path:
+def download_hf_snapshot(spec: dict[str, Any], project_root: Path, *,
+                         force: bool = False, max_workers: int = 16) -> Path:
     """Download a Hugging Face repo snapshot into ``spec['target_dir']``.
 
-    Uses ``allow_patterns``/``ignore_patterns`` so we grab the JSONL + audio (+
-    textgrids for v3) and skip the auto-generated parquet under ``data/``.
+    ``snapshot_download`` is already idempotent and resume-friendly: files
+    already fully on disk are skipped, partial ``.incomplete`` fetches are
+    resumed. ``force=True`` forwards ``force_download`` to redownload
+    everything. ``max_workers`` bumps HF's default parallelism (8) — helpful
+    when the snapshot is thousands of small files.
+
+    ``allow_patterns``/``ignore_patterns`` are read from the registry entry so
+    we grab the JSONL + audio (+ textgrids for v3) and skip the auto-generated
+    parquet under ``data/``.
     """
     try:
         from huggingface_hub import snapshot_download
@@ -142,6 +183,8 @@ def download_hf_snapshot(spec: dict[str, Any], project_root: Path) -> Path:
         local_dir=str(target),
         allow_patterns=spec.get("allow_patterns"),
         ignore_patterns=spec.get("ignore_patterns"),
+        force_download=force,
+        max_workers=max_workers,
     )
     return target
 

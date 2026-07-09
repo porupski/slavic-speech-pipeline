@@ -96,9 +96,13 @@ print(cfg)
 # | Switch | Default | Effect |
 # |---|---|---|
 # | `confirm_large` | `True`  | Allow files/snapshots marked `is_large`. Set to `False` and the plan will *skip* every large item — safe way to explore the catalogue. |
-# | `force`         | `False` | Re-download files even when they already exist and are non-empty. |
+# | `force`         | `False` | Wipe partial downloads and re-fetch from scratch. Leave `False` and interrupted downloads resume where they left off. |
 # | `dry_run`       | `False` | Print the plan and stop. Nothing touches disk. Great for a first pass. |
 # | `download_only` | `False` | Fetch archives but skip the unpack step. Useful when moving data between machines. |
+#
+# **Resume is on by default** — Ctrl-C the notebook mid-download and just re-run this cell.
+# CLARIN sources continue via HTTP `Range` on the `.part` file; HF snapshots continue via
+# `snapshot_download`'s built-in `.incomplete` handling. `force=True` overrides both.
 #
 # **If you're just here to poke around, set `dry_run = True` in the cell below.**
 
@@ -150,18 +154,28 @@ for ds_name in target_datasets:
         if spec["source"] == "clarin":
             dest    = PROJECT_ROOT / spec["target_dir"] / item["name"]
             url     = f"{spec['base_url']}/{item['name']}"
-            already = dest.exists() and dest.stat().st_size > 0
+            part    = dest.with_suffix(dest.suffix + ".part")
+            done    = dest.exists() and dest.stat().st_size > 0
+            partial = part.exists() and part.stat().st_size > 0
         else:  # hf
             dest    = PROJECT_ROOT / spec["target_dir"]
             url     = f"hf://{spec['hf_repo']}"
-            already = dest.exists() and any(dest.iterdir())
+            # HF: can't cheaply know if the snapshot is fully complete without
+            # asking the hub, so we always defer to snapshot_download itself
+            # (idempotent — skips files already fully on disk).
+            done    = False
+            partial = dest.exists() and any(dest.iterdir())
 
-        if already and not cfg.force:
-            action, reason = "skip", "already on disk"
+        if cfg.dry_run:
+            action, reason = "skip", "dry_run"
         elif is_large and not cfg.confirm_large:
             action, reason = "skip", f"large (~{size_mb} MB) — set confirm_large=True"
-        elif cfg.dry_run:
-            action, reason = "skip", "dry_run"
+        elif done and not cfg.force:
+            action, reason = "skip", "already on disk"
+        elif partial and not cfg.force:
+            action, reason = "resume", "picking up partial"
+        elif cfg.force:
+            action, reason = "download", "force re-download"
         else:
             action, reason = "download", "ok"
 
@@ -177,18 +191,18 @@ for ds_name in target_datasets:
             "reason":   reason,
         })
 
-        flag = "📥" if action == "download" else "⏭️ "
+        flag = {"download": "📥", "resume": "⏯️ ", "skip": "⏭️ "}[action]
         print(f"  {flag} {item['name']:60s} ~{size_mb:>7} MB   [{action}: {reason}]")
 
     ds_plans   = [p for p in plan if p["dataset"] == ds_name]
     ds_on_disk = sum(p["size_mb"] for p in ds_plans if p["reason"] == "already on disk")
-    ds_to_dl   = sum(p["size_mb"] for p in ds_plans if p["action"] == "download")
-    print(f"\n  on disk: ~{ds_on_disk:,} MB   to download: ~{ds_to_dl:,} MB\n")
+    ds_active  = sum(p["size_mb"] for p in ds_plans if p["action"] in ("download", "resume"))
+    print(f"\n  on disk: ~{ds_on_disk:,} MB   to fetch: ~{ds_active:,} MB\n")
 
 total_on_disk = sum(p["size_mb"] for p in plan if p["reason"] == "already on disk")
-total_to_dl   = sum(p["size_mb"] for p in plan if p["action"] == "download")
+total_active  = sum(p["size_mb"] for p in plan if p["action"] in ("download", "resume"))
 print(f"Totals — on disk: ~{total_on_disk:,} MB  |  "
-      f"to download: ~{total_to_dl:,} MB  (~{total_to_dl/1024:.1f} GB)")
+      f"to fetch: ~{total_active:,} MB  (~{total_active/1024:.1f} GB)")
 
 # %% [markdown]
 # ---
@@ -205,17 +219,18 @@ if cfg.dry_run:
     print("🧪 dry_run=True — skipping all downloads")
 else:
     for p in plan:
-        if p["action"] != "download":
+        if p["action"] not in ("download", "resume"):
             print(f"⏭️  [{p['dataset']}] {p['item']['name']}  ({p['reason']})")
             continue
-        print(f"📥 [{p['dataset']}] {p['item']['name']}  ←  {p['url']}")
+        verb = "📥 downloading" if p["action"] == "download" else "⏯️  resuming"
+        print(f"{verb} [{p['dataset']}] {p['item']['name']}  ←  {p['url']}")
         try:
             if p["spec"]["source"] == "clarin":
-                udl.download_clarin_file(p["url"], p["dest"])
+                udl.download_clarin_file(p["url"], p["dest"], force=cfg.force)
                 size_mb = p["dest"].stat().st_size / 1e6
                 print(f"   ✅ wrote {p['dest'].relative_to(PROJECT_ROOT)}  ({size_mb:.1f} MB)")
             else:  # hf
-                udl.download_hf_snapshot(p["spec"], PROJECT_ROOT)
+                udl.download_hf_snapshot(p["spec"], PROJECT_ROOT, force=cfg.force)
                 print(f"   ✅ snapshot at {p['dest'].relative_to(PROJECT_ROOT)}")
         except Exception as e:
             print(f"   ❌ failed: {e}")
