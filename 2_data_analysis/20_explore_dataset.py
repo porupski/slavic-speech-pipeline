@@ -24,6 +24,10 @@
 # frame JSONLs have per-record sequence labels that need their own treatment;
 # this notebook prints a clear skip message and stops if it sees one.
 #
+# Two ready-to-run examples (after running chapter 1 → `11e`):
+#   - Classification: `parlaspeech_hr_bench_v3_gender.jsonl` (default)
+#   - Regression:     `parlaspeech_hr_bench_v3_age.jsonl` — set `cfg.jsonl_path` accordingly
+#
 # **Output.**
 # - Cell-by-cell tables and figures inline.
 # - PNGs and one consolidated `<stem>_report.md` next to each other under
@@ -75,8 +79,18 @@ plt.rcParams["grid.alpha"] = 0.3
 # %% [markdown]
 # ## 1. Config
 #
-# One dataclass at the top, no buried constants. Change `jsonl_path` to point
-# at any canonical instance JSONL; the rest are display knobs.
+# One dataclass at the top, no buried constants. Change `jsonl_path` to point at
+# any canonical instance JSONL (the per-task files emitted by chapter 1). The
+# rest are display knobs.
+#
+# **Example paths** — after running `11e_prep_parlaspeech_benchmark_v3` at least once:
+#
+# - Classification example (default): `data/processed_jsonl/parlaspeech_hr_bench_v3_gender.jsonl`
+# - Regression example:               `data/processed_jsonl/parlaspeech_hr_bench_v3_age.jsonl`
+#
+# Both are canonical per-task JSONLs and will pass the schema validator. Don't
+# point this at the raw HF-downloaded benchmark JSONL (under `data/benchmarking/`)
+# — that has a different shape and will fail validation.
 #
 # - `imbalance_max_ratio` — warn when max-class / min-class exceeds this.
 # - `imbalance_rare_pct` — warn on any class below this percentage of its split.
@@ -89,7 +103,7 @@ plt.rcParams["grid.alpha"] = 0.3
 # %%
 @dataclass
 class Config:
-    jsonl_path: str = "data/processed_jsonl/parlaspeech_hr_utterance_instance.jsonl"
+    jsonl_path: str = "data/processed_jsonl/parlaspeech_hr_bench_v3_gender.jsonl"
     output_dir: str = "data/reports"
 
     imbalance_max_ratio: float = 20.0

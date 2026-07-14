@@ -1,63 +1,51 @@
 #!/usr/bin/env bash
-# setup_env.sh — create the `ssp` mamba environment for slavic-speech-pipeline
-# Run from the repo root: bash setup_env.sh
+# setup_env_cpu.sh — clone the `ssp` (CPU) mamba environment from the frozen YAML.
+#
+# Usage:
+#   bash 0_env_setup/setup_env_cpu.sh          # create the env if it doesn't exist
+#   bash 0_env_setup/setup_env_cpu.sh --force  # remove and recreate
+#
+# The single source of truth for the env is `ssp_cpu.yaml` next to this script,
+# exported from a known-good machine. No requirements.txt, no per-package pip
+# install lines — mamba resolves the whole thing from the YAML.
 
 set -euo pipefail
 
 ENV_NAME="ssp"
-PY_VERSION="3.11"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+YAML="${HERE}/ssp_cpu.yaml"
 
-echo "→ Checking mamba is available..."
-if ! command -v mamba &> /dev/null; then
-    echo "❌ mamba not found. Install miniforge first: https://github.com/conda-forge/miniforge"
+FORCE=0
+if [[ "${1:-}" == "--force" ]]; then
+    FORCE=1
+fi
+
+if ! command -v mamba &>/dev/null; then
+    echo "❌ mamba not found on PATH."
+    echo "   Install miniforge (https://github.com/conda-forge/miniforge) or run:"
+    echo "     eval \"\$(micromamba shell hook --shell bash)\" && alias mamba=micromamba"
     exit 1
 fi
-mamba --version
 
-# Has the env already? If so, bail loudly rather than half-update it.
+if [[ ! -f "${YAML}" ]]; then
+    echo "❌ ${YAML} not found."
+    exit 1
+fi
+
 if mamba env list | awk '{print $1}' | grep -qx "${ENV_NAME}"; then
-    echo "❌ Env '${ENV_NAME}' already exists."
-    echo "   To recreate: mamba env remove -n ${ENV_NAME} && bash setup_env.sh"
-    exit 1
+    if [[ "${FORCE}" -eq 1 ]]; then
+        echo "→ removing existing '${ENV_NAME}' env (--force) …"
+        mamba env remove -n "${ENV_NAME}" -y
+    else
+        echo "❌ env '${ENV_NAME}' already exists."
+        echo "   To recreate: bash 0_env_setup/setup_env_cpu.sh --force"
+        exit 1
+    fi
 fi
 
-echo
-echo "→ Creating env '${ENV_NAME}' with Python ${PY_VERSION}..."
-mamba create -n "${ENV_NAME}" python="${PY_VERSION}" -y
+echo "→ creating '${ENV_NAME}' from ${YAML} …"
+mamba env create -n "${ENV_NAME}" -f "${YAML}"
 
 echo
-echo "→ Installing scientific + audio stack from conda-forge..."
-mamba install -n "${ENV_NAME}" -c conda-forge -y \
-    numpy pandas scipy \
-    pysoundfile librosa \
-    lxml \
-    matplotlib seaborn \
-    scikit-learn \
-    jupyter ipykernel tqdm requests
-
-echo
-echo "→ Installing PyTorch (CPU build by default — replace with CUDA build if needed)..."
-# mamba install -n "${ENV_NAME}" -c pytorch -y \
-#    pytorch cpuonly
-mamba run -n "${ENV_NAME}" pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-echo
-echo "→ Installing pip-only packages..."
-mamba run -n "${ENV_NAME}" pip install praatio transformers datasets accelerate jupytext huggingface_hub
-
-echo
-echo "→ Registering Jupyter kernel..."
-mamba run -n "${ENV_NAME}" python -m ipykernel install --user \
-    --name "${ENV_NAME}" \
-    --display-name "Python (${ENV_NAME})"
-
-echo
-echo "✅ Done."
-echo
-echo "To activate:"
+echo "✅ done. To activate:"
 echo "   mamba activate ${ENV_NAME}"
-echo
-echo "To verify:"
-echo "   python -c 'import numpy, pandas, soundfile, librosa, lxml, praatio, torch, transformers; print(\"ok\")'"
-echo
-echo "For chapter 3+ (training), see ENV_SETUP.md → 'Adding chapter 3+ dependencies'."

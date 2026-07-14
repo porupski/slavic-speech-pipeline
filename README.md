@@ -8,13 +8,11 @@ A modular pipeline for fine-tuning Wav2Vec2 on Slavic speech corpora. Instance- 
 # Install the CPU env (data prep, light development):
 bash 0_env_setup/setup_env_cpu.sh
 mamba activate ssp
-
-# Or the CUDA env on a GPU server (training):
-bash 0_env_setup/setup_env_cuda.sh
-mamba activate ssp-cuda
 ```
 
-Then walk the chapters in order. Each has its own `README.md` and one-knob notebooks. If you just want to see the whole thing move end-to-end quickly, download the default target (`ParlaSpeech-HR benchmark v3`, ~9 GB) in chapter 1 and follow the trail from there.
+The CUDA env for GPU training is currently maintained via `0_env_setup/legacy/setup_env_cuda.sh` while its YAML export is pending — see `0_env_setup/README.md`.
+
+Then walk the chapters in order. Each has its own `README.md` and one-knob notebooks. If you just want to see the whole thing move end-to-end quickly, run chapter 1's `11e` (ParlaSpeech-HR benchmark v3, ~9 GB, pulled from Hugging Face directly) and follow the trail from there.
 
 ## Chapters
 

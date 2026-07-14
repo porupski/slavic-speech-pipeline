@@ -66,13 +66,31 @@ print(f"PROJECT_ROOT = {PROJECT_ROOT}")
 # Standard imports.
 
 # %%
+import io
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 import numpy as np
 import soundfile as sf
-from datasets import load_dataset
+from datasets import Audio, load_dataset
 from tqdm.auto import tqdm
+
+
+def read_audio_bytes(entry: dict) -> tuple[np.ndarray, int]:
+    """Decode an ``Audio(decode=False)`` row-entry with soundfile.
+
+    ``entry`` is ``{"bytes": <raw file bytes or None>, "path": <str or None>}``.
+    We prefer the inlined bytes (present after ``push_to_hub``); fall back to
+    ``path`` if only that's set. Using soundfile everywhere sidesteps
+    ``datasets``' torchcodec dependency, which brings in CUDA runtime libs
+    even on CPU-only PyTorch and often breaks fresh envs.
+    """
+    b = entry.get("bytes")
+    if b is not None:
+        arr, sr = sf.read(io.BytesIO(b))
+    else:
+        arr, sr = sf.read(entry["path"])
+    return arr, int(sr)
 
 # %% [markdown]
 # ---
@@ -150,13 +168,17 @@ print(f"tasks to emit: {list(cfg.tasks)}")
 # %%
 mark("load")
 ds = load_dataset(cfg.hf_repo, "default", split="train")
+# Turn off datasets' built-in audio decoding — we hand the raw bytes to
+# soundfile ourselves (see `read_audio_bytes` above).
+ds = ds.cast_column("audio", Audio(decode=False))
 if cfg.limit:
     ds = ds.select(range(min(cfg.limit, len(ds))))
 print(f"✅ loaded {len(ds)} rows from {cfg.hf_repo}")
 
 ex = ds[0]
+_arr, _sr = read_audio_bytes(ex["audio"])
 print(f"  e.g. {ex['instance_id']}  | {ex['speaker_gender']} | {ex['speaker_name']} "
-      f"| audio shape {ex['audio']['array'].shape} @ {ex['audio']['sampling_rate']} Hz")
+      f"| audio shape {_arr.shape} @ {_sr} Hz")
 
 # %% [markdown]
 # ---
@@ -175,8 +197,7 @@ n_skipped = 0
 for row in tqdm(ds, desc="processing", unit=" rows"):
     instance_id = row["instance_id"]
 
-    audio_arr = row["audio"]["array"]
-    sr        = int(row["audio"]["sampling_rate"])
+    audio_arr, sr = read_audio_bytes(row["audio"])
 
     audio_rel = f"{cfg.audio_dir}/{instance_id}.wav"
     audio_abs = PROJECT_ROOT / audio_rel
