@@ -8,7 +8,7 @@
     "Targets are preset names from the TARGETS registry; list them with available_targets()."
   ],
 
-  "run_mode": "demo",
+  "run_mode": "test",
 
   "shared": {
     "model_name": "facebook/wav2vec2-base",
@@ -17,7 +17,7 @@
     "batch_size": 16,
     "grad_accum": 1,
     "learning_rate": 1e-5,
-    "num_epochs": 3,
+    "num_epochs": 2,
     "max_grad_norm": 1.0,
     "warmup_ratio": 0.10,
     "logging_steps": 100,
@@ -38,7 +38,7 @@
   },
 
   "classification": {
-    "target": "hr_bench_v1_gender",
+    "target": "hr_bench_v3_gender",
     "best_metric_classification": "macro_f1"
   },
 

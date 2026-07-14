@@ -3,15 +3,15 @@
     "purpose": "Single source of truth for what 10_download_data.py can fetch. Split out so it doesn't dominate the notebook.",
     "sources": {
       "clarin": "Direct HTTP from the CLARIN.SI repository. `files` lists individual archives, each with size_mb + is_large flag.",
-      "hf":     "Hugging Face Hub. `hf_repo` + `hf_repo_type`. `allow_patterns`/`ignore_patterns` filter what snapshot_download grabs. `size_mb`/`is_large` describe the whole snapshot."
+      "hf":     "Hugging Face Hub, via `huggingface_hub.snapshot_download`. `hf_repo` + `hf_repo_type`, plus optional `allow_patterns`/`ignore_patterns`. `size_mb`/`is_large` describe the whole snapshot."
     },
-    "shorthands": "Expand to lists of registry keys — e.g. 'ParlaSpeech' → all four annotation sets."
+    "shorthands": "Expand to lists of registry keys — e.g. 'ParlaSpeech' → all four annotation sets.",
+    "how_to_extend": "Add a new entry under `datasets`. For CLARIN sources, copy an existing CLARIN block: set `source: \"clarin\"`, `handle`, `base_url`, `target_dir`, `unpack_dir`, and a `files` list with `{name, size_mb, is_large}` per archive. For HF sources, set `source: \"hf\"`, `hf_repo`, `hf_repo_type` (usually \"dataset\"), `target_dir`, plus `allow_patterns`/`ignore_patterns` to filter what snapshot_download grabs. Add the key to a shorthand under `shorthands` if it groups with others. Note that HF datasets consumed via `load_dataset` (not raw file snapshots) belong in the prep notebooks (see 11d/11e), not here."
   },
 
   "shorthands": {
     "ParlaSpeech":            ["ParlaSpeech-HR", "ParlaSpeech-RS", "ParlaSpeech-PL", "ParlaSpeech-CZ"],
-    "ParlaSpeech-audio":      ["ParlaSpeech-HR-audio", "ParlaSpeech-RS-audio", "ParlaSpeech-PL-audio", "ParlaSpeech-CZ-audio"],
-    "ParlaSpeech-benchmarks": ["ParlaSpeech-HR-benchmark-v1", "ParlaSpeech-HR-benchmark-v3"]
+    "ParlaSpeech-audio":      ["ParlaSpeech-HR-audio", "ParlaSpeech-RS-audio", "ParlaSpeech-PL-audio", "ParlaSpeech-CZ-audio"]
   },
 
   "datasets": {
@@ -169,30 +169,6 @@
         {"name": "ParlaSpeech-CZ.v1.0.part4.tgz", "size_mb": 22070, "is_large": true}
       ],
       "note": "Czech FLAC audio — ~153 GB across 4 parts. Pair with ParlaSpeech-CZ."
-    },
-
-    "ParlaSpeech-HR-benchmark-v1": {
-      "source":       "hf",
-      "hf_repo":      "porupski/ParlaSpeech-HR-benchmark_v1",
-      "hf_repo_type": "dataset",
-      "target_dir":   "data/benchmarking/ParlaSpeech-HR-benchmark-v1",
-      "allow_patterns":  ["*.jsonl", "audio/**"],
-      "ignore_patterns": ["*.parquet", "data/*.parquet"],
-      "size_mb":  9200,
-      "is_large": true,
-      "note": "ParlaSpeech-HR benchmark v1 — pre-built speaker-disjoint splits for gender / speaker-id / power-status / age (all classification). Ships with 16 kHz mono audio ready to train on. ~9 GB. Feeds 11d_prep_parlaspeech_benchmark_v1."
-    },
-
-    "ParlaSpeech-HR-benchmark-v3": {
-      "source":       "hf",
-      "hf_repo":      "porupski/ParlaSpeech-HR-benchmark_v3",
-      "hf_repo_type": "dataset",
-      "target_dir":   "data/benchmarking/ParlaSpeech-HR-benchmark-v3",
-      "allow_patterns":  ["*.jsonl", "audio/**", "textgrids/**"],
-      "ignore_patterns": ["*.parquet", "data/*.parquet"],
-      "size_mb":  9100,
-      "is_large": true,
-      "note": "ParlaSpeech-HR benchmark v3 — pre-built speaker-disjoint splits for gender / speaker-id / power-status (classification) and age / orientation (regression). Ships with 16 kHz mono audio; also includes align/pause/stress TextGrids where available. ~9 GB. Default download target. Feeds 11e_prep_parlaspeech_benchmark_v3."
     }
   }
 }

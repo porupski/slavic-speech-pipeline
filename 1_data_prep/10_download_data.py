@@ -15,19 +15,22 @@
 # %% [markdown]
 # # Download data — Chapter 1
 #
-# Fetch the source corpora the rest of the pipeline expects on disk. Two kinds of source:
+# Fetch **CLARIN.SI** source corpora — ParlaSpeech (HR / RS / PL / CZ), ROG, GOS — as raw
+# archives, then unpack them. Idempotent: files already on disk are skipped, partial
+# downloads resume via HTTP `Range`.
 #
-# - **CLARIN.SI** archives (ParlaSpeech, ROG, GOS) — plain HTTP downloads, then unpacked.
-# - **Hugging Face Hub** snapshots (ParlaSpeech-HR benchmark v1 / v3) — grabbed via
-#   `huggingface_hub`, already laid out as `<name>/audio/<hash>/…` so no unpack step.
+# The catalogue lives in [`10a_dataset_registry.json`](10a_dataset_registry.json); the
+# helpers live in [`utils_download.py`](utils_download.py). To add another source (CLARIN
+# or HF-raw-file), see the `_readme.how_to_extend` note inside the registry JSON.
 #
-# The full catalogue lives in [`10a_dataset_registry.json`](10a_dataset_registry.json); the
-# helpers live in [`utils_download.py`](utils_download.py). This notebook is meant to stay short
-# — pick what you want, glance at the safety switches, run.
+# > **Note — ParlaSpeech-HR benchmarks (v1 / v3) are handled elsewhere.**
+# > They are HF datasets in native `datasets` format, pulled inline by
+# > [`11d`](11d_prep_parlaspeech_benchmark_v1.py) and [`11e`](11e_prep_parlaspeech_benchmark_v3.py)
+# > via `load_dataset(...)` — no separate download step. If you only want the benchmarks
+# > for a quick end-to-end pass through the pipeline, skip this notebook and start there.
 #
-# **Default target: ParlaSpeech-HR-benchmark-v3.** ~9 GB, ships ready-to-train audio and
-# per-task splits — the smallest self-contained thing that lets you finish chapter 1 and move
-# on to chapter 3. Anything larger, you opt into deliberately below.
+# **Default target: `ROG-Dialog`.** A small (~1.2 GB) complete Slovenian corpus — annotations
+# and audio in one bundle, feeds `11b`. Anything larger you opt into deliberately below.
 #
 # ---
 #
@@ -63,11 +66,10 @@ print(f"Shorthands:         {sorted(REGISTRY['shorthands'])}")
 #
 # `cfg.datasets` is the list of registry keys (or shorthands) to fetch. Examples:
 #
-# - `["ParlaSpeech-HR-benchmark-v3"]` — the default; ~9 GB, ready to train.
-# - `["ParlaSpeech-HR-benchmark-v1"]` — the older HR benchmark (~9 GB).
+# - `["ROG-Dialog"]` — the default; Slovenian dialogue corpus (~1.2 GB, annotations + audio).
+# - `["ParlaSpeech-RS"]` — just Serbian ParlaSpeech annotations (~2 GB, no audio).
 # - `["ParlaSpeech-RS", "ParlaSpeech-RS-audio"]` — Serbian annotations + audio; smallest of the
-#   full ParlaSpeech releases.
-# - `["ParlaSpeech-benchmarks"]` — shorthand: both HR benchmarks.
+#   full ParlaSpeech releases (~65 GB).
 # - `["ParlaSpeech"]` — all four ParlaSpeech annotation sets (no audio).
 # - `["ParlaSpeech-audio"]` — all four ParlaSpeech audio sets. **Hundreds of GB.** Be sure.
 
@@ -76,7 +78,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Config:
-    datasets: list = field(default_factory=lambda: ["ParlaSpeech-HR-benchmark-v3"])
+    datasets: list = field(default_factory=lambda: ["ROG-Dialog"])
     confirm_large: bool = True   # allow files/snapshots marked is_large
     force: bool = False          # re-download things already on disk
     dry_run: bool = False        # plan only, do not touch disk
@@ -292,12 +294,14 @@ for ds_name in target_datasets:
 #
 # ## Next
 #
-# - **ParlaSpeech-HR benchmark v1** → `11d_prep_parlaspeech_benchmark_v1.ipynb`
-# - **ParlaSpeech-HR benchmark v3** → `11e_prep_parlaspeech_benchmark_v3.ipynb`
+# - **ROG-Dialog** → `11b_prep_ROG-dia.ipynb`
+# - **ROG** → `11a_prep_ROG-art.ipynb`
 # - **ParlaSpeech-{HR,RS,PL,CZ}** → `11c_prep_parlaspeech.ipynb` (`cfg.lang` pins one language;
 #   empty = every ParlaSpeech-{LANG} under `data/unpacked/`).
-# - **ROG** → `11a_prep_ROG-art.ipynb`
-# - **ROG-Dialog** → `11b_prep_ROG-dia.ipynb`
 # - **GOS** → arrange restricted audio access first.
+#
+# For the ParlaSpeech-HR benchmarks (v1 / v3), skip this notebook and go straight to
+# `11d_prep_parlaspeech_benchmark_v1.ipynb` / `11e_prep_parlaspeech_benchmark_v3.ipynb` —
+# they call `load_dataset(...)` directly, no separate CLARIN-style download needed.
 #
 # Re-running with the same config just prints skip lines — idempotent.

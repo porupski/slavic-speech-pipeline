@@ -6,8 +6,9 @@ stock_models/
 test_runs/
 test_processed_jsonl/
 
-# --- internal-only docs (kept locally, not shipped to users) -----------------
+# --- internal-only docs and tooling (kept locally, not shipped to users) -----
 BLUEPRINT.md
+00_prep_PSHR_benchmarks/
 
 # --- local backups (created before risky edits) ------------------------------
 *.BACKUP.*

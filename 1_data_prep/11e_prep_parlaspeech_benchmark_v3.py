@@ -14,22 +14,17 @@
 # %% [markdown]
 # # Prep ParlaSpeech-HR benchmark **v3** — chapter 1 (variant e)
 #
-# Parse the pre-built **ParlaSpeech-HR-benchmark-v3** (placed under
-# `data/benchmarking/`) into canonical pipeline JSONLs — **one small file per
-# task**, because the benchmark's splits are *per-task*: the same utterance can
-# be gender/train and age/dev, so a shared top-level `split` cannot exist.
-# Within each task file, the canonical shape holds and 31/32 consume it
-# unchanged.
+# Pull the ParlaSpeech-HR benchmark v3 from **Hugging Face** and emit canonical pipeline
+# JSONLs — **one file per task**. The benchmark's splits are *per-task* (the same utterance
+# can be `gender/train` and `age/dev`), so we write one small file per task; within each,
+# the canonical shape holds and `31`/`32` consume it unchanged.
 #
-# **Differences from `11c_prep_parlaspeech`:**
-# - splits come from the `benchmark` key — **no `assign_splits`** (the benchmark
-#   construction already guarantees speaker-disjointness, and hash-disjointness
-#   for `speaker_id`);
-# - **no audio conversion** — the benchmark ships ready 16 kHz mono WAVs under
-#   `data/benchmarking/ParlaSpeech-HR-benchmark-v3/audio/`; `audio_path` points
-#   straight there.
+# **What changed vs. the old flow:** the source is `load_dataset("porupski/ParlaSpeech-HR-benchmark_v3")`
+# instead of a local `.jsonl` + `audio/` folder. Audio bytes come inline in the parquet;
+# we write them to disk as 16 kHz PCM_16 WAVs so `audio_path` in the emitted JSONL still
+# points at a real file on disk — identical schema, identical downstream contract.
 #
-# **Tasks emitted** (each → `parlaspeech_hr_bench_<task>.jsonl`):
+# **Tasks emitted** (each → `parlaspeech_hr_bench_v3_<task>.jsonl`):
 #
 # | task | label_key | type |
 # |---|---|---|
@@ -46,7 +41,6 @@
 # %%
 import time
 
-# ── Stage timing ──────────────────────────────────────────────
 STAGE_TIMES: dict[str, float] = {}
 def mark(stage: str) -> None:
     STAGE_TIMES[stage] = time.time()
@@ -72,10 +66,12 @@ print(f"PROJECT_ROOT = {PROJECT_ROOT}")
 # Standard imports.
 
 # %%
-import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
+import numpy as np
+import soundfile as sf
+from datasets import load_dataset
 from tqdm.auto import tqdm
 
 # %% [markdown]
@@ -83,57 +79,60 @@ from tqdm.auto import tqdm
 #
 # ## 1. Config
 #
-# - `benchmark_dir` — where the pre-built benchmark lives (jsonl + `audio/`).
-# - `tasks` — which task files to emit.
-# - `check_audio` — verify every referenced WAV exists on disk (cheap; the
-#   benchmark is small).
+# - `hf_repo` — where the benchmark lives on HF. Cached under `~/.cache/huggingface/`.
+# - `audio_dir` — where to write the extracted WAVs. Layout: `<audio_dir>/<instance_id>.wav`.
+# - `limit` — 0 = all rows. Set small for a quick sanity check.
+# - `force_audio` — overwrite existing WAVs. Default off; already-written files are skipped.
+#
+# **Note on `file_id`:** v3 rows don't carry the YouTube-video hash as a flat column
+# (the audio bytes are inlined; the source path isn't preserved). We use `instance_id` as
+# `file_id`; the sanity check's "hash-disjoint" test on the speaker_id task becomes
+# trivially true. Correctness downstream is unaffected — the benchmark's own splits
+# guarantee speaker-disjointness.
 
 # %%
 @dataclass
 class Config:
-    benchmark_dir: str = "data/benchmarking/ParlaSpeech-HR-benchmark-v3"
-    benchmark_jsonl: str = "ParlaSpeech-HR-benchmark-v3.jsonl"
+    hf_repo: str = "porupski/ParlaSpeech-HR-benchmark_v3"
     dataset_name: str = "ParlaSpeech-HR-benchmark-v3"
 
     output_dir: str = "data/processed_jsonl"
+    audio_dir:  str = "data/benchmarking/ParlaSpeech-HR-benchmark-v3/audio"
+
     tasks: tuple = ("gender", "speaker_id", "power_status", "age", "orientation")
 
-    check_audio: bool = True
+    limit: int = 0
+    force_audio: bool = False
 
 cfg = Config()
-
 
 # %% [markdown]
 # ---
 #
 # ## 2. Task registry
-#
-# Mirrors the `TARGETS` registry the trainers use: each task names its
-# `label_key`, task type, and output file. `transform` normalizes the raw
-# benchmark label into the type the trainer expects.
 
 # %%
 def build_tasks(out_dir: str) -> dict:
     return {
         "gender": dict(
             label_key="speaker_gender", task_type="classification",
-            transform=str,
+            transform=lambda x: None if x is None else str(x),
             out=f"{out_dir}/parlaspeech_hr_bench_v3_gender.jsonl"),
         "speaker_id": dict(
             label_key="speaker_name", task_type="classification",
-            transform=str,
+            transform=lambda x: None if x is None else str(x),
             out=f"{out_dir}/parlaspeech_hr_bench_v3_speaker_id.jsonl"),
         "power_status": dict(
             label_key="power_status", task_type="classification",
-            transform=str,
+            transform=lambda x: None if x is None else str(x),
             out=f"{out_dir}/parlaspeech_hr_bench_v3_power_status.jsonl"),
         "age": dict(
             label_key="speaker_age", task_type="regression",
-            transform=int,
+            transform=lambda x: None if x is None else int(x),
             out=f"{out_dir}/parlaspeech_hr_bench_v3_age.jsonl"),
         "orientation": dict(
             label_key="orientation", task_type="regression",
-            transform=float,
+            transform=lambda x: None if x is None else float(x),
             out=f"{out_dir}/parlaspeech_hr_bench_v3_orientation.jsonl"),
     }
 
@@ -143,138 +142,124 @@ for name in cfg.tasks:
         raise ValueError(f"unknown task {name!r}. Known: {sorted(TASKS)}")
 print(f"tasks to emit: {list(cfg.tasks)}")
 
+# %% [markdown]
+# ---
+#
+# ## 3. Load the HF dataset
+
+# %%
+mark("load")
+ds = load_dataset(cfg.hf_repo, "default", split="train")
+if cfg.limit:
+    ds = ds.select(range(min(cfg.limit, len(ds))))
+print(f"✅ loaded {len(ds)} rows from {cfg.hf_repo}")
+
+ex = ds[0]
+print(f"  e.g. {ex['instance_id']}  | {ex['speaker_gender']} | {ex['speaker_name']} "
+      f"| audio shape {ex['audio']['array'].shape} @ {ex['audio']['sampling_rate']} Hz")
 
 # %% [markdown]
 # ---
 #
-# ## 3. Locate the benchmark
+# ## 4. Extract audio to disk + build canonical rows
 
 # %%
-BENCH_DIR = PROJECT_ROOT / cfg.benchmark_dir
-BENCH_JSONL = BENCH_DIR / cfg.benchmark_jsonl
-AUDIO_DIR = BENCH_DIR / "audio"
+mark("audio+build")
+audio_root = PROJECT_ROOT / cfg.audio_dir
+audio_root.mkdir(parents=True, exist_ok=True)
 
-for p, what in ((BENCH_JSONL, "benchmark jsonl"), (AUDIO_DIR, "audio dir")):
-    if not p.exists():
-        raise FileNotFoundError(
-            f"{what} not found: {p}\n"
-            f"Place the ParlaSpeech-HR-benchmark-v3 bundle under "
-            f"{cfg.benchmark_dir} and re-run.")
-print(f"✅ {BENCH_JSONL.relative_to(PROJECT_ROOT)}  "
-      f"({BENCH_JSONL.stat().st_size/1e6:.0f} MB)")
+per_task: dict[str, list[dict]] = defaultdict(list)
+n_written = 0
+n_skipped = 0
 
+for row in tqdm(ds, desc="processing", unit=" rows"):
+    instance_id = row["instance_id"]
 
-def _detect_audio_ext(audio_root: Path) -> str:
-    """Return the dominant audio extension on disk (`.wav` or `.flac`).
+    audio_arr = row["audio"]["array"]
+    sr        = int(row["audio"]["sampling_rate"])
 
-    The JSONL's `audio` field lists an extension, but the bundle's on-disk
-    files may differ (v1 lists `.flac`, ships `.wav`). One scan settles it.
-    """
-    for hash_dir in audio_root.iterdir():
-        if not hash_dir.is_dir():
-            continue
-        for f in hash_dir.iterdir():
-            suf = f.suffix.lower()
-            if suf in (".wav", ".flac"):
-                return suf
-    return ".wav"
+    audio_rel = f"{cfg.audio_dir}/{instance_id}.wav"
+    audio_abs = PROJECT_ROOT / audio_rel
+    if cfg.force_audio or not audio_abs.exists():
+        sf.write(str(audio_abs), audio_arr, sr, subtype="PCM_16")
+        n_written += 1
+    else:
+        n_skipped += 1
 
-AUDIO_EXT = _detect_audio_ext(AUDIO_DIR)
-print(f"  audio extension on disk: {AUDIO_EXT}")
-
-# %% [markdown]
-# ---
-#
-# ## 4. Preflight — peek at one record
-
-# %%
-with open(BENCH_JSONL, encoding="utf-8") as f:
-    ex = json.loads(f.readline())
-si = ex.get("speaker_info", {})
-print(f"  e.g. {ex['id']}  | {si.get('Speaker_gender','?')} "
-      f"| {si.get('Speaker_name','?')} | dur {ex.get('audio_length')}s")
-print(f"  benchmark tasks on this record: {list(ex.get('benchmark', {}))}")
-
-# %% [markdown]
-# ---
-#
-# ## 5. Parse — one canonical row per (record × selecting task)
-#
-# Each benchmark record carries `benchmark: {task: {label, split}}` for the
-# tasks that selected it. We emit one canonical row per entry, with that task's
-# split and a single label under the task's `label_key`. Metadata keeps the full
-# `benchmark` dict for traceability, plus the usual provenance.
-
-# %%
-def parse_rows(path: Path) -> dict[str, list[dict]]:
-    per_task: dict[str, list[dict]] = defaultdict(list)
-    n_in = 0
-    with open(path, encoding="utf-8") as f:
-        for line in tqdm(f, desc="parsing benchmark", unit=" lines", leave=False):
-            n_in += 1
-            r = json.loads(line)
-            si = r.get("speaker_info", {})
-            raw_audio = r.get("audio")
-            file_hash = Path(raw_audio).parts[0]
-            stem = Path(raw_audio).stem
-            base = {
-                "instance_id": r["id"],
-                "dataset":     cfg.dataset_name,
-                "file_id":     file_hash,
-                "audio_path":  f"{cfg.benchmark_dir}/audio/{file_hash}/{stem}{AUDIO_EXT}",
-                "speaker":     si.get("Speaker_ID", "unknown"),
-                "text":        r.get("text"),
-                "metadata": {
-                    "source_audio": raw_audio,
-                    "audio_length": round(float(r.get("audio_length", 0.0)), 3),
-                    "lang":         si.get("Lang"),
-                    "speaker_info": si,
-                    "benchmark":    r.get("benchmark", {}),
-                },
-            }
-            for task, entry in r.get("benchmark", {}).items():
-                if task not in cfg.tasks:
-                    continue
-                spec = TASKS[task]
-                per_task[task].append({
-                    **base,
-                    "split":  entry["split"],
-                    "labels": {spec["label_key"]: spec["transform"](entry["label"])},
-                })
-    print(f"  parsed {n_in} benchmark records")
+    base = {
+        "instance_id": instance_id,
+        "dataset":     cfg.dataset_name,
+        "file_id":     instance_id,   # see Config note above
+        "audio_path":  audio_rel,
+        "speaker":     row["speaker_id"] or row["speaker_name"] or "unknown",
+        "text":        row["text"],
+        "metadata": {
+            "audio_length": row["audio_length"],
+            "text_start":   row["text_start"],
+            "text_end":     row["text_end"],
+            "audio_start":  row["audio_start"],
+            "audio_end":    row["audio_end"],
+            "lang":         row.get("lang"),
+            "speaker_info": {
+                "Text_ID":            row["text_id"],
+                "ID":                 row["session_id"],
+                "Title":              row["title"],
+                "Date":               row["date"],
+                "Body":               row["body"],
+                "Term":               row["term"],
+                "Session":            row["session"],
+                "Meeting":            row["meeting"],
+                "Sitting":            row["sitting"],
+                "Agenda":             row["agenda"],
+                "Subcorpus":          row["subcorpus"],
+                "Lang":               row["lang"],
+                "Speaker_role":       row["speaker_role"],
+                "Speaker_MP":         row["speaker_mp"],
+                "Speaker_minister":   row["speaker_minister"],
+                "Speaker_party":      row["speaker_party"],
+                "Speaker_party_name": row["speaker_party_name"],
+                "Party_status":       row["party_status"],
+                "Party_orientation":  row["party_orientation"],
+                "Speaker_ID":         row["speaker_id"],
+                "Speaker_name":       row["speaker_name"],
+                "Speaker_gender":     row["speaker_gender"],
+                "Speaker_birth":      row["speaker_birth"],
+            },
+            "sentiment": {
+                "ParlaSent_logit": row["sentiment_logit"],
+                "ParlaSent_3":     row["sentiment_3"],
+                "ParlaSent_6":     row["sentiment_6"],
+            },
+            "benchmark": {
+                task: {
+                    "label": row[f"benchmark_{task}_label"],
+                    "split": row[f"benchmark_{task}_split"],
+                }
+                for task in cfg.tasks
+                if row.get(f"benchmark_{task}_split")
+            },
+        },
+    }
     for task in cfg.tasks:
-        print(f"  {task}: {len(per_task[task])} rows")
-    return per_task
+        split = row.get(f"benchmark_{task}_split")
+        label = row.get(f"benchmark_{task}_label")
+        if not split or label is None:
+            continue
+        spec = TASKS[task]
+        per_task[task].append({
+            **base,
+            "split":  split,
+            "labels": {spec["label_key"]: spec["transform"](label)},
+        })
 
-
-mark("parse")
-per_task = parse_rows(BENCH_JSONL)
-
-# %% [markdown]
-# ---
-#
-# ## 6. Audio check
-#
-# The benchmark ships its own WAVs; this just confirms every referenced file is
-# actually there (e.g. the tarball unpacked fully).
-
-# %%
-if cfg.check_audio:
-    paths = {row["audio_path"] for rows in per_task.values() for row in rows}
-    missing = [p for p in sorted(paths) if not (PROJECT_ROOT / p).exists()]
-    if missing:
-        print(f"⚠️  {len(missing)}/{len(paths)} WAVs missing, e.g.:")
-        for m in missing[:5]:
-            print(f"   {m}")
-        raise FileNotFoundError("benchmark audio incomplete — re-run the build/download")
-    print(f"✅ all {len(paths)} referenced WAVs present")
-else:
-    print("check_audio=False — skipped")
+print(f"✅ audio: {n_written} written, {n_skipped} skipped (already on disk)")
+for task in cfg.tasks:
+    print(f"  {task}: {len(per_task[task])} rows")
 
 # %% [markdown]
 # ---
 #
-# ## 7. Write task JSONLs
+# ## 5. Write per-task JSONLs
 
 # %%
 mark("write")
@@ -288,12 +273,7 @@ for task in cfg.tasks:
 # %% [markdown]
 # ---
 #
-# ## 8. Sanity checks
-#
-# Beyond schema validation, re-verify the benchmark invariants per task:
-# split sizes, no null labels, label distributions, **speaker-disjoint** splits
-# (gender/age/power/orientation) and **same-speakers + hash-disjoint** splits
-# (speaker_id).
+# ## 6. Sanity checks
 
 # %%
 def sanity(task: str, path: str) -> None:
@@ -312,25 +292,19 @@ def sanity(task: str, path: str) -> None:
 
     if spec["task_type"] == "classification":
         dist = Counter(r["labels"][key] for r in rows)
-        top = dict(sorted(dist.items(), key=lambda kv: -kv[1])[:4])
+        top  = dict(sorted(dist.items(), key=lambda kv: -kv[1])[:4])
         print(f"     labels: {len(dist)} classes, top {top}")
     else:
-        vals = [r["labels"][key] for r in rows]
-        print(f"     label range: [{min(vals)}, {max(vals)}]  "
-              f"mean {sum(vals)/len(vals):.2f}")
+        vals = [r["labels"][key] for r in rows if r["labels"].get(key) is not None]
+        if vals:
+            print(f"     label range: [{min(vals)}, {max(vals)}]  mean {sum(vals)/len(vals):.2f}")
 
     spk_by_split = defaultdict(set)
-    hash_by_split = defaultdict(set)
     for r in rows:
         spk_by_split[r["split"]].add(r["speaker"])
-        hash_by_split[r["split"]].add(r["file_id"])
     if task == "speaker_id":
         same = spk_by_split["train"] == spk_by_split["dev"] == spk_by_split["test"]
-        h_leak = (hash_by_split["train"] & hash_by_split["dev"]) \
-               | (hash_by_split["train"] & hash_by_split["test"]) \
-               | (hash_by_split["dev"] & hash_by_split["test"])
-        print(f"     same speakers in all splits: {'✅' if same else '❌'}  "
-              f"| hash leaks: {'✅ none' if not h_leak else f'❌ {len(h_leak)}'}")
+        print(f"     same speakers in all splits: {'✅' if same else '❌'}")
     else:
         leak = (spk_by_split["train"] & spk_by_split["dev"]) \
              | (spk_by_split["train"] & spk_by_split["test"]) \
@@ -351,8 +325,7 @@ for task, (path, _) in written.items():
 def print_stage_breakdown(times: dict[str, float]) -> None:
     items = list(times.items())
     if not items:
-        print("no timing recorded")
-        return
+        print("no timing recorded"); return
     def mmss(s: float) -> str:
         s = int(round(max(0.0, s)))
         return f"{s // 60:02d}:{s % 60:02d}"
@@ -374,7 +347,11 @@ print_stage_breakdown(STAGE_TIMES)
 #
 # ## Next
 #
-# - **Chapter 3** — `31`/`32` train on these files via the existing
-#   `hr_bench_v3_*` presets in `utils_instance_train.py`'s `TARGETS`
-#   (gender, speaker_id, power_status — classification; age, orientation —
-#   regression).
+# **Chapter 3** — `31`/`32` train on these files via the existing `hr_bench_v3_*` presets
+# in `utils_instance_train.py`'s `TARGETS` (gender, speaker_id, power_status —
+# classification; age, orientation — regression).
+#
+# The heavy alignment layers (`words`, `words_align`, `chars_align`, `primary_stress`,
+# `linguistic_annotation`, inlined TextGrids) live in the `alignments` config on HF, opt-in
+# via `load_dataset("porupski/ParlaSpeech-HR-benchmark_v3", "alignments")`. Not used here —
+# they feed future frame-stress modelling in chapter 4.
