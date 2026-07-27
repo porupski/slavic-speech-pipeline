@@ -30,7 +30,8 @@ if ! command -v mamba &>/dev/null; then
     echo "   Install Miniforge:"
     echo "     curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o miniforge.sh"
     echo "     bash miniforge.sh -b -p \"\${HOME}/miniforge3\""
-    echo "     eval \"\$(\${HOME}/miniforge3/bin/conda shell.bash hook)\""
+    echo "     eval \"\$(\${HOME}/miniforge3/bin/mamba shell hook --shell bash)\""
+    echo "   (Add the eval line to ~/.bashrc for persistence)"
     echo "   Or if you already have micromamba:"
     echo "     eval \"\$(micromamba shell hook --shell bash)\" && alias mamba=micromamba"
     exit 1

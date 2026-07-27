@@ -9,10 +9,12 @@ You need `mamba` on PATH. The recommended route is **Miniforge** (bundles mamba 
 ```bash
 curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o miniforge.sh
 bash miniforge.sh -b -p "${HOME}/miniforge3"
-eval "$("${HOME}/miniforge3/bin/conda" shell.bash hook)"
+eval "$("${HOME}/miniforge3/bin/mamba" shell hook --shell bash)"
 ```
 
-Add the `eval` line to your `~/.bashrc` (or `~/.zshrc`) so mamba is available in every new shell. Then close and reopen the terminal.
+Add the `eval` line to your `~/.bashrc` (or `~/.zshrc`) so `mamba activate` works in every new shell. Then `source ~/.bashrc` or open a new terminal.
+
+> **Note:** using the `conda shell.bash hook` instead of the `mamba shell hook` only wires up `conda activate` — `mamba activate` will fail with "running as a subprocess". Use the mamba hook above.
 
 If you already have **micromamba** but not mamba:
 
