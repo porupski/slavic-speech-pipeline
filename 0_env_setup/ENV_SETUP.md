@@ -1,10 +1,20 @@
 # Environment setup — details
 
-Two environment variants: **CPU** (development, laptops) and **CUDA** (GPU servers). Both are cloned from a frozen `mamba env export` YAML — no per-package pip lines to keep in sync.
+Two environment variants: **CPU** (development, laptops) and **CUDA** (GPU servers). The CPU env is cloned from a frozen `mamba env export` YAML. The CUDA env is a from-scratch installer with pinned versions until a YAML export from the GPU server is available.
 
 ## Prerequisites
 
-Miniforge or micromamba. If `mamba` isn't on PATH:
+You need `mamba` on PATH. The recommended route is **Miniforge** (bundles mamba + conda-forge by default):
+
+```bash
+curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o miniforge.sh
+bash miniforge.sh -b -p "${HOME}/miniforge3"
+eval "$("${HOME}/miniforge3/bin/conda" shell.bash hook)"
+```
+
+Add the `eval` line to your `~/.bashrc` (or `~/.zshrc`) so mamba is available in every new shell. Then close and reopen the terminal.
+
+If you already have **micromamba** but not mamba:
 
 ```bash
 eval "$(micromamba shell hook --shell bash)"
@@ -35,32 +45,34 @@ mamba env create -n ssp -f 0_env_setup/ssp_cpu.yaml
 
 ## CUDA environment (`ssp-cuda`)
 
-The YAML export is pending until the GPU server is next online. Until then, the last-known-good pre-YAML script lives at `0_env_setup/legacy/setup_env_cuda.sh` (kept locally, gitignored):
+For GPU servers. Targets **CUDA 12.4** (compatible with driver 550+).
 
 ```bash
-bash 0_env_setup/legacy/setup_env_cuda.sh
+bash 0_env_setup/setup_env_cuda.sh          # create, or bail if `ssp-cuda` already exists
+bash 0_env_setup/setup_env_cuda.sh --force  # remove + recreate
+
 mamba activate ssp-cuda
 ```
 
-That script pins **CUDA 12.4** — compatible with driver 550+. It uses:
+Unlike the CPU env, this is a **from-scratch installer** (no YAML yet — that requires an export from a live GPU machine). The script installs conda-forge packages with versions pinned to match `ssp_cpu.yaml`, then installs PyTorch from the official CUDA 12.4 pip wheel index:
 
 ```bash
-pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+pip install torch==2.10.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu124
 ```
-
-Once the GPU server is up, re-export to a proper YAML:
-
-```bash
-mamba env export -n ssp-cuda --no-builds > 0_env_setup/ssp_cuda.yaml
-```
-
-Then create a matching `setup_env_cuda.sh` (mirror of the CPU one) and retire the legacy script.
 
 Verify GPU is visible after activating:
 
 ```bash
 python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 ```
+
+**Once the GPU server is online and the env is stable**, lock it down properly:
+
+```bash
+mamba env export -n ssp-cuda --no-builds > 0_env_setup/ssp_cuda.yaml
+```
+
+Then `setup_env_cuda.sh` becomes a thin YAML wrapper (same pattern as the CPU script) and this from-scratch approach is retired.
 
 ---
 
