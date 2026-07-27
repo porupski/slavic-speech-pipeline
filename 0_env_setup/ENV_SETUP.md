@@ -57,7 +57,7 @@ mamba activate ssp-cuda
 Unlike the CPU env, this is a **from-scratch installer** (no YAML yet — that requires an export from a live GPU machine). The script installs conda-forge packages with versions pinned to match `ssp_cpu.yaml`, then installs PyTorch from the official CUDA 12.4 pip wheel index:
 
 ```bash
-pip install torch==2.10.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu124
+pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
 ```
 
 Verify GPU is visible after activating:

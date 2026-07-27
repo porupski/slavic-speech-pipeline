@@ -72,12 +72,12 @@ mamba install -n "${ENV_NAME}" -c conda-forge -y \
 echo
 echo "→ Installing PyTorch CUDA 12.4 build via pip..."
 # cu124 index: https://download.pytorch.org/whl/cu124
-# Versions pinned to match the CPU env (pytorch=2.10.0, torchaudio=2.11.0).
-# If these exact versions are not present in the cu124 index, check available ones with:
+# Latest available in the cu124 index as of env creation.
+# Check available versions with:
 #   pip index versions torch --index-url https://download.pytorch.org/whl/cu124
 mamba run -n "${ENV_NAME}" pip install \
-    "torch==2.10.0" \
-    "torchaudio==2.11.0" \
+    "torch==2.6.0" \
+    "torchaudio==2.6.0" \
     --index-url https://download.pytorch.org/whl/cu124
 
 echo
