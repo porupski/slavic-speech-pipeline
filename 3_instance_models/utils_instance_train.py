@@ -1089,6 +1089,8 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
     total_steps = steps_per_epoch * cfg.num_epochs
     warmup_steps = int(total_steps * cfg.warmup_ratio)
 
+    _is_ampere = device == "cuda" and torch.cuda.get_device_capability(0)[0] >= 8
+
     training_args = TrainingArguments(
         output_dir=str(phase_dir / "trainer_tmp"),
         eval_strategy="no",
@@ -1108,7 +1110,7 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
         remove_unused_columns=False,
         use_cpu=(device == "cpu"),
         bf16=(device == "cuda"),
-        tf32=(device == "cuda"),
+        tf32=_is_ampere,
         dataloader_num_workers=cfg.dataloader_num_workers,
     )
 
