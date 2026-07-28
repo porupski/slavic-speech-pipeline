@@ -824,10 +824,18 @@ class Wav2Vec2ForRegression(Wav2Vec2PreTrainedModel):
 
 
 def build_model(cfg: Config, num_labels: int, label2id, id2label):
-    """Dispatch on task_type. Classification: HF stock audio-classification
-    head (transformers 5.x requires str label2id keys at the from_pretrained
-    boundary — stringified here; the in-process maps keep native types).
-    Regression: the custom masked-mean-pool head above."""
+    """Dispatch on task_type.
+
+    Classification path is backbone-agnostic — AutoModelForAudioClassification
+    handles wav2vec2-base, wav2vec-BERT 2.0, and any other HF-registered audio
+    classification backbone.
+
+    Regression path currently only supports wav2vec2-family checkpoints: the
+    Wav2Vec2ForRegression head above hardcodes a Wav2Vec2Model backbone. For
+    other backbones a matching regression head class must be added.
+
+    (transformers 5.x requires str label2id keys at the from_pretrained
+    boundary — stringified here; the in-process maps keep native types.)"""
     if cfg.task_type == "classification":
         hf_label2id = {str(k): int(v) for k, v in label2id.items()}
         hf_id2label = {int(k): str(v) for k, v in id2label.items()}
@@ -839,13 +847,37 @@ def build_model(cfg: Config, num_labels: int, label2id, id2label):
         )
     else:
         config_obj = AutoConfig.from_pretrained(cfg.model_name, num_labels=num_labels)
+        model_type = getattr(config_obj, "model_type", "unknown")
+        if model_type != "wav2vec2":
+            raise ValueError(
+                f"Regression head currently supports only wav2vec2-family models, "
+                f"got model_type={model_type!r} ({cfg.model_name!r}). "
+                f"Use a wav2vec2-* checkpoint for regression, or add a matching "
+                f"regression head class for this backbone."
+            )
         model = Wav2Vec2ForRegression(config_obj, loss_type=cfg.loss_function)
         model.wav2vec2 = Wav2Vec2Model.from_pretrained(
             cfg.model_name, config=config_obj, ignore_mismatched_sizes=True,
         )
+
     if cfg.freeze_feature_encoder:
-        model.wav2vec2.freeze_feature_encoder()
-        print("🔒 feature encoder (CNN) frozen")
+        # HF audio models expose the backbone as model.<base_model_prefix>:
+        #   Wav2Vec2ForSequenceClassification     → model.wav2vec2
+        #   Wav2Vec2BertForSequenceClassification → model.wav2vec2_bert
+        # wav2vec-BERT 2.0 has no CNN feature encoder (input is already mel
+        # filterbanks), so freeze_feature_encoder either doesn't exist or is a
+        # no-op — skip the call and say so instead of crashing.
+        backbone_name = model.base_model_prefix
+        backbone = getattr(model, backbone_name, None)
+        if backbone is not None and hasattr(backbone, "freeze_feature_encoder"):
+            backbone.freeze_feature_encoder()
+            print(f"🔒 feature encoder (CNN) frozen on backbone '{backbone_name}'")
+        else:
+            print(
+                f"ℹ️  freeze_feature_encoder requested but backbone "
+                f"'{backbone_name}' has no CNN feature encoder to freeze "
+                f"(expected for mel-spectrogram models such as wav2vec-BERT 2.0)."
+            )
     return model
 
 
