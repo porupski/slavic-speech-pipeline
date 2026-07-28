@@ -88,11 +88,9 @@ print(f"HF_HOME      = {os.environ['HF_HOME']}")
 # task type.
 
 # %%
-from utils_instance_train import available_targets
+from utils_instance_train import print_target_menu
 
-print(f"{TASK_TYPE} targets:")
-for t in available_targets(TASK_TYPE):
-    print(f"   {t}")
+print_target_menu(TASK_TYPE)
 
 # %% [markdown]
 # # Config

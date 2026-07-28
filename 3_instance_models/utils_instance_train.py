@@ -257,10 +257,40 @@ _add_hr_benchmark_v3_targets(TARGETS)
 
 
 def available_targets(task_type: str | None = None) -> list[str]:
-    """Sorted preset names, optionally filtered to one task_type."""
+    """Sorted preset names, optionally filtered to one task_type. Returns ALL
+    registered targets regardless of whether their JSONL is present on disk —
+    use print_target_menu() for the on-disk-filtered menu."""
     if task_type is None:
         return sorted(TARGETS)
     return sorted(k for k, t in TARGETS.items() if t["task_type"] == task_type)
+
+
+def print_target_menu(task_type: str | None = None) -> None:
+    """Print the target menu split by whether the underlying JSONL is present
+    locally. Everything under 'available on system' can be trained right now;
+    'download required for' names the corpora you still need to fetch/prepare.
+
+    Optional task_type filter mirrors available_targets."""
+    keys = (sorted(k for k, t in TARGETS.items() if t["task_type"] == task_type)
+            if task_type is not None else sorted(TARGETS))
+    tt_label = task_type if task_type is not None else "all"
+
+    have, need = [], []
+    for name in keys:
+        rel = TARGETS[name]["jsonl_path"]
+        (have if udp.from_project_relative(rel).exists() else need).append((name, rel))
+
+    print(f"{tt_label} targets available on system:")
+    if have:
+        for name, _ in have:
+            print(f"   {name}")
+    else:
+        print("   (none — see download list below)")
+
+    if need:
+        print("\ndownload required for:")
+        for name, rel in need:
+            print(f"   {name}   ← {rel}")
 
 
 # Optional per-target constraint fields. If a TARGETS entry sets one,
@@ -334,7 +364,8 @@ class Config:
     num_epochs: int      = 3      # full-run default; modes override (test=1, demo=2)
     max_grad_norm: float = 1.0
     warmup_ratio: float  = 0.10
-    logging_steps: int   = 100
+    logging_steps: int | str = "auto"   # int, or "auto" → ~100 log lines / run
+                                        # (total_steps // 100, min 1)
 
     # Rough ETA seed: train records processed per second (base model on GPU).
     # A deliberate guess — recalibrated from phase 1's real duration.
@@ -735,17 +766,25 @@ def preprocess_function(examples, feature_extractor):
         audio_arrays.append(data)
 
     if audio_key == "input_values":
+        # wav2vec2-style: raw-waveform extractor accepts a list of variable-length
+        # 1-D arrays with padding=False and returns them unchanged.
         inputs = feature_extractor(
             audio_arrays, sampling_rate=16000, return_tensors=None, padding=False,
         )
         processed = inputs[audio_key]
     else:
-        processed = []
-        for audio in audio_arrays:
-            out = feature_extractor(
-                [audio], sampling_rate=16000, return_tensors=None, padding=False,
-            )
-            processed.append(out[audio_key][0])
+        # SeamlessM4T-style: mel filterbank extractor. With padding=False on a
+        # batch, numpy fails to stack variable-length (frames, feat_dim) arrays
+        # into 3-D and the extractor crashes on the shape unpack. Workaround:
+        # pad within this preprocess batch so numpy can stack, then unpack each
+        # example's real frame count via attention_mask so the DataCollator can
+        # re-pad to per-training-batch length (no wasted memory downstream).
+        inputs = feature_extractor(
+            audio_arrays, sampling_rate=16000, return_tensors="np", padding="longest",
+        )
+        features = inputs[audio_key]         # (B, max_frames, feat_dim)
+        mask = inputs["attention_mask"]      # (B, max_frames)
+        processed = [features[i, : int(mask[i].sum())] for i in range(len(features))]
 
     return {audio_key: processed, "labels": examples["label"]}
 
@@ -865,19 +904,13 @@ def build_model(cfg: Config, num_labels: int, label2id, id2label):
         #   Wav2Vec2ForSequenceClassification     → model.wav2vec2
         #   Wav2Vec2BertForSequenceClassification → model.wav2vec2_bert
         # wav2vec-BERT 2.0 has no CNN feature encoder (input is already mel
-        # filterbanks), so freeze_feature_encoder either doesn't exist or is a
-        # no-op — skip the call and say so instead of crashing.
+        # filterbanks) — silently skip the freeze in that case rather than
+        # spamming a warning the user can't act on.
         backbone_name = model.base_model_prefix
         backbone = getattr(model, backbone_name, None)
         if backbone is not None and hasattr(backbone, "freeze_feature_encoder"):
             backbone.freeze_feature_encoder()
             print(f"🔒 feature encoder (CNN) frozen on backbone '{backbone_name}'")
-        else:
-            print(
-                f"ℹ️  freeze_feature_encoder requested but backbone "
-                f"'{backbone_name}' has no CNN feature encoder to freeze "
-                f"(expected for mel-spectrogram models such as wav2vec-BERT 2.0)."
-            )
     return model
 
 
@@ -1119,16 +1152,27 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
     train_ds = Dataset.from_list(train_items)
     eval_ds  = Dataset.from_list(eval_items)
 
+    # Cap CPU-worker settings at the physical core count. Config values are
+    # treated as ceilings — you can leave dataloader_num_workers=16 in the
+    # config and it'll DTRT on an 8-core box (with a visible note).
+    cpu_max = os.cpu_count() or 1
+    map_num_proc = min(cfg.map_num_proc, cpu_max)
+    dataloader_num_workers = min(cfg.dataloader_num_workers, cpu_max)
+    if map_num_proc < cfg.map_num_proc or dataloader_num_workers < cfg.dataloader_num_workers:
+        print(f"⚙️  capped CPU workers to os.cpu_count()={cpu_max}: "
+              f"map_num_proc {cfg.map_num_proc}→{map_num_proc}, "
+              f"dataloader_num_workers {cfg.dataloader_num_workers}→{dataloader_num_workers}")
+
     print(f"preprocessing {len(train_ds)} train + {len(eval_ds)} eval (batch_size={cfg.preprocess_batch_size})…")
     train_ds = train_ds.map(
         lambda x: preprocess_function(x, feature_extractor),
         batched=True, batch_size=cfg.preprocess_batch_size,
-        remove_columns=train_ds.column_names, num_proc=cfg.map_num_proc,
+        remove_columns=train_ds.column_names, num_proc=map_num_proc,
     )
     eval_ds = eval_ds.map(
         lambda x: preprocess_function(x, feature_extractor),
         batched=True, batch_size=cfg.preprocess_batch_size,
-        remove_columns=eval_ds.column_names, num_proc=cfg.map_num_proc,
+        remove_columns=eval_ds.column_names, num_proc=map_num_proc,
     )
     audio_key = feature_extractor.model_input_names[0]
     train_ds.set_format(type="torch", columns=[audio_key, "labels"])
@@ -1145,6 +1189,13 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
     total_steps = steps_per_epoch * cfg.num_epochs
     warmup_steps = int(total_steps * cfg.warmup_ratio)
 
+    # logging_steps=="auto" → ~100 log lines per run regardless of dataset size.
+    if isinstance(cfg.logging_steps, str) and cfg.logging_steps == "auto":
+        logging_steps = max(1, total_steps // 100)
+        print(f"📝 logging_steps=auto → {logging_steps} (total_steps={total_steps})")
+    else:
+        logging_steps = int(cfg.logging_steps)
+
     _is_ampere = device == "cuda" and torch.cuda.get_device_capability(0)[0] >= 8
 
     training_args = TrainingArguments(
@@ -1152,7 +1203,7 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
         eval_strategy="no",
         save_strategy="no",
         logging_strategy="steps",
-        logging_steps=cfg.logging_steps,
+        logging_steps=logging_steps,
         report_to="none",
         label_names=["labels"],
         per_device_train_batch_size=cfg.batch_size,
@@ -1167,7 +1218,7 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
         use_cpu=(device == "cpu"),
         bf16=(device == "cuda"),
         tf32=_is_ampere,
-        dataloader_num_workers=cfg.dataloader_num_workers,
+        dataloader_num_workers=dataloader_num_workers,
     )
 
     callback = EpochCheckpointCallback(
