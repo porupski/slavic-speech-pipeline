@@ -1,0 +1,30 @@
+{
+    "shared": {
+        "model_name": "classla/wav2vecbert2-filledPause",
+
+        "audio_dir": "data/inference_input",
+        "runs_dir":  "runs",
+
+        "batch_size":       8,
+        "chunk_length_s":   30.0,
+        "background_class_id": 0,
+
+        "postproc": {
+            "drop_short":     true,
+            "drop_initial":   true,
+            "drop_final":     true,
+            "short_cutoff_s": 0.08
+        },
+
+        "keep_frame_labels": false,
+        "write_textgrids":   true,
+
+        "reserved_gpu": "2",
+        "use_cuda":     true
+    },
+    "modes": {
+        "test": { "cap_files": 2  },
+        "demo": { "cap_files": 10 },
+        "full": { "cap_files": null }
+    }
+}
