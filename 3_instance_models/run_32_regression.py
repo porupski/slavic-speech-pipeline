@@ -65,11 +65,10 @@ def main() -> None:
         fit_normalizer,
         make_run_dirs, load_feature_extractor, run_phase,
         print_recalibrated_eta, print_run_summary, plot_test_scatter, spot_check,
-        mark, print_stage_breakdown,
+        mark, print_stage_breakdown, print_project_info,
     )
     mark("literal start")
-    print(f"PROJECT_ROOT = {uit.PROJECT_ROOT}")
-    print(f"HF_HOME      = {os.environ['HF_HOME']}")
+    print_project_info()
 
     # ── Config ────────────────────────────────────────────────────────────────
     cfg, raw_config = load_config(args.config, task_type=TASK_TYPE, run_mode=args.mode)

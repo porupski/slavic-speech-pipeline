@@ -64,12 +64,14 @@ else:
 import utils_frame_infer as ufi
 from utils_frame_infer import (
     load_config, print_config_summary, resolve_device,
-    run_inference, sample_plot_examples,
-    N_PLOT_EXAMPLES,
+    run_inference, sample_plot_examples, make_run_name,
+    print_project_info, N_PLOT_EXAMPLES,
 )
 
-print(f"PROJECT_ROOT = {ufi.PROJECT_ROOT}")
-print(f"HF_HOME      = {os.environ['HF_HOME']}")
+# Anonymised by default (repo name only) so committed notebook output doesn't
+# leak absolute paths. Call print_project_info(verbose=True) locally if you
+# need the real paths for debugging.
+print_project_info()
 
 # %% [markdown]
 # # Config
@@ -80,12 +82,17 @@ print(f"HF_HOME      = {os.environ['HF_HOME']}")
 # are skipped. Delete the JSONL to force a full re-run.
 
 # %%
-RUN_MODE = "demo"                    # "test" | "demo" | "full"
-RUN_NAME = "fp_bert2_demo"
+RUN_MODE = "demo"    # "test" | "demo" | "full"
+RUN_NAME = None      # None → auto-generate: {audio_dir_basename}_{task_name}_classification_{ts}
+                     # (mirrors Ch3's naming); or set an explicit string here.
 
 cfg = load_config(CONFIG_PATH, run_mode=RUN_MODE)
 # Honour the notebook's GPU guard decision above (overrides config's use_cuda).
 cfg.use_cuda = USE_CUDA
+
+if RUN_NAME is None:
+    RUN_NAME = make_run_name(cfg)
+print(f"run_name = {RUN_NAME}")
 
 device = resolve_device(cfg)
 print_config_summary(cfg, device)

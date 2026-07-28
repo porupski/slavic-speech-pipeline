@@ -72,11 +72,13 @@ else:
 
 # %%
 import utils_instance_train as uit   # heavy import: pulls in torch + transformers (HF_HOME is handled inside)
-from utils_instance_train import mark
+from utils_instance_train import mark, print_project_info
 
 mark("literal start")
-print(f"PROJECT_ROOT = {uit.PROJECT_ROOT}")
-print(f"HF_HOME      = {os.environ['HF_HOME']}")
+# Anonymised by default so committed notebook output doesn't leak absolute
+# paths. Call print_project_info(verbose=True) locally if you need the real
+# paths for debugging.
+print_project_info()
 
 # %% [markdown]
 # # Targets

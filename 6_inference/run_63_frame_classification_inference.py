@@ -34,8 +34,9 @@ def parse_args() -> argparse.Namespace:
                    help="path to config.json")
     p.add_argument("--mode", "-m", choices=["test", "demo", "full"], default="full",
                    help="run_mode; caps cap_files")
-    p.add_argument("--run_name", "-r", required=True,
-                   help="name of the output run folder under runs/")
+    p.add_argument("--run_name", "-r", default=None,
+                   help="name of the output run folder under runs/. "
+                        "Omit → auto-generate from cfg (Ch3-style).")
     p.add_argument("--audio_dir", default=None,
                    help="override cfg.audio_dir (relative to project root or absolute)")
     p.add_argument("--model_name", default=None,
@@ -65,9 +66,9 @@ def main() -> None:
     from utils_frame_infer import (
         load_config, print_config_summary, resolve_device,
         run_inference, sample_plot_examples, N_PLOT_EXAMPLES,
+        print_project_info,
     )
-    print(f"PROJECT_ROOT = {ufi.PROJECT_ROOT}")
-    print(f"HF_HOME      = {os.environ['HF_HOME']}")
+    print_project_info()
 
     # ── Config ────────────────────────────────────────────────────────────────
     cfg = load_config(args.config, run_mode=args.mode)

@@ -30,6 +30,7 @@ import random
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 # ── PROJECT_ROOT + HF_HOME (must precede the transformers import) ─────────────
@@ -65,6 +66,10 @@ class Config:
     # (AutoModelForAudioFrameClassification-compatible). Ch3 utterance-level
     # checkpoints are NOT compatible — different head.
     model_name: str = "classla/wav2vecbert2-filledPause"
+
+    # Short identifier used in auto-generated run names (mirrors Ch3's
+    # {target}_{task_type} pattern). Change per-model if you swap the default.
+    task_name: str = "fp_frame"
 
     # -- Input / output ------------------------------------------------------
     audio_dir: str = "data/inference_input"
@@ -135,6 +140,30 @@ def resolve_device(cfg: Config) -> str:
     if cfg.use_cuda:
         print("⚠️  GPU selected but torch.cuda.is_available()==False; falling back to CPU")
     return "cpu"
+
+
+def print_project_info(verbose: bool = False) -> None:
+    """Report PROJECT_ROOT + HF_HOME. Anonymised by default (only the repo
+    folder name is shown, not the absolute path) so that committed notebook
+    output doesn't leak the user's local filesystem layout. Pass
+    verbose=True to see the full absolute paths for local debugging."""
+    if verbose:
+        print(f"PROJECT_ROOT = {PROJECT_ROOT}")
+        print(f"HF_HOME      = {os.environ['HF_HOME']}")
+    else:
+        print(f"repo         = {PROJECT_ROOT.name}/")
+        print(f"HF cache     = <repo>/stock_models/  (via HF_HOME, project-local)")
+
+
+def make_run_name(cfg: Config) -> str:
+    """Auto-generate a run name mirroring Ch3's convention:
+        {data}_{task_name}_classification_{YYYYMMDD-HHMMSS}
+    where {data} is the leaf folder name of cfg.audio_dir. If the folder name
+    is empty (e.g. cfg.audio_dir='/'), falls back to 'audio'."""
+    audio_dir_p = Path(cfg.audio_dir)
+    data_tag = audio_dir_p.name or "audio"
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return f"{data_tag}_{cfg.task_name}_classification_{ts}"
 
 
 def print_config_summary(cfg: Config, device: str) -> None:
@@ -374,21 +403,44 @@ def plot_examples(examples, out_png, show=False):
 
 def sample_plot_examples(out_jsonl: Path, run_dir: Path,
                          n: int = N_PLOT_EXAMPLES, seed: int = 1234,
-                         show: bool = True):
-    """Read n random JSONL lines, reload audio, render examples.png."""
+                         show: bool = True) -> None:
+    """Render examples.png in run_dir: pick n audio files from the inference
+    JSONL, prioritising files that contain post-processed events (more
+    interesting to look at). Only if fewer than n files have events do we
+    fall back to no-event files as filler.
+
+    Returns None deliberately — Jupyter would otherwise echo a PosixPath and
+    leak absolute paths into committed notebook output."""
     out_jsonl = Path(out_jsonl)
     if not out_jsonl.exists():
         print(f"no inference jsonl at {out_jsonl.relative_to(PROJECT_ROOT)}; skipping plots")
-        return None
+        return
     lines = out_jsonl.read_text().splitlines()
     if not lines:
         print("no examples to plot")
-        return None
+        return
+
+    recs = []
+    for line in lines:
+        try:
+            recs.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+
     rng = random.Random(seed)
-    sample = rng.sample(lines, min(n, len(lines)))
+    with_ev = [r for r in recs if r.get("postproc_events")]
+    without_ev = [r for r in recs if not r.get("postproc_events")]
+    rng.shuffle(with_ev)
+    rng.shuffle(without_ev)
+
+    picked = with_ev[:n]
+    if len(picked) < n:
+        # Not enough event-bearing files — fill with random no-event ones so
+        # the plot always renders n panels (assuming n <= total).
+        picked.extend(without_ev[:n - len(picked)])
+
     examples = []
-    for line in sample:
-        rec = json.loads(line)
+    for rec in picked:
         audio_path = PROJECT_ROOT / rec["audio_path"]
         try:
             data, sr = read_audio(audio_path)
@@ -402,11 +454,10 @@ def sample_plot_examples(out_jsonl: Path, run_dir: Path,
             "title": f"{rec['audio_path']}   ·   {rec['duration_s']}s   ·   {len(events)} FP events",
         })
     if not examples:
-        return None
+        return
     out_png = run_dir / "examples.png"
     plot_examples(examples, out_png, show=show)
     print(f"saved {out_png.relative_to(PROJECT_ROOT)}")
-    return out_png
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -418,11 +469,16 @@ def _model_revision(model) -> str:
     return getattr(model.config, "_commit_hash", None) or "unknown"
 
 
-def run_inference(cfg: Config, run_name: str) -> dict:
+def run_inference(cfg: Config, run_name: str | None = None) -> dict:
     """Walk cfg.audio_dir, run the frame classifier, stream results to
     runs/{run_name}/inference.jsonl. Writes TextGrids if requested. Returns a
-    dict with run_dir / out_jsonl / counts."""
+    dict with run_dir / out_jsonl / counts.
+
+    run_name=None → auto-generate via make_run_name(cfg)."""
     t0 = time.time()
+    if run_name is None:
+        run_name = make_run_name(cfg)
+    print(f"run_name = {run_name}")
     device = resolve_device(cfg)
     print_config_summary(cfg, device)
 

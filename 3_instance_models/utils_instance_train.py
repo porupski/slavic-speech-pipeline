@@ -479,6 +479,19 @@ def resolve_device(cfg: Config, use_cuda: bool) -> str:
     return device
 
 
+def print_project_info(verbose: bool = False) -> None:
+    """Report PROJECT_ROOT + HF_HOME. Anonymised by default (only the repo
+    folder name is shown, not the absolute path) so that committed notebook
+    output doesn't leak the user's local filesystem layout. Pass
+    verbose=True to see the full absolute paths for local debugging."""
+    if verbose:
+        print(f"PROJECT_ROOT = {PROJECT_ROOT}")
+        print(f"HF_HOME      = {os.environ['HF_HOME']}")
+    else:
+        print(f"repo         = {PROJECT_ROOT.name}/")
+        print(f"HF cache     = <repo>/stock_models/  (via HF_HOME, project-local)")
+
+
 def print_config_summary(cfg: Config, device: str) -> None:
     print(f"target      = {cfg.target}")
     print(f"run_mode    = {cfg.run_mode}  (caps train/dev/test = {cfg.cap_train}/{cfg.cap_dev}/{cfg.cap_test}, sampling={cfg.demo_sampling})")

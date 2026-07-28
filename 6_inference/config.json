@@ -1,6 +1,7 @@
 {
     "shared": {
         "model_name": "classla/wav2vecbert2-filledPause",
+        "task_name":  "fp_frame",
 
         "audio_dir": "data/inference_input",
         "runs_dir":  "runs",
