@@ -713,7 +713,17 @@ def prepare_dataset_dict(records: list[dict], cfg: Config, label2id: dict | None
 
 def preprocess_function(examples, feature_extractor):
     """Load each WAV via soundfile. Chapter-1 splitter guarantees 16 kHz mono PCM-16;
-    we sanity-check and resample as a defensive fallback."""
+    we sanity-check and resample as a defensive fallback.
+
+    Works for both wav2vec2-style models (input_values, raw waveform) and
+    SeamlessM4T-style models (input_features, log-mel spectrogram). The right
+    key is read from feature_extractor.model_input_names[0].
+
+    SeamlessM4T is processed one clip at a time: batched processing with
+    padding=False causes numpy to produce a 1-D object array (sequences have
+    different frame counts), which then fails shape unpacking inside the
+    extractor. wav2vec2 is still processed in one batched call."""
+    audio_key = feature_extractor.model_input_names[0]
     audio_arrays = []
     for path in examples["audio_path"]:
         data, sr = sf.read(path, dtype="float32", always_2d=False)
@@ -723,10 +733,21 @@ def preprocess_function(examples, feature_extractor):
             import librosa
             data = librosa.resample(data, orig_sr=sr, target_sr=16000)
         audio_arrays.append(data)
-    inputs = feature_extractor(
-        audio_arrays, sampling_rate=16000, return_tensors=None, padding=False,
-    )
-    return {"input_values": inputs["input_values"], "labels": examples["label"]}
+
+    if audio_key == "input_values":
+        inputs = feature_extractor(
+            audio_arrays, sampling_rate=16000, return_tensors=None, padding=False,
+        )
+        processed = inputs[audio_key]
+    else:
+        processed = []
+        for audio in audio_arrays:
+            out = feature_extractor(
+                [audio], sampling_rate=16000, return_tensors=None, padding=False,
+            )
+            processed.append(out[audio_key][0])
+
+    return {audio_key: processed, "labels": examples["label"]}
 
 
 def load_feature_extractor(cfg: Config):
@@ -744,16 +765,18 @@ def load_feature_extractor(cfg: Config):
 class DataCollatorForInstance:
     """Pads audio within each batch and threads the attention mask through.
     Label dtype follows the task: long for classification, float32 for
-    regression."""
+    regression. Works for both wav2vec2 (input_values) and SeamlessM4T
+    (input_features) — the key is read from model_input_names."""
     def __init__(self, feature_extractor, task_type: str):
         self.feature_extractor = feature_extractor
         self.task_type = task_type
+        self.audio_key = feature_extractor.model_input_names[0]
 
     def __call__(self, features):
-        input_values = [f["input_values"] for f in features]
+        audio_seqs = [f[self.audio_key] for f in features]
         labels = [f["labels"] for f in features]
         batch = self.feature_extractor.pad(
-            {"input_values": input_values},
+            {self.audio_key: audio_seqs},
             padding=True, return_attention_mask=True, return_tensors="pt",
         )
         dtype = torch.long if self.task_type == "classification" else torch.float32
@@ -1075,8 +1098,9 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
         batched=True, batch_size=cfg.preprocess_batch_size,
         remove_columns=eval_ds.column_names, num_proc=cfg.map_num_proc,
     )
-    train_ds.set_format(type="torch", columns=["input_values", "labels"])
-    eval_ds.set_format(type="torch", columns=["input_values", "labels"])
+    audio_key = feature_extractor.model_input_names[0]
+    train_ds.set_format(type="torch", columns=[audio_key, "labels"])
+    eval_ds.set_format(type="torch", columns=[audio_key, "labels"])
 
     print(f"building model: {cfg.model_name}")
     model = build_model(cfg, num_labels=len(cfg.label_order) if cfg.task_type == "classification" else 1,
