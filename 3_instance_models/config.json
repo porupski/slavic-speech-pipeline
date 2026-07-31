@@ -1,11 +1,22 @@
 {
   "_readme": [
-    "All user-facing knobs for the chapter-3 instance trainers (31/32 notebooks + runners).",
-    "You should never need to edit the .py files — change values here instead.",
-    "Layering: Config defaults -> 'shared' -> 'classification'/'regression' -> 'modes'[run_mode].",
+    "Notebook and runner knobs for chapter 3. Never edit the .py; change values here.",
+    "Layering: Config defaults -> 'shared' -> 'classification'/'regression' -> modes[run_mode].",
     "Every key must name a real Config field in utils_instance_train.py (typos are hard errors).",
-    "run_mode: 'test' (plumbing only) | 'demo' (capped, tangible) | 'full' (whole corpus).",
-    "Targets are preset names from the TARGETS registry; list them with available_targets()."
+    "Targets are preset names from the TARGETS registry; list them with available_targets().",
+    "",
+    "Run modes:",
+    "  - test   : tiny random model, ~64 rec — plumbing only, seconds.",
+    "  - demo   : real model, capped data — tangible result in 1 to 2 hours.",
+    "  - full   : whole corpus, caps off — for the CLI runner in tmux.",
+    "  - custom : add your own preset below; anything in the modes block works.",
+    "",
+    "Supported base models (set via 'model_name'):",
+    "  - facebook/wav2vec2-base       (small, English pretraining)",
+    "  - facebook/wav2vec2-xls-r-300m (large, multilingual — Slavic coverage)",
+    "  - facebook/w2v-bert-2.0        (Meta wav2vec-BERT 2.0, best on content tasks)",
+    "",
+    "See supported_models.md for the full compatibility matrix."
   ],
 
   "run_mode": "test",
@@ -63,6 +74,8 @@
     },
     "full": {
       "cap_train": null, "cap_dev": null, "cap_test": null
+    },
+    "custom": {
     }
   }
 }

@@ -364,8 +364,8 @@ class Config:
     num_epochs: int      = 3      # full-run default; modes override (test=1, demo=2)
     max_grad_norm: float = 1.0
     warmup_ratio: float  = 0.10
-    logging_steps: int | str = "auto"   # int, or "auto" → ~100 log lines / run
-                                        # (total_steps // 100, min 1)
+    logging_steps: int | str = "auto"   # int, or "auto" → ~10 log lines / epoch
+                                        # (steps_per_epoch // 10, min 1)
 
     # Rough ETA seed: train records processed per second (base model on GPU).
     # A deliberate guess — recalibrated from phase 1's real duration.
@@ -1147,6 +1147,33 @@ def best_epoch_of(epoch_results: list[dict], cfg: Config) -> dict:
                                              else float("-inf")))
 
 
+def release_gpu(verbose: bool = True) -> None:
+    """Release Python-side GPU references and empty the CUDA cache.
+
+    Call this after the last phase finishes to free the cached weights
+    that the Trainer leaves on the reserved GPU. A small baseline (about
+    200 to 400 MB for the CUDA context) stays until the Python process
+    exits.
+    """
+    reserved_before_mb = None
+    if torch.cuda.is_available():
+        reserved_before_mb = torch.cuda.memory_reserved() // (1024 * 1024)
+
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        try:
+            torch.cuda.ipc_collect()
+        except Exception:
+            pass
+        if verbose:
+            reserved_after_mb = torch.cuda.memory_reserved() // (1024 * 1024)
+            print(f"🧹 released model + emptied CUDA cache "
+                  f"(reserved: {reserved_before_mb} MB → {reserved_after_mb} MB)")
+    elif verbose:
+        print("🧹 released Python refs (no CUDA device)")
+
+
 def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[dict],
               eval_split_name: str, save_best_model: bool,
               cfg: Config, run_dir: Path, model_dir: Path, feature_extractor,
@@ -1202,10 +1229,10 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
     total_steps = steps_per_epoch * cfg.num_epochs
     warmup_steps = int(total_steps * cfg.warmup_ratio)
 
-    # logging_steps=="auto" → ~100 log lines per run regardless of dataset size.
+    # logging_steps=="auto" → ~10 log lines per epoch.
     if isinstance(cfg.logging_steps, str) and cfg.logging_steps == "auto":
-        logging_steps = max(1, total_steps // 100)
-        print(f"📝 logging_steps=auto → {logging_steps} (total_steps={total_steps})")
+        logging_steps = max(1, steps_per_epoch // 10)
+        print(f"📝 logging_steps=auto → {logging_steps} (~10/epoch, steps_per_epoch={steps_per_epoch})")
     else:
         logging_steps = int(cfg.logging_steps)
 
@@ -1284,9 +1311,7 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
 
     # Free model + CUDA cache before the next phase allocates a fresh one.
     del trainer, model
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    release_gpu(verbose=True)
 
     return callback.epoch_results, best
 

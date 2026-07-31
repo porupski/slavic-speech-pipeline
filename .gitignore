@@ -12,6 +12,7 @@ prep_PSHR_benchmarks/
 0_env_setup/backups/
 3_instance_models/legacy/
 misc/
+*_ste.*
 
 # --- local backups (created before risky edits) ------------------------------
 *.BACKUP.*

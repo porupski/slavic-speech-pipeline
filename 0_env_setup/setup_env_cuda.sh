@@ -65,7 +65,29 @@ if "${MAMBA_CMD}" env list | awk '{print $1}' | grep -qx "${ENV_NAME}"; then
 fi
 
 echo "→ Creating '${ENV_NAME}' from ${YAML} …"
-"${MAMBA_CMD}" env create -n "${ENV_NAME}" -f "${YAML}"
+echo "   Environment creates can take 3 to 10 minutes."
+echo "   The script prints a heartbeat every 20 s so the run does not look stuck."
+
+# -y suppresses the interactive "Confirm changes: [Y/n]" prompt on some hosts.
+"${MAMBA_CMD}" env create -y -n "${ENV_NAME}" -f "${YAML}" &
+CREATE_PID=$!
+
+START_TS=$(date +%s)
+while kill -0 "${CREATE_PID}" 2>/dev/null; do
+    sleep 20
+    if kill -0 "${CREATE_PID}" 2>/dev/null; then
+        ELAPSED=$(( $(date +%s) - START_TS ))
+        printf "   … still running (%dm %02ds elapsed) …\n" $((ELAPSED / 60)) $((ELAPSED % 60))
+    fi
+done
+
+# Reap the exit code without tripping `set -e`.
+CREATE_RC=0
+wait "${CREATE_PID}" || CREATE_RC=$?
+if [[ ${CREATE_RC} -ne 0 ]]; then
+    echo "❌ env create failed (exit ${CREATE_RC})."
+    exit ${CREATE_RC}
+fi
 
 echo
 echo "✅ Done. To activate:"
