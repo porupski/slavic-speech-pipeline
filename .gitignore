@@ -72,3 +72,9 @@ logs/
 .cache/
 hf_cache/
 torch_cache/
+
+# --- mamba / micromamba tempfiles from interrupted env creates ---------------
+# When pip in the yaml fails or the create is Ctrl-C'd, a mambaXXXXXXXXX
+# tempfile is left next to the yaml. Ignore all of them.
+0_env_setup/mamba*
+0_env_setup/micromamba*

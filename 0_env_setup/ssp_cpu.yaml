@@ -376,7 +376,7 @@ dependencies:
     - shellingham==1.5.4
     - sympy==1.14.0
     - tokenizers==0.22.2
-    - torch==2.12.0+cpu
+    - torch==2.12.0
     - transformers==5.9.0
     - typer==0.25.1
     - xxhash==3.7.0
