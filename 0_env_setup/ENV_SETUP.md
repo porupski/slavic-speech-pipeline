@@ -1,27 +1,56 @@
 # Environment setup — details
 
-Two environment variants: **CPU** (development, laptops) and **CUDA** (GPU servers). The CPU env is cloned from a frozen `mamba env export` YAML. The CUDA env is a from-scratch installer with pinned versions until a YAML export from the GPU server is available.
+Two environment variants: **CPU** (development, laptops) and **CUDA** (GPU
+servers). Both are cloned from a frozen `mamba env export` YAML — no
+per-package pip lines to keep in sync.
 
 ## Prerequisites
 
-You need `mamba` on PATH. The recommended route is **Miniforge** (bundles mamba + conda-forge by default):
+`mamba` on PATH. The recommended route is **Miniforge**, which bundles mamba
+and conda-forge by default:
 
 ```bash
 curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o miniforge.sh
 bash miniforge.sh -b -p "${HOME}/miniforge3"
-eval "$("${HOME}/miniforge3/bin/mamba" shell hook --shell bash)"
 ```
 
-Add the `eval` line to your `~/.bashrc` (or `~/.zshrc`) so `mamba activate` works in every new shell. Then `source ~/.bashrc` or open a new terminal.
+To make `mamba activate` work in every new shell, add these two lines to
+`~/.bashrc` (or `~/.zshrc`):
 
-> **Note:** using the `conda shell.bash hook` instead of the `mamba shell hook` only wires up `conda activate` — `mamba activate` will fail with "running as a subprocess". Use the mamba hook above.
+```bash
+source "${HOME}/miniforge3/etc/profile.d/conda.sh"
+source "${HOME}/miniforge3/etc/profile.d/mamba.sh"
+```
 
-If you already have **micromamba** but not mamba:
+Guard the sources if you use the same `.bashrc` on multiple machines:
+
+```bash
+# Guarded form — silently skips on machines without Miniforge.
+if [ -f "${HOME}/miniforge3/etc/profile.d/conda.sh" ]; then
+    source "${HOME}/miniforge3/etc/profile.d/conda.sh"
+    if [ -f "${HOME}/miniforge3/etc/profile.d/mamba.sh" ]; then
+        source "${HOME}/miniforge3/etc/profile.d/mamba.sh"
+    fi
+fi
+```
+
+Then `source ~/.bashrc` or open a new terminal.
+
+> **Note:** using only `conda shell.bash hook` wires up `conda activate` but
+> not `mamba activate`. Sourcing both `profile.d` files above wires up
+> both, so either works.
+
+### If your host only has micromamba
+
+`micromamba` is a separate binary from `mamba` with a compatible command
+set. The scripts here call `mamba`, so alias it:
 
 ```bash
 eval "$(micromamba shell hook --shell bash)"
 alias mamba=micromamba
 ```
+
+Add both lines to `~/.bashrc` for persistence.
 
 ---
 
@@ -31,50 +60,52 @@ For local development and data prep. No GPU required.
 
 ```bash
 bash 0_env_setup/setup_env_cpu.sh          # create, or bail if `ssp` already exists
-bash 0_env_setup/setup_env_cpu.sh --force  # remove + recreate
+bash 0_env_setup/setup_env_cpu.sh --force  # remove and recreate
 
 mamba activate ssp
 ```
 
 The script is a thin wrapper around:
+
 ```bash
 mamba env create -n ssp -f 0_env_setup/ssp_cpu.yaml
 ```
 
-`ssp_cpu.yaml` was exported with `--no-builds` from a known-good machine and is the single source of truth for the env.
+`ssp_cpu.yaml` was exported with `--no-builds` from a known-good machine
+and is the single source of truth for the env. PyTorch is installed
+through pip as `torch==2.12.0+cpu`, so the env contains no CUDA runtime
+libraries.
 
 ---
 
 ## CUDA environment (`ssp-cuda`)
 
-For GPU servers. Targets **CUDA 12.4** (compatible with driver 550+).
+For GPU servers. Targets **CUDA 12.4**, compatible with driver 550 or newer.
 
 ```bash
 bash 0_env_setup/setup_env_cuda.sh          # create, or bail if `ssp-cuda` already exists
-bash 0_env_setup/setup_env_cuda.sh --force  # remove + recreate
+bash 0_env_setup/setup_env_cuda.sh --force  # remove and recreate
 
 mamba activate ssp-cuda
 ```
 
-Unlike the CPU env, this is a **from-scratch installer** (no YAML yet — that requires an export from a live GPU machine). The script installs conda-forge packages with versions pinned to match `ssp_cpu.yaml`, then installs PyTorch from the official CUDA 12.4 pip wheel index:
+Thin wrapper around:
 
 ```bash
-pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+mamba env create -n ssp-cuda -f 0_env_setup/ssp_cuda.yaml
 ```
 
-Verify GPU is visible after activating:
+`ssp_cuda.yaml` was exported with `--no-builds` from a known-good GPU
+machine. PyTorch is installed through pip as `torch==2.6.0+cu124` and
+`torchaudio==2.6.0+cu124`. The YAML has a top-of-`pip:` line
+`--extra-index-url https://download.pytorch.org/whl/cu124`, without which
+pip cannot resolve these tagged wheels during replay.
+
+Verify GPU is visible after activation:
 
 ```bash
 python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 ```
-
-**Once the GPU server is online and the env is stable**, lock it down properly:
-
-```bash
-mamba env export -n ssp-cuda --no-builds > 0_env_setup/ssp_cuda.yaml
-```
-
-Then `setup_env_cuda.sh` becomes a thin YAML wrapper (same pattern as the CPU script) and this from-scratch approach is retired.
 
 ---
 
@@ -91,26 +122,52 @@ Or `bash 0_env_setup/setup_env_cpu.sh --force` for the CPU env — one step.
 
 ## Exporting a new YAML
 
-Whenever the env changes meaningfully and the new state should be shared:
+Whenever the env changes and the new state should be shared:
 
 ```bash
 mamba env export -n ssp      --no-builds > 0_env_setup/ssp_cpu.yaml
 mamba env export -n ssp-cuda --no-builds > 0_env_setup/ssp_cuda.yaml
 ```
 
-`--no-builds` drops per-machine build hashes (e.g. `numpy=1.26.4=py311hXXXX` becomes `numpy=1.26.4`), so the YAML replays on other Linux boxes without hitting "no such build" errors.
+`--no-builds` drops per-machine build hashes (`numpy=1.26.4=py311hXXXX` becomes
+`numpy=1.26.4`), so the YAML replays on other Linux boxes without hitting
+"no such build" errors.
 
-For torch specifically, mamba/conda-forge resolves the CPU / CUDA build cleanly in most cases. If a cross-machine replay ever fails on a `torch==X.Y.Z+cpu` line because pip can't find that build, hand-edit the exported YAML to add the appropriate PyTorch pip index above the `torch` line:
+For torch specifically, `mamba env export` drops the `--extra-index-url`
+line from the pip section. Re-add it manually above the tagged torch line
+after every re-export:
 
 ```yaml
   - pip:
-    - --extra-index-url https://download.pytorch.org/whl/cpu
-    - torch==2.x.x+cpu
-    - ...
+    - --extra-index-url https://download.pytorch.org/whl/cu124
+    - torch==2.6.0+cu124
 ```
+
+---
+
+## Backups
+
+Per-machine backup exports live in `0_env_setup/backups/env_backup_<host>/`.
+Each host folder contains three exports:
+
+- `<env>.yaml` — `--no-builds`, portable across Linux boxes.
+- `<env>_with_builds.yaml` — full snapshot with build hashes, exact
+  replay on the same platform.
+- `<env>_from_history.yaml` — record of explicitly-installed packages.
+
+The canonical `ssp_cpu.yaml` and `ssp_cuda.yaml` at the top of
+`0_env_setup/` are the current single source of truth. Backups exist to
+allow cross-machine diffing if the canonical YAML ever regresses.
+
+---
 
 ## Notes
 
-- `ssp` and `ssp-cuda` are intentionally separate envs — don't try to upgrade one into the other.
-- If the server doesn't have `nvcc`, that's fine — PyTorch from the pip wheel bundles its own CUDA runtime.
-- The Jupyter kernel registration is handled by mamba's env resolver via the `ipykernel` package in the YAML. If you don't see the "Python (ssp)" kernel in Jupyter, run once: `python -m ipykernel install --user --name ssp --display-name "Python (ssp)"`.
+- `ssp` and `ssp-cuda` are intentionally separate envs — do not upgrade one
+  into the other.
+- The GPU server does not need `nvcc`. PyTorch from the pip wheel bundles
+  its own CUDA runtime.
+- The Jupyter kernel registration is handled by mamba's env resolver
+  through the `ipykernel` package in the YAML. If the "Python (ssp)"
+  kernel does not appear in Jupyter, run once:
+  `python -m ipykernel install --user --name ssp --display-name "Python (ssp)"`.

@@ -22,8 +22,13 @@ fi
 
 if ! command -v mamba &>/dev/null; then
     echo "❌ mamba not found on PATH."
-    echo "   Install miniforge (https://github.com/conda-forge/miniforge) or run:"
-    echo "     eval \"\$(micromamba shell hook --shell bash)\" && alias mamba=micromamba"
+    echo "   Install Miniforge (bundles mamba):"
+    echo "     curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o miniforge.sh"
+    echo "     bash miniforge.sh -b -p \"\${HOME}/miniforge3\""
+    echo "     source \"\${HOME}/miniforge3/etc/profile.d/conda.sh\""
+    echo "     source \"\${HOME}/miniforge3/etc/profile.d/mamba.sh\""
+    echo "   (Add the two source lines to ~/.bashrc for persistence.)"
+    echo "   If you have micromamba, an alias works: alias mamba=micromamba"
     exit 1
 fi
 
