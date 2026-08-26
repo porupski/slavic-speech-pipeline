@@ -8,6 +8,7 @@ test_processed_jsonl/
 
 # --- internal-only docs and tooling (kept locally, not shipped to users) -----
 0_env_setup/backups/
+ref_files/
 misc/
 *_test.*
 

@@ -891,16 +891,39 @@ def save_predictions_json(predictions, labels, items, out_path: Path, id2label: 
     out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False))
 
 
-_PALETTE = ["#dddddd", "#d62728", "#1f77b4", "#2ca02c", "#9467bd",
-            "#ff7f0e", "#8c564b", "#e377c2"]
+# ── Plot palette (see ref_files/colors.md) ────────────────────────────────
+COLOR_GOLD_POS      = "#ffa500"   # orange — gold-positive frame (annotator)
+COLOR_PRED_MATCH    = "#1f77b4"   # blue   — pred fired AND matches gold
+COLOR_PRED_MISMATCH = "#ff5c5c"   # red    — pred fired AND does NOT match gold
+COLOR_BG            = "#f0f0f0"   # neutral gray — silent frame
 
 
-def _row_to_image(seq, n_classes: int):
-    pal = (_PALETTE * ((n_classes // len(_PALETTE)) + 1))[:n_classes]
-    rgba = np.zeros((1, len(seq), 4), dtype=float)
-    for t, v in enumerate(seq):
-        rgba[0, t] = mcolors.to_rgba(pal[int(v)])
-    return rgba, pal
+def _render_gold_pred_pair(gold_seq, pred_seq) -> np.ndarray:
+    """Build a (2, T, 4) RGBA strip: gold row on top, pred row below.
+    - Gold row: orange where gold==positive, neutral elsewhere.
+    - Pred row: colored only where pred==positive; blue if it matches gold
+      (correct positive), red if it does not (false positive). pred==negative
+      stays neutral, so missed positives are visible as an orange top cell
+      with neutral below."""
+    T = len(gold_seq)
+    if T == 0:
+        return np.zeros((2, 0, 4), dtype=float)
+    strip = np.empty((2, T, 4), dtype=float)
+    bg   = mcolors.to_rgba(COLOR_BG)
+    gpos = mcolors.to_rgba(COLOR_GOLD_POS)
+    pmat = mcolors.to_rgba(COLOR_PRED_MATCH)
+    pmis = mcolors.to_rgba(COLOR_PRED_MISMATCH)
+    # We treat "positive" as the last class in label_order (canonical convention
+    # for binary tasks — 1 in [0, 1]). Any label class ≠ 0 counts as positive
+    # so this still works if label_order ever grows past binary.
+    for t in range(T):
+        g = int(gold_seq[t]); p = int(pred_seq[t])
+        strip[0, t] = gpos if g != 0 else bg
+        if p != 0:
+            strip[1, t] = pmat if p == g else pmis
+        else:
+            strip[1, t] = bg
+    return strip
 
 
 def plot_example_predictions(predictions, labels, items, out_path: Path,
@@ -911,12 +934,11 @@ def plot_example_predictions(predictions, labels, items, out_path: Path,
         return
     fig, axes = plt.subplots(n, 1, figsize=(10, max(2, 0.9 * n)), squeeze=False)
     axes = axes[:, 0]
-    n_classes = len(id2label); pal = None
     for i in range(n):
         valid = labels[i] != IGNORE_INDEX
-        gold_img, pal = _row_to_image(labels[i][valid], n_classes)
-        pred_img, _   = _row_to_image(pred_idx[i][valid], n_classes)
-        strip = np.concatenate([gold_img, pred_img], axis=0)
+        gold_seq = labels[i][valid]
+        pred_seq = pred_idx[i][valid]
+        strip = _render_gold_pred_pair(gold_seq, pred_seq)
         ax = axes[i]
         ax.imshow(strip, aspect="auto", interpolation="nearest")
         ax.set_yticks([0, 1]); ax.set_yticklabels(["gold", "pred"], fontsize=8)
@@ -924,9 +946,14 @@ def plot_example_predictions(predictions, labels, items, out_path: Path,
         title = items[i]["instance_id"]
         ax.set_title(("..." + title[-57:]) if len(title) > 60 else title,
                      fontsize=8, loc="left")
-    handles = [plt.Rectangle((0, 0), 1, 1, color=pal[k]) for k in range(n_classes)]
-    fig.legend(handles, [str(id2label[k]) for k in range(n_classes)],
-               loc="lower center", ncol=min(n_classes, 6), fontsize=8,
+    legend_specs = [
+        (COLOR_GOLD_POS,      "gold: primary stress"),
+        (COLOR_PRED_MATCH,    "pred: correct positive"),
+        (COLOR_PRED_MISMATCH, "pred: false positive"),
+    ]
+    handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c, _ in legend_specs]
+    fig.legend(handles, [l for _, l in legend_specs],
+               loc="lower center", ncol=len(legend_specs), fontsize=8,
                bbox_to_anchor=(0.5, -0.02))
     plt.tight_layout(rect=[0, 0.03, 1, 1])
     fig.savefig(out_path, bbox_inches="tight"); plt.close(fig)
@@ -1255,11 +1282,8 @@ def plot_test_example_predictions(run_dir: Path, phase2_best: dict, id2label: di
 
     fig, axes = plt.subplots(n, 1, figsize=(10, max(2, 0.9 * n)), squeeze=False)
     axes = axes[:, 0]
-    n_classes = len(id2label); pal = None
     for i, p in enumerate(sample):
-        gold_img, pal = _row_to_image(p["gold_raw"], n_classes)
-        pred_img, _   = _row_to_image(p["pred_raw"], n_classes)
-        strip = np.concatenate([gold_img, pred_img], axis=0)
+        strip = _render_gold_pred_pair(p["gold_raw"], p["pred_raw"])
         ax = axes[i]
         ax.imshow(strip, aspect="auto", interpolation="nearest")
         ax.set_yticks([0, 1]); ax.set_yticklabels(["gold", "pred"], fontsize=8)
@@ -1267,9 +1291,14 @@ def plot_test_example_predictions(run_dir: Path, phase2_best: dict, id2label: di
         title = p["instance_id"]
         ax.set_title(("..." + title[-57:]) if len(title) > 60 else title,
                      fontsize=8, loc="left")
-    handles = [plt.Rectangle((0, 0), 1, 1, color=pal[k]) for k in range(n_classes)]
-    fig.legend(handles, [str(id2label[k]) for k in range(n_classes)],
-               loc="lower center", ncol=min(n_classes, 6), fontsize=8,
+    legend_specs = [
+        (COLOR_GOLD_POS,      "gold: primary stress"),
+        (COLOR_PRED_MATCH,    "pred: correct positive"),
+        (COLOR_PRED_MISMATCH, "pred: false positive"),
+    ]
+    handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c, _ in legend_specs]
+    fig.legend(handles, [l for _, l in legend_specs],
+               loc="lower center", ncol=len(legend_specs), fontsize=8,
                bbox_to_anchor=(0.5, -0.02))
     plt.tight_layout(rect=[0, 0.03, 1, 1])
     out = run_dir / "example_predictions_test.png"

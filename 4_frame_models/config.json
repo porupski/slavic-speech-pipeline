@@ -71,8 +71,12 @@
       "num_epochs": 3, "batch_size": 32
     },
     "full": {
+      "model_name": "facebook/w2v-bert-2.0",
+      "dataloader_num_workers": 32,
+      "map_num_proc": 32,
+
       "cap_train": null, "cap_dev": null, "cap_test": null,
-      "num_epochs": 15, "batch_size": 32
+      "num_epochs": 20, "batch_size": 64
     }
   }
 }
