@@ -7,12 +7,9 @@ test_runs/
 test_processed_jsonl/
 
 # --- internal-only docs and tooling (kept locally, not shipped to users) -----
-BLUEPRINT.md
-prep_PSHR_benchmarks/
 0_env_setup/backups/
-3_instance_models/legacy/
 misc/
-*_ste.*
+*_test.*
 
 # --- local backups (created before risky edits) ------------------------------
 *.BACKUP.*

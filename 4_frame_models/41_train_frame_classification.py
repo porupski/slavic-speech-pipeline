@@ -184,16 +184,36 @@ def _add_parlaspeech_frame_targets(targets: dict) -> None:
     }
 
 
+def _add_nejc_slo_stress_targets(targets: dict) -> None:
+    """Slovenian primary-stress `word_frame` from Nejc's annotated TGs
+    (built by `5_tg_minter/54_stress_tg_to_jsonl.py`). Independent target —
+    not pooled with the HR/RS ParlaSpeech one; Slovenian stress is a different
+    phenomenon from Štokavian pitch accent."""
+    targets["si_primary_stress_frames"] = {
+        "jsonl_path":  "data/processed_jsonl/si_primary_stress_word_frame.jsonl",
+        "label_key":   "primary_stress",
+        "task_type":   "classification",
+        "level":       "frame",
+        "label_order": [0, 1],
+    }
+
+
 _add_parlaspeech_frame_targets(TARGETS)
+_add_nejc_slo_stress_targets(TARGETS)
 
 
 def resolve_target(cfg, targets: dict) -> None:
-    """Fill label_key/task_type/label_order and `cfg.jsonl_paths` (the list of lang
+    """Fill label_key/task_type/label_order and `cfg.jsonl_paths` (the list of
     JSONLs to pool) from the picked task preset and `cfg.langs`. Mutates cfg.
 
-    `cfg.langs=()` → every lang the task supports that has a JSONL on disk (missing
-    ones skipped with a note). `cfg.langs=("hr",)` → exactly those (must be
-    supported; a requested-but-missing JSONL is a hard error)."""
+    Two shapes are supported:
+    - Multi-lang template: preset carries `jsonl_template` + `langs`.
+      `cfg.langs=()` → every supported lang that has a JSONL on disk (missing
+      ones skipped with a note). `cfg.langs=("hr",)` → exactly those (must be
+      supported; a requested-but-missing JSONL is a hard error).
+    - Single-file target: preset carries `jsonl_path`. `cfg.langs` is ignored
+      (a warning is printed if it is set); the one path must exist on disk.
+    """
     if cfg.target not in targets:
         raise ValueError(
             f"Config.target={cfg.target!r} not in TARGETS. Known: {sorted(targets)}"
@@ -203,6 +223,19 @@ def resolve_target(cfg, targets: dict) -> None:
     cfg.task_type   = t["task_type"]
     cfg.label_order = t["label_order"]
 
+    # ── Single-file target ────────────────────────────────────────────────
+    if "jsonl_path" in t:
+        if cfg.langs:
+            print(f"  ⚠️  cfg.langs={cfg.langs} ignored for single-file target {cfg.target!r}")
+        p = t["jsonl_path"]
+        if not udp.from_project_relative(p).exists():
+            raise FileNotFoundError(
+                f"target {cfg.target!r} expects {p} on disk — build it first"
+            )
+        cfg.jsonl_paths = [p]
+        return
+
+    # ── Multi-lang template target ────────────────────────────────────────
     supported = t["langs"]
     chosen = tuple(l.lower() for l in cfg.langs) if cfg.langs else supported
     unknown = [l for l in chosen if l not in supported]
