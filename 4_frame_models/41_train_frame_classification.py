@@ -378,10 +378,22 @@ def cap_split(records: list[dict], n, seed: int, sampling: str = "proportional")
 @dataclass
 class Config:
     # -- Target preset (resolver overwrites the data fields below) -----------
-    target: str = "parlaspeech_primary_stress_frames" #"parlaspeech_fp_frames"
+    target: str = "si_primary_stress_frames"
+    # Other options (uncomment to switch):
+    #   "parlaspeech_primary_stress_frames"  (HR/RS — needs 11c)
+    #   "parlaspeech_fp_frames"              (HR/RS/PL/CZ — needs 11c)
+    #   "si_primary_stress_frames"           (Slovenian — needs 54)
     # Languages to pool. () = all langs the target supports that have a JSONL on
     # disk; e.g. ("hr",) for Croatian only, ("hr", "rs") for a HR+RS mix.
+    # Ignored for single-file targets (e.g. si_primary_stress_frames).
     langs: tuple = ()
+
+    # -- Word-frame filters (only bite on targets that carry the flag) -------
+    # `exclude_multistress`: skip rows tagged metadata.multistress=True. On for
+    # the SI primary-stress target (the north star is ONE stressed syllable per
+    # word); harmless on targets that don't carry the flag (no row is tagged,
+    # so no row is dropped).
+    exclude_multistress: bool = True
 
     # -- Run-mode caps (set by apply_mode from MODES[RUN_MODE]) --------------
     # None = no cap (full). cap_split applies these identically to train/dev/test,
@@ -535,11 +547,15 @@ mark("data prep")
 CAP_SEED = 1234   # deterministic shuffle seed for cap_split
 
 
-def load_split(jsonl_paths: list, split: str, label_key: str) -> list[dict]:
-    """Concatenate `split` records carrying a non-empty `label_key` sequence across
-    every pooled lang JSONL. Records keep their own `dataset` tag for per-lang
-    analysis downstream."""
-    out = []
+def load_split(jsonl_paths: list, split: str, label_key: str,
+               exclude_multistress: bool = False) -> tuple[list[dict], int]:
+    """Concatenate `split` records carrying a non-empty `label_key` sequence
+    across every pooled lang JSONL. Records keep their own `dataset` tag for
+    per-lang analysis downstream. Returns (records, n_multistress_dropped).
+
+    `exclude_multistress`: drop rows tagged metadata.multistress=True (SI
+    primary-stress target). Rows without the tag are unaffected."""
+    out, n_multi = [], 0
     for jp in jsonl_paths:
         for r in udp.iter_jsonl(jp):
             if r["split"] != split:
@@ -547,13 +563,22 @@ def load_split(jsonl_paths: list, split: str, label_key: str) -> list[dict]:
             v = r.get("labels", {}).get(label_key)
             if v is None or not isinstance(v, list) or len(v) == 0:
                 continue
+            if exclude_multistress and r.get("metadata", {}).get("multistress"):
+                n_multi += 1
+                continue
             out.append(r)
-    return out
+    return out, n_multi
 
 
-train_records = load_split(cfg.jsonl_paths, "train", cfg.label_key)
-dev_records   = load_split(cfg.jsonl_paths, "dev",   cfg.label_key)
-test_records  = load_split(cfg.jsonl_paths, "test",  cfg.label_key)
+train_records, _n_multi_tr = load_split(cfg.jsonl_paths, "train", cfg.label_key,
+                                        exclude_multistress=cfg.exclude_multistress)
+dev_records,   _n_multi_dv = load_split(cfg.jsonl_paths, "dev",   cfg.label_key,
+                                        exclude_multistress=cfg.exclude_multistress)
+test_records,  _n_multi_te = load_split(cfg.jsonl_paths, "test",  cfg.label_key,
+                                        exclude_multistress=cfg.exclude_multistress)
+if cfg.exclude_multistress and (_n_multi_tr + _n_multi_dv + _n_multi_te):
+    print(f"   multistress rows excluded: train={_n_multi_tr}  "
+          f"dev={_n_multi_dv}  test={_n_multi_te}")
 
 # One knob, applied identically to every split. None caps (full mode) are no-ops.
 _pre = (len(train_records), len(dev_records), len(test_records))
