@@ -1,0 +1,78 @@
+{
+  "_readme": [
+    "Notebook and runner knobs for chapter 4 (frame classification). Never edit the .py; change values here.",
+    "Layering (later wins): Config defaults -> 'shared' -> 'classification' -> modes[run_mode].",
+    "Every key must name a real Config field in utils_frame_train.py (typos are hard errors).",
+    "Targets are preset names from the TARGETS registry; list them with available_targets().",
+    "",
+    "Run modes:",
+    "  - test  : tiny random model, ~64 records -- plumbing only, seconds.",
+    "  - demo  : real model, capped data -- tangible result in ~1 hour.",
+    "  - full  : whole dataset, caps off -- overnight territory.",
+    "",
+    "Supported base models (set via 'model_name'):",
+    "  - facebook/wav2vec2-base                                (raw waveform, small)",
+    "  - facebook/wav2vec2-xls-r-300m                          (raw waveform, larger, multilingual)",
+    "  - facebook/w2v-bert-2.0                                 (log-mel filterbanks, best on content)",
+    "  - classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier (HR/RS-finetuned; body + head transfer)",
+    "",
+    "See supported_models.md for the full compatibility matrix."
+  ],
+
+  "run_mode": "test",
+
+  "shared": {
+    "model_name": "facebook/w2v-bert-2.0",
+    "freeze_feature_encoder": true,
+    "head_dropout": 0.1,
+
+    "batch_size": 16,
+    "grad_accum": 1,
+    "learning_rate": 1e-5,
+    "num_epochs": 10,
+    "max_grad_norm": 1.0,
+    "warmup_ratio": 0.10,
+    "logging_steps": "auto",
+
+    "eta_rec_per_s_guess": 25.0,
+
+    "runs_dir": "runs",
+    "models_dir": "models",
+
+    "preprocess_batch_size": 32,
+    "dataloader_num_workers": 8,
+    "map_num_proc": 8,
+    "enable_max_audio_seconds": false,
+    "max_audio_seconds": 15.0,
+
+    "n_examples_to_plot": 6,
+
+    "demo_sampling": "proportional",
+    "cap_seed": 1234,
+    "reserved_gpu": "2"
+  },
+
+  "classification": {
+    "target": "si_primary_stress_frames",
+    "langs": [],
+    "exclude_multistress": true,
+    "best_metric_classification": "frame_macro_f1"
+  },
+
+  "modes": {
+    "test": {
+      "model_name": "hf-internal-testing/tiny-random-wav2vec2",
+      "cap_train": 64, "cap_dev": 16, "cap_test": 16,
+      "num_epochs": 1, "batch_size": 2, "grad_accum": 1,
+      "runs_dir": "runs/test", "models_dir": "models/test"
+    },
+    "demo": {
+      "cap_train": 4000, "cap_dev": 1000, "cap_test": 1000,
+      "num_epochs": 3, "batch_size": 32
+    },
+    "full": {
+      "cap_train": null, "cap_dev": null, "cap_test": null,
+      "num_epochs": 15, "batch_size": 32
+    }
+  }
+}
