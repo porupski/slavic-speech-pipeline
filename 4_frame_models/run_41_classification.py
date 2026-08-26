@@ -64,6 +64,7 @@ def main() -> None:
         validate_frame_rate, drop_long_records, build_label_maps,
         make_run_dirs, load_feature_extractor, run_phase,
         print_recalibrated_eta, print_run_summary, spot_check,
+        plot_test_confusion, plot_test_example_predictions,
         mark, print_stage_breakdown, print_project_info,
     )
     mark("literal start")
@@ -129,6 +130,9 @@ def main() -> None:
 
     print_run_summary(cfg, run_name, run_dir, model_dir, phase1_best, phase2_best)
     spot_check(run_dir, phase2_best)
+    plot_test_confusion(run_dir, phase2_best, label2id, cfg.label_order, show=False)
+    plot_test_example_predictions(run_dir, phase2_best, id2label,
+                                  n_examples=cfg.n_examples_to_plot, show=False)
 
     mark("end script")
     print_stage_breakdown()

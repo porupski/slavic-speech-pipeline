@@ -54,11 +54,12 @@ os.environ.setdefault("HF_HOME", str(PROJECT_ROOT / "stock_models"))
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import seaborn as sns
 import soundfile as sf
 import torch
 import torch.nn as nn
 from datasets import Dataset
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score
 from transformers import (
     AutoConfig, AutoFeatureExtractor,
     Trainer, TrainerCallback, TrainingArguments,
@@ -1190,6 +1191,94 @@ def print_run_summary(cfg: Config, run_name: str, run_dir: Path, model_dir: Path
         if isinstance(v, float):
             print(f"   {k}: {v:.4f}")
     print(f"\nbest model: {(model_dir / 'best_model').relative_to(PROJECT_ROOT)}")
+
+
+def _best_test_predictions_path(run_dir: Path, phase2_best: dict) -> Path:
+    """predictions.json for the best phase-2 (TEST) epoch. Raises if missing."""
+    p = (run_dir / "phase2_test" / "epoch_logs"
+         / f"epoch_{phase2_best['epoch']}" / "predictions.json")
+    if not p.exists():
+        raise FileNotFoundError(f"expected predictions at {p}")
+    return p
+
+
+def plot_test_confusion(run_dir: Path, phase2_best: dict, label2id: dict,
+                        label_order: list, show: bool = True) -> None:
+    """Frame-level confusion matrix on the best phase-2 (TEST) epoch, stacked:
+    absolute counts on top, row-normalized percentages below (each row sums to
+    100 — read it as ``of the true X frames, what did the model call them?``).
+    Saves to ``<run_dir>/confusion_matrix_test.png``."""
+    preds_data = json.loads(_best_test_predictions_path(run_dir, phase2_best).read_text())
+    y_true = [g for p in preds_data for g in p["gold_raw"]]
+    y_pred = [pr for p in preds_data for pr in p["pred_raw"]]
+
+    str_labels = [str(x) for x in label_order]
+    n = len(label_order)
+    cm = confusion_matrix(y_true, y_pred, labels=list(range(n)))
+    row_sums = cm.sum(axis=1, keepdims=True)
+    cm_rel = np.divide(cm.astype(float), row_sums,
+                       out=np.zeros_like(cm, dtype=float),
+                       where=row_sums != 0) * 100.0
+
+    fig, axes = plt.subplots(2, 1, figsize=(max(6, n * 1.1), max(9, n * 1.8)))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="viridis",
+                xticklabels=str_labels, yticklabels=str_labels, ax=axes[0])
+    axes[0].set_xlabel("predicted"); axes[0].set_ylabel("true")
+    axes[0].set_title(f"frame counts — epoch {phase2_best['epoch']} on TEST")
+
+    sns.heatmap(cm_rel, annot=True, fmt=".1f", cmap="viridis",
+                xticklabels=str_labels, yticklabels=str_labels, ax=axes[1])
+    axes[1].set_xlabel("predicted"); axes[1].set_ylabel("true")
+    axes[1].set_title(f"row-normalized %  — epoch {phase2_best['epoch']} on TEST")
+
+    plt.tight_layout()
+    out = run_dir / "confusion_matrix_test.png"
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    print(f"saved {out.relative_to(PROJECT_ROOT)}")
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+def plot_test_example_predictions(run_dir: Path, phase2_best: dict, id2label: dict,
+                                  n_examples: int = 6, seed: int = 0,
+                                  show: bool = True) -> None:
+    """Gold-over-pred frame-strip plot for `n_examples` random TEST records
+    from the best phase-2 epoch. Saves to
+    ``<run_dir>/example_predictions_test.png``."""
+    preds_data = json.loads(_best_test_predictions_path(run_dir, phase2_best).read_text())
+    n = min(n_examples, len(preds_data))
+    if n == 0:
+        print("⚠️  no predictions to plot"); return
+    sample = random.Random(seed).sample(preds_data, k=n)
+
+    fig, axes = plt.subplots(n, 1, figsize=(10, max(2, 0.9 * n)), squeeze=False)
+    axes = axes[:, 0]
+    n_classes = len(id2label); pal = None
+    for i, p in enumerate(sample):
+        gold_img, pal = _row_to_image(p["gold_raw"], n_classes)
+        pred_img, _   = _row_to_image(p["pred_raw"], n_classes)
+        strip = np.concatenate([gold_img, pred_img], axis=0)
+        ax = axes[i]
+        ax.imshow(strip, aspect="auto", interpolation="nearest")
+        ax.set_yticks([0, 1]); ax.set_yticklabels(["gold", "pred"], fontsize=8)
+        ax.set_xticks([])
+        title = p["instance_id"]
+        ax.set_title(("..." + title[-57:]) if len(title) > 60 else title,
+                     fontsize=8, loc="left")
+    handles = [plt.Rectangle((0, 0), 1, 1, color=pal[k]) for k in range(n_classes)]
+    fig.legend(handles, [str(id2label[k]) for k in range(n_classes)],
+               loc="lower center", ncol=min(n_classes, 6), fontsize=8,
+               bbox_to_anchor=(0.5, -0.02))
+    plt.tight_layout(rect=[0, 0.03, 1, 1])
+    out = run_dir / "example_predictions_test.png"
+    fig.savefig(out, bbox_inches="tight")
+    print(f"saved {out.relative_to(PROJECT_ROOT)}")
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
 
 
 def spot_check(run_dir: Path, phase2_best: dict, k: int = 5, seed: int = 0) -> None:

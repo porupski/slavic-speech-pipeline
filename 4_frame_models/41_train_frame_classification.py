@@ -246,6 +246,32 @@ print_run_summary(cfg, run_name, run_dir, model_dir, phase1_best, phase2_best)
 spot_check(run_dir, phase2_best)
 
 # %% [markdown]
+# ## Confusion matrix (TEST, best epoch)
+#
+# Frame-level confusion matrix on the best phase-2 epoch, stacked: absolute
+# counts on top, row-normalized percentages below (each row sums to 100 —
+# "of the true X frames, what did the model call them?"). Saved as
+# `confusion_matrix_test.png` in the run folder.
+
+# %%
+from utils_frame_train import plot_test_confusion
+
+plot_test_confusion(run_dir, phase2_best, label2id, cfg.label_order)
+
+# %% [markdown]
+# ## Example predictions (TEST, best epoch)
+#
+# Gold-over-pred frame strips for a handful of random TEST records — the
+# quick visual gut-check on where the model puts the stress vs where the
+# annotator put it. Saved as `example_predictions_test.png` in the run folder.
+
+# %%
+from utils_frame_train import plot_test_example_predictions
+
+plot_test_example_predictions(run_dir, phase2_best, id2label,
+                              n_examples=cfg.n_examples_to_plot)
+
+# %% [markdown]
 # ## Stage timing
 
 # %%
