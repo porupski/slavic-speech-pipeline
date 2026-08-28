@@ -41,8 +41,10 @@
 #   class to separate the peaks into distinct labels.)
 # - Any `"1"` mark that falls outside every `wordAlign` interval is dropped
 #   and logged.
-# - Splits are speaker-grouped hashes (80/10/10) for now. When the train/test
-#   Excel arrives, set `SPLIT_OVERRIDE_XLSX` in the settings cell to override.
+# - Splits come from `SPLIT_OVERRIDE_CSV` (built by
+#   `data/nejc_slo_stress/build_split_csv.py` from Nejc's Excel). Anything the
+#   CSV does not cover falls back to a speaker-grouped hash (80/10/10) — no
+#   leakage, deterministic.
 
 # %% [markdown]
 # ## ▼ USER SETTINGS — edit this cell, then run the rest
@@ -60,7 +62,7 @@ OUTPUT_JSONL = "data/processed_jsonl/si_primary_stress_word_frame.jsonl"
 SPLIT_RATIOS       = (0.8, 0.1, 0.1)
 SPLIT_GROUP_KEY    = "speaker"
 SPLIT_SEED         = "nejc-slo-stress-v1"
-SPLIT_OVERRIDE_XLSX = None   # e.g. "data/nejc_slo_stress/split.xlsx" once available
+SPLIT_OVERRIDE_CSV = "data/nejc_slo_stress/split.csv"   # None to fall back to hash
 
 # --- FRAME RATE -------------------------------------------------------------
 FRAME_RATE_HZ = 50   # hard-locked project-wide; matches chapter 4.
@@ -455,33 +457,35 @@ for c in sorted(set(n_words_per_corpus) | set(n_stress_per_corpus)):
 # %% [markdown]
 # ## Step 3 — Assign splits
 #
-# Speaker-grouped hash by default (no leakage across splits). If an override
-# Excel exists at `SPLIT_OVERRIDE_XLSX`, it is applied instead — expected shape
-# is a sheet with columns `file_id` (or `wav_stem`) and `split`
-# (train|dev|test). Missing rows fall back to the hash.
+# Splits come from `SPLIT_OVERRIDE_CSV` (canonical: built by
+# `data/nejc_slo_stress/build_split_csv.py` from Nejc's Excel). CSV shape:
+# columns `file_id` (or `wav_stem`) + `split` where split ∈ {train, dev, test}.
+# Any TG whose `file_id` is not covered by the CSV falls back to a speaker-
+# grouped hash so nothing gets silently dropped.
 
 # %%
-def _load_split_override(xlsx_path: str | None) -> dict[str, str]:
-    if not xlsx_path:
+import csv as _csv
+
+
+def _load_split_override(csv_path: str | None) -> dict[str, str]:
+    if not csv_path:
         return {}
-    p = udp.from_project_relative(xlsx_path)
+    p = udp.from_project_relative(csv_path)
     if not p.exists():
-        print(f"⚠️  split override {xlsx_path} not found — using hash splits")
+        print(f"⚠️  split override {csv_path} not found — using hash splits")
         return {}
-    try:
-        import pandas as pd  # only imported if the override is used
-    except ImportError as e:
-        raise RuntimeError(
-            "pandas is required to read the split override Excel"
-        ) from e
-    df = pd.read_excel(p)
-    key_col = "file_id" if "file_id" in df.columns else "wav_stem"
-    if key_col not in df.columns or "split" not in df.columns:
+    with open(p, newline="", encoding="utf-8") as f:
+        reader = _csv.DictReader(f)
+        rows = list(reader)
+        fields = reader.fieldnames or []
+    key_col = "file_id" if "file_id" in fields else "wav_stem"
+    if key_col not in fields or "split" not in fields:
         raise ValueError(
-            f"split override must have a '{key_col}' column and a 'split' column"
+            f"split override CSV must have a '{key_col}' column and a 'split' "
+            f"column; got {fields}"
         )
-    mapping = {str(row[key_col]): str(row["split"]).strip().lower()
-               for _, row in df.iterrows()}
+    mapping = {r[key_col].strip(): r["split"].strip().lower() for r in rows
+               if r.get(key_col)}
     valid = {"train", "dev", "test"}
     bad = {k: v for k, v in mapping.items() if v not in valid}
     if bad:
@@ -489,7 +493,7 @@ def _load_split_override(xlsx_path: str | None) -> dict[str, str]:
     return mapping
 
 
-split_override = _load_split_override(SPLIT_OVERRIDE_XLSX)
+split_override = _load_split_override(SPLIT_OVERRIDE_CSV)
 if split_override:
     print(f"split override: {len(split_override)} rows")
     for r in utterance_records:

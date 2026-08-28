@@ -844,7 +844,26 @@ def build_model(cfg: Config, num_labels: int, label2id, id2label):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def compute_frame_metrics(eval_pred):
-    """Frame-level metrics, non-pad frames only, flattened across the batch."""
+    """Frame-level metrics, non-pad frames only, flattened across the batch.
+
+    Three numbers land in the epoch log:
+    - `frame_accuracy` — fraction of frames the model got right. Cheap and
+      easy to read but misleading on imbalanced data: a constant-0 model on
+      a corpus where 85 % of frames are silent scores 0.85.
+    - `frame_macro_f1` — mean of the per-class F1 scores. On a binary task
+      this is `(f1_neg + f1_pos) / 2`. Because `f1_neg` is usually near 1.0
+      (the model almost never mislabels a silent frame), macro_f1 mostly
+      moves with the harder positive class — but the "easy" negative class
+      still masks part of the signal.
+    - `frame_f1_positive` — F1 on JUST the positive class (the last class in
+      `label_order`, i.e. 1 = "stressed" for binary stress). This is the
+      honest number for "how well does the model actually find the thing?"
+      It ignores the trivial-easy negative frames entirely. Formula:
+      `2 * precision_pos * recall_pos / (precision_pos + recall_pos)` where
+      precision = TP / (TP + FP), recall = TP / (TP + FN). Punishes both
+      over-eager firing (many FPs → low precision) and under-firing (many
+      FNs → low recall). Use this as the north-star metric for imbalanced
+      detection tasks."""
     logits, labels = eval_pred
     preds = np.argmax(logits, axis=-1)
     mask = labels != IGNORE_INDEX
@@ -1268,29 +1287,93 @@ def plot_test_confusion(run_dir: Path, phase2_best: dict, label2id: dict,
         plt.close(fig)
 
 
-def plot_test_example_predictions(run_dir: Path, phase2_best: dict, id2label: dict,
-                                  n_examples: int = 6, seed: int = 0,
-                                  show: bool = True) -> None:
-    """Gold-over-pred frame-strip plot for `n_examples` random TEST records
-    from the best phase-2 epoch. Saves to
-    ``<run_dir>/example_predictions_test.png``."""
-    preds_data = json.loads(_best_test_predictions_path(run_dir, phase2_best).read_text())
-    n = min(n_examples, len(preds_data))
-    if n == 0:
-        print("⚠️  no predictions to plot"); return
-    sample = random.Random(seed).sample(preds_data, k=n)
+def _rank_records_by_error(preds_data: list[dict]) -> list[dict]:
+    """Attach `_n_tot`, `_n_mis`, `_err` to each record and return the list."""
+    scored = []
+    for p in preds_data:
+        gold, pred = p["gold_raw"], p["pred_raw"]
+        n_tot = len(gold)
+        if n_tot == 0:
+            continue
+        n_mis = sum(1 for g, pr in zip(gold, pred) if g != pr)
+        scored.append({**p, "_n_tot": n_tot, "_n_mis": n_mis,
+                       "_err": n_mis / n_tot})
+    return scored
 
-    fig, axes = plt.subplots(n, 1, figsize=(10, max(2, 0.9 * n)), squeeze=False)
+
+def plot_test_example_predictions(run_dir: Path, phase2_best: dict, id2label: dict,
+                                  n_per_tier: int = 5, seed: int = 0,
+                                  show: bool = True) -> None:
+    """Gold-over-pred frame strips for a mix of TEST records from the best
+    phase-2 epoch:
+
+    - ``n_per_tier`` BEST examples (lowest per-record frame-error rate;
+      ties broken by longer clips first — more interesting than a 3-frame
+      trivially-correct word).
+    - ``n_per_tier`` WORST examples (highest error rate; same tie-break).
+    - ``2 * n_per_tier`` RANDOM examples from the rest.
+
+    Ranking is deterministic given the model; only the RANDOM tier depends
+    on ``seed`` — bump ``seed`` in the notebook to re-roll the random picks
+    without changing best/worst.
+
+    Saves to ``<run_dir>/example_predictions_test.png`` when ``seed=0``, or
+    to ``example_predictions_test_seed<N>.png`` for a non-zero seed so
+    repeated calls do not overwrite the default plot."""
+    preds_data = json.loads(_best_test_predictions_path(run_dir, phase2_best).read_text())
+    scored = _rank_records_by_error(preds_data)
+    if not scored:
+        print("⚠️  no predictions with frames to plot"); return
+
+    # Best / worst: sort by err (asc / desc). Break ties by n_tot desc so a
+    # long clip that got everything right beats a 2-frame clip that also did.
+    by_best  = sorted(scored, key=lambda r: (r["_err"],  -r["_n_tot"]))
+    by_worst = sorted(scored, key=lambda r: (-r["_err"], -r["_n_tot"]))
+
+    best_recs  = by_best[:n_per_tier]
+    best_ids   = {r["instance_id"] for r in best_recs}
+    worst_recs: list = []
+    for r in by_worst:
+        if r["instance_id"] in best_ids:
+            continue
+        worst_recs.append(r)
+        if len(worst_recs) >= n_per_tier:
+            break
+    picked = best_ids | {r["instance_id"] for r in worst_recs}
+    rest = [r for r in scored if r["instance_id"] not in picked]
+    n_rand = min(2 * n_per_tier, len(rest))
+    rand_recs = random.Random(seed).sample(rest, k=n_rand)
+
+    tiers = [
+        ("BEST",  best_recs),
+        ("WORST", worst_recs),
+        ("RAND",  rand_recs),
+    ]
+    total_rows = sum(len(recs) for _, recs in tiers)
+    if total_rows == 0:
+        print("⚠️  nothing to plot"); return
+
+    fig, axes = plt.subplots(total_rows, 1,
+                             figsize=(10, max(2, 0.85 * total_rows)),
+                             squeeze=False)
     axes = axes[:, 0]
-    for i, p in enumerate(sample):
-        strip = _render_gold_pred_pair(p["gold_raw"], p["pred_raw"])
-        ax = axes[i]
-        ax.imshow(strip, aspect="auto", interpolation="nearest")
-        ax.set_yticks([0, 1]); ax.set_yticklabels(["gold", "pred"], fontsize=8)
-        ax.set_xticks([])
-        title = p["instance_id"]
-        ax.set_title(("..." + title[-57:]) if len(title) > 60 else title,
-                     fontsize=8, loc="left")
+    row_i = 0
+    for tier_name, recs in tiers:
+        for j, p in enumerate(recs, 1):
+            strip = _render_gold_pred_pair(p["gold_raw"], p["pred_raw"])
+            ax = axes[row_i]
+            ax.imshow(strip, aspect="auto", interpolation="nearest")
+            ax.set_yticks([0, 1]); ax.set_yticklabels(["gold", "pred"], fontsize=8)
+            ax.set_xticks([])
+            title_id = p["instance_id"]
+            title_id = ("..." + title_id[-52:]) if len(title_id) > 55 else title_id
+            match = p["_n_tot"] - p["_n_mis"]
+            match_pct = 100.0 * match / p["_n_tot"]
+            ax.set_title(f"[{tier_name} #{j}] {title_id}   "
+                         f"match={match}/{p['_n_tot']} ({match_pct:.1f}%)",
+                         fontsize=8, loc="left")
+            row_i += 1
+
     legend_specs = [
         (COLOR_GOLD_POS,      "gold: primary stress"),
         (COLOR_PRED_MATCH,    "pred: correct positive"),
@@ -1299,11 +1382,15 @@ def plot_test_example_predictions(run_dir: Path, phase2_best: dict, id2label: di
     handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c, _ in legend_specs]
     fig.legend(handles, [l for _, l in legend_specs],
                loc="lower center", ncol=len(legend_specs), fontsize=8,
-               bbox_to_anchor=(0.5, -0.02))
-    plt.tight_layout(rect=[0, 0.03, 1, 1])
-    out = run_dir / "example_predictions_test.png"
+               bbox_to_anchor=(0.5, -0.01))
+    plt.tight_layout(rect=[0, 0.02, 1, 1])
+    fname = ("example_predictions_test.png" if seed == 0
+             else f"example_predictions_test_seed{seed}.png")
+    out = run_dir / fname
     fig.savefig(out, bbox_inches="tight")
-    print(f"saved {out.relative_to(PROJECT_ROOT)}")
+    print(f"saved {out.relative_to(PROJECT_ROOT)}  "
+          f"({len(best_recs)} best + {len(worst_recs)} worst + "
+          f"{len(rand_recs)} random, seed={seed})")
     if show:
         plt.show()
     else:

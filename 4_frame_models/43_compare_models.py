@@ -202,7 +202,7 @@ def run_one_cell(cell_idx: int, cell: dict, args, grid_root: "Path") -> dict:
         # Top-level summary plots (also written per cell)
         plot_test_confusion(run_dir, phase2_best, label2id, cfg.label_order, show=False)
         plot_test_example_predictions(run_dir, phase2_best, id2label,
-                                      n_examples=cfg.n_examples_to_plot, show=False)
+                                      n_per_tier=cfg.n_examples_to_plot, show=False)
 
         row.update({
             "phase1_best_epoch": phase1_best.get("epoch"),

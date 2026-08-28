@@ -132,7 +132,7 @@ def main() -> None:
     spot_check(run_dir, phase2_best)
     plot_test_confusion(run_dir, phase2_best, label2id, cfg.label_order, show=False)
     plot_test_example_predictions(run_dir, phase2_best, id2label,
-                                  n_examples=cfg.n_examples_to_plot, show=False)
+                                  n_per_tier=cfg.n_examples_to_plot, show=False)
 
     mark("end script")
     print_stage_breakdown()

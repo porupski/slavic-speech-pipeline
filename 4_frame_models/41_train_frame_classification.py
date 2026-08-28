@@ -261,15 +261,28 @@ plot_test_confusion(run_dir, phase2_best, label2id, cfg.label_order)
 # %% [markdown]
 # ## Example predictions (TEST, best epoch)
 #
-# Gold-over-pred frame strips for a handful of random TEST records — the
-# quick visual gut-check on where the model puts the stress vs where the
-# annotator put it. Saved as `example_predictions_test.png` in the run folder.
+# Gold-over-pred frame strips for a mix of TEST records:
+# - `n_per_tier` **best** (lowest per-record error, ties broken by longer clip)
+# - `n_per_tier` **worst** (highest per-record error, same tie-break)
+# - `2 * n_per_tier` **random** (from the rest, seeded)
+#
+# Best/worst are deterministic given the model; only the random tier depends
+# on `seed`. Bump `seed` in the reroll cell below to get a different random
+# pick without retraining. Saved as `example_predictions_test.png` in the
+# run folder (or `_seed<N>.png` for non-zero seed).
 
 # %%
 from utils_frame_train import plot_test_example_predictions
 
 plot_test_example_predictions(run_dir, phase2_best, id2label,
-                              n_examples=cfg.n_examples_to_plot)
+                              n_per_tier=cfg.n_examples_to_plot)
+
+# %% [markdown]
+# **Re-roll the random tier** — pure JSON re-read, no re-training:
+# ```python
+# plot_test_example_predictions(run_dir, phase2_best, id2label,
+#                               n_per_tier=cfg.n_examples_to_plot, seed=42)
+# ```
 
 # %% [markdown]
 # ## Stage timing
