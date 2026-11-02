@@ -1228,10 +1228,13 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def make_run_dirs(cfg: Config, train_records: list[dict]) -> tuple[Path, Path, str]:
+    # Naming contract: {YYYY-MM-DD}_{HHMMSS}_{data}_{task}_{params}
+    # Timestamp first → folders sort chronologically by default.
+    # Colon-free time keeps the name portable (Windows, URL, CLI).
     dataset_name = train_records[0]["dataset"]
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     safe_model = cfg.model_name.replace("/", "_")
-    run_name = f"{dataset_name}_{cfg.label_key}_{safe_model}_{ts}"
+    run_name = f"{ts}_{dataset_name}_{cfg.label_key}_{safe_model}"
     run_dir   = udp.from_project_relative(cfg.runs_dir)   / run_name
     model_dir = udp.from_project_relative(cfg.models_dir) / run_name
     run_dir.mkdir(parents=True, exist_ok=True)

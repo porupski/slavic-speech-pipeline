@@ -273,14 +273,16 @@ def print_project_info(verbose: bool = False) -> None:
 
 
 def make_run_name(cfg: Config) -> str:
-    """Auto-generate a run name mirroring Ch3's convention:
-        {data}_{task_name}_classification_{YYYYMMDD-HHMMSS}
+    """Auto-generate a run name under the toolkit-wide naming contract:
+        {YYYY-MM-DD}_{HHMMSS}_{data}_{task_name}_classification
     where {data} is the leaf folder name of cfg.audio_dir. If the folder name
-    is empty (e.g. cfg.audio_dir='/'), falls back to 'audio'."""
+    is empty (e.g. cfg.audio_dir='/'), falls back to 'audio'.
+    Timestamp first → folders sort chronologically. Colon-free time keeps the
+    name portable (Windows, URL, CLI)."""
     audio_dir_p = Path(cfg.audio_dir)
     data_tag = audio_dir_p.name or "audio"
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return f"{data_tag}_{cfg.task_name}_classification_{ts}"
+    ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    return f"{ts}_{data_tag}_{cfg.task_name}_classification"
 
 
 def print_config_summary(cfg: Config, device: str) -> None:

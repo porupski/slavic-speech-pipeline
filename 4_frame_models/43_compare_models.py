@@ -294,9 +294,10 @@ def main() -> None:
     from utils_frame_train import print_project_info
     print_project_info()
 
-    # Grid root
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    grid_name = args.grid_dir or f"grid_{ts}"
+    # Grid root — toolkit-wide naming contract: {YYYY-MM-DD}_{HHMMSS}_grid
+    # Timestamp first → folders sort chronologically. Colons dropped for portability.
+    ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    grid_name = args.grid_dir or f"{ts}_grid"
     grid_root = uft.PROJECT_ROOT / "runs" / grid_name
     grid_root.mkdir(parents=True, exist_ok=True)
     print(f"grid root : {grid_root.relative_to(uft.PROJECT_ROOT)}")

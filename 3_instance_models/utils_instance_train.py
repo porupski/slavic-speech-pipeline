@@ -1325,9 +1325,12 @@ def make_run_dirs(cfg: Config, train_records: list[dict],
     """Create the timestamped run + model directories, snapshot the effective
     config (and the normalizer stats for regression). Returns
     (run_dir, model_dir, run_name)."""
+    # Naming contract: {YYYY-MM-DD}_{HHMMSS}_{data}_{task}_{params}
+    # Timestamp first → folders sort chronologically by default.
+    # Colon-free time keeps the name portable (Windows, URL, CLI).
     dataset_name = train_records[0]["dataset"]
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_name = f"{dataset_name}_{cfg.label_key}_{cfg.task_type}_{ts}"
+    ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    run_name = f"{ts}_{dataset_name}_{cfg.label_key}_{cfg.task_type}"
 
     run_dir   = udp.from_project_relative(cfg.runs_dir)   / run_name
     model_dir = udp.from_project_relative(cfg.models_dir) / run_name
