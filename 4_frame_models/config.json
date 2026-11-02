@@ -1,7 +1,7 @@
 {
   "_readme": [
-    "Notebook and runner knobs for chapter 4 (frame classification). Never edit the .py; change values here.",
-    "Layering (later wins): Config defaults -> 'shared' -> 'classification' -> modes[run_mode].",
+    "Notebook and runner knobs for chapter 4. Never edit the .py; change values here.",
+    "Layering (later wins): Config defaults -> 'shared' -> 'classification' or 'regression' -> modes[run_mode].",
     "Every key must name a real Config field in utils_frame_train.py (typos are hard errors).",
     "Targets are preset names from the TARGETS registry; list them with available_targets().",
     "",
@@ -16,7 +16,12 @@
     "  - facebook/w2v-bert-2.0                                 (log-mel filterbanks, best on content)",
     "  - classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier (HR/RS-finetuned; body + head transfer)",
     "",
-    "See supported_models.md for the full compatibility matrix."
+    "See supported_models.md for the full compatibility matrix.",
+    "",
+    "SCAFFOLD note (2026-11-02): the 'regression' block below mirrors chapter 3",
+    "but is NOT consumed by the engine yet. 42_train_frame_regression.py is a",
+    "structural scaffold; load_config raises when task_type='regression'. See",
+    "42_train_frame_regression.py :: 'What to wire in the engine' for the plan."
   ],
 
   "run_mode": "test",
@@ -56,7 +61,16 @@
     "target": "si_primary_stress_frames",
     "langs": [],
     "exclude_multistress": true,
-    "best_metric_classification": "frame_macro_f1"
+    "best_metric_classification": "frame_f1_positive"
+  },
+
+  "regression": {
+    "target": "",
+    "langs": [],
+    "best_metric_regression": "spearman",
+    "normalize": "zscore",
+    "loss_function": "mse",
+    "label_scale": null
   },
 
   "modes": {

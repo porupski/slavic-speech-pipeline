@@ -5,6 +5,8 @@ Per-frame classification. Feed an utterance WAV, predict a label per model frame
 - **Filled-pause frames** — binary FP / not-FP over a whole utterance (ParlaSpeech `utterance_frame` from `11c`).
 - **Primary-stress frames** (HR/RS) — word as the instance. `41` loads the utterance WAV and the 50 Hz label sequence, then slices both in memory by the record's word bounds. No word WAVs on disk.
 
+A regression twin — `42_train_frame_regression` — ships as a **scaffold** (dated 2026-11-02). The notebook mirrors `41` structurally and the chapter-3 regression twin content-wise. The engine (`utils_frame_train.py`) is still classification-only, so `42` stops at `load_config` with a dated port-plan error. Made for structural completeness; tested when the first continuous frame-level target lands. The port plan lives at the bottom of `42_train_frame_regression.py` under *What to wire in the engine*.
+
 Engine parity with the chapter-3 twins: run-mode tiers, GPU guard, stage timer, attention-mask handling, GPU flush between phases, inference spot-check. The frame-specific pieces are the per-frame head, token-CE with `ignore_index=-100`, and per-record label alignment to the model's real CNN output length.
 
 ## Run
@@ -29,4 +31,4 @@ Run cells top-to-bottom. First cell is the same GPU guard pattern as chapter 3 �
 ## What's missing
 
 - **The shared-engine refactor** — chapter 4 is still standalone (the whole engine lives inline in `41`). The chapter-3 pattern (`utils_frame_train.py` + `config.json` + py runner) is planned. Full runs should wait for that refactor.
-- **`42_train_frame_regression.ipynb`** — completeness twin for scalar-per-frame regression. No annotated continuous target exists yet; the twin will be code for future work.
+- **Frame regression engine wiring** — the `42` scaffold is in place, but `utils_frame_train.py` still raises when `task_type='regression'`. Chapter 3's `utils_instance_train.py` is the port template; the step-by-step plan is in `42_train_frame_regression.py` under *What to wire in the engine*.

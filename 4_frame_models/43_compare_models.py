@@ -74,9 +74,11 @@ CELLS: list[dict] = [
     {"label": "classla_lr3e6", "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
      "learning_rate": 3e-6, "num_epochs": 15, "batch_size": 64},
     {"label": "classla_lr1e5", "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 64},
-    {"label": "classla_lr3e5", "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 3e-5, "num_epochs": 15, "batch_size": 64},
+     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
+    # {"label": "classla_lr3e5", "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
+    #  "learning_rate": 3e-5, "num_epochs": 15, "batch_size": 64},
+    {"label": "classla_lr1e5_bs32", "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
+     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 32},
 
     # ── longer runs, best LR per family ──────────────────────────────────
     {"label": "bert_vanilla_lr1e5_30ep", "model_name": "facebook/w2v-bert-2.0",

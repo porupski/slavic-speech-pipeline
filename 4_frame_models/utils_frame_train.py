@@ -2,7 +2,9 @@
 
 Shared by:
   * 41_train_frame_classification.ipynb / run_41_classification.py
-  * (future) 42_train_frame_regression.ipynb / run_42_regression.py
+  * 42_train_frame_regression.ipynb (SCAFFOLD, 2026-11-02; engine wiring
+    for regression is not yet implemented — see the port plan at the
+    bottom of 42_train_frame_regression.py)
 
 Mirrors chapter 3's `utils_instance_train.py` shape as closely as possible.
 The differences from chapter 3 are frame-level, not instance-level:
@@ -289,6 +291,16 @@ class Config:
     # "frame_macro_f1" | "frame_accuracy" | "frame_f1_positive"
     best_metric_classification: str = "frame_macro_f1"
 
+    # -- Regression knobs (SCAFFOLD, 2026-11-02) -----------------------------
+    # Inert placeholders mirroring chapter 3 (utils_instance_train.py). The
+    # fields are present so the regression block in config.json loads
+    # cleanly, but no regression code path consumes them yet. See the port
+    # plan in 42_train_frame_regression.py for the wiring list.
+    best_metric_regression: str = "spearman"   # "mse" | "mae" | "spearman"
+    normalize:              str = "zscore"     # "zscore" | "none"
+    loss_function:          str = "mse"        # "mse" | "l1"
+    label_scale:    float | None = None        # optional scalar for integer-coded regression targets
+
     # -- Preprocessing -------------------------------------------------------
     preprocess_batch_size: int  = 32
     dataloader_num_workers: int = 8
@@ -326,9 +338,16 @@ def load_config(path: str | Path, task_type: str,
     (``classification``) → ``modes[run_mode]``. Returns (cfg, raw)."""
     raw = json.loads(Path(path).read_text())
     if task_type != "classification":
-        raise ValueError(
-            f"chapter-4 v1 supports only 'classification', got {task_type!r} "
-            "(frame regression → future 42_train_frame_regression)"
+        # SCAFFOLD guard, 2026-11-02. 42_train_frame_regression ships as a
+        # structural scaffold; the engine (this file) is still classification-
+        # only. To wire regression end to end, port from utils_instance_train
+        # (chapter 3) per the plan at the bottom of
+        # 42_train_frame_regression.py and remove this guard + the twin in
+        # validate_config().
+        raise NotImplementedError(
+            f"utils_frame_train supports only task_type='classification', got {task_type!r}. "
+            "42_train_frame_regression is a scaffold — see its 'What to wire in the engine' "
+            "section (dated 2026-11-02) for the port plan from utils_instance_train.py."
         )
     cfg = Config(task_type=task_type)
     apply_mode(cfg, raw.get("shared", {}))
@@ -353,7 +372,11 @@ def validate_config(cfg: Config) -> None:
     if cfg.demo_sampling not in ("proportional", "balanced"):
         raise ValueError(f"demo_sampling invalid: {cfg.demo_sampling!r}")
     if cfg.task_type != "classification":
-        raise ValueError(f"v1 supports classification only, got {cfg.task_type!r}")
+        # SCAFFOLD guard, 2026-11-02. Twin of the load_config guard above.
+        raise NotImplementedError(
+            f"validate_config supports task_type='classification' only, got {cfg.task_type!r}. "
+            "See 42_train_frame_regression.py :: 'What to wire in the engine' for the port plan."
+        )
     if not cfg.label_order or len(cfg.label_order) < 2:
         raise ValueError("label_order must have ≥2 entries. Binary = [0, 1].")
     if len(set(cfg.label_order)) != len(cfg.label_order):
@@ -1285,6 +1308,23 @@ def plot_test_confusion(run_dir: Path, phase2_best: dict, label2id: dict,
         plt.show()
     else:
         plt.close(fig)
+
+    # Machine-readable twin of the PNG. Rows = true, columns = predicted.
+    _save_confusion_csvs(run_dir, cm, cm_rel, str_labels)
+
+
+def _save_confusion_csvs(run_dir: Path, cm: np.ndarray, cm_rel: np.ndarray,
+                         str_labels: list[str]) -> None:
+    """Write counts + row-normalized confusion matrices as CSVs next to the PNG."""
+    def _write(path: Path, matrix: np.ndarray, fmt: str) -> None:
+        with path.open("w") as f:
+            f.write("," + ",".join(str_labels) + "\n")
+            for lbl, row in zip(str_labels, matrix):
+                f.write(lbl + "," + ",".join(fmt % v for v in row) + "\n")
+        print(f"saved {path.relative_to(PROJECT_ROOT)}")
+
+    _write(run_dir / "confusion_matrix_counts.csv",      cm,     "%d")
+    _write(run_dir / "confusion_matrix_normalised.csv",  cm_rel, "%.4f")
 
 
 def _rank_records_by_error(preds_data: list[dict]) -> list[dict]:
