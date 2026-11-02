@@ -197,9 +197,12 @@ def _find_word_for_stress(words: list[dict], s: float, e: float,
 
 
 def extract_words_and_stress(tg, *, tol: float = MATCH_TOLERANCE_S
-                             ) -> tuple[list[dict], list[dict], list[tuple]]:
-    """Return (words_align, primary_stress, notes).
+                             ) -> tuple[list[dict], list[dict], list[dict], list[tuple]]:
+    """Return (words_align, primary_stress, graph_align, notes).
     `primary_stress` keeps **every** valid `"1"` mark (multi-stress words too).
+    `graph_align` is the full non-empty grapheme sequence from `graphAlign`
+    (utterance-relative times) — used later by chapter-4/6 vowel-nucleus
+    accuracy eval. Empty list if the tier is missing.
     `notes` is a list of `(kind, *args)` tuples for the per-file report:
       - `stress_outside_word` — mark dropped (does not appear in `primary_stress`)
       - `multiple_primary_per_word` — mark kept; word will be tagged
@@ -234,13 +237,29 @@ def extract_words_and_stress(tg, *, tol: float = MATCH_TOLERANCE_S
             continue
         ps.append({"words_align_idx": idx, "raw": [s, ee]})
 
+    # graphAlign is optional (older TGs may lack it). Keep every non-empty
+    # interval verbatim; word-slicing happens in build_word_frame_rows.
+    graph_align: list[dict] = []
+    if "graphAlign" in tg.tierNames:
+        for e in tg.getTier("graphAlign").entries:
+            text = (e.label or "").strip()
+            if not text:
+                continue
+            graph_align.append({
+                "text":   text,
+                "time_s": float(e.start),
+                "time_e": float(e.end),
+            })
+    else:
+        notes.append(("no_graphAlign_tier",))
+
     # Note (do not drop) words that carry >1 "1" mark. build_word_frame_rows
     # aggregates all marks for that word into one row and tags it multistress.
     idx_count = Counter(p["words_align_idx"] for p in ps)
     for i, n in sorted(idx_count.items()):
         if n > 1:
             notes.append(("multiple_primary_per_word", i, words[i]["text"], n))
-    return words, ps, notes
+    return words, ps, graph_align, notes
 
 
 # %% [markdown]
@@ -266,6 +285,7 @@ def build_word_frame_rows(r, hz):
     md = r["metadata"]
     wa = md.get("words_align")
     ps_list = md.get("primary_stress")
+    ga_all = md.get("graph_align") or []   # utterance-relative grapheme intervals
     if not wa or not ps_list:
         return []
     # Group all stress marks by their target word.
@@ -294,6 +314,30 @@ def build_word_frame_rows(r, hz):
                 e = min(n, round((float(raw[1]) - w_s) * hz))
                 for i in range(s, e):
                     labels[i] = 1
+        # Slice graph_align to just this word's span, rebasing times to
+        # word-local seconds. Small tolerance handles annotator-edge grapheme
+        # intervals that touch the word boundary within a frame.
+        _tol = 1e-3
+        graph_local = []
+        for g in ga_all:
+            g_s, g_e = float(g["time_s"]), float(g["time_e"])
+            if g_e <= w_s - _tol or g_s >= w_e + _tol:
+                continue
+            graph_local.append({
+                "text":   g["text"],
+                "time_s": round(max(0.0, g_s - w_s), 4),
+                "time_e": round(min(word_dur, g_e - w_s), 4),
+            })
+        row_metadata = {
+            "audio_length":     word_dur,
+            "lang":             md.get("lang"),
+            "source_utterance": r["instance_id"],
+            "words_align_idx":  wai,
+            "multistress":      len(marks) > 1,
+            "n_stress_marks":   len(marks),
+        }
+        if graph_local:
+            row_metadata["graph_align"] = graph_local
         rows.append({
             **base,
             "instance_id":  f"{r['instance_id']}#w{wai}",
@@ -303,14 +347,7 @@ def build_word_frame_rows(r, hz):
             "end_t":        round(w_e, 3),
             "frame_rate_hz": hz,
             "labels":       {"primary_stress": labels},
-            "metadata": {
-                "audio_length":     word_dur,
-                "lang":             md.get("lang"),
-                "source_utterance": r["instance_id"],
-                "words_align_idx":  wai,
-                "multistress":      len(marks) > 1,
-                "n_stress_marks":   len(marks),
-            },
+            "metadata":     row_metadata,
         })
     return rows
 
@@ -386,7 +423,7 @@ for meta in parsed_names:
         continue
 
     try:
-        words, ps, notes = extract_words_and_stress(tg)
+        words, ps, graph_align, notes = extract_words_and_stress(tg)
     except ValueError as e:
         print(f"⚠️  tier missing in {meta['tg_path'].name}: {e}")
         continue
@@ -428,6 +465,7 @@ for meta in parsed_names:
             "session_end_t":   meta["end"],
             "words_align":     words,
             "primary_stress":  ps,
+            "graph_align":     graph_align,   # utterance-relative; sliced per word in build_word_frame_rows
         },
     })
 
