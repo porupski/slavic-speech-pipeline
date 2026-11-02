@@ -1,0 +1,65 @@
+{
+    "_readme": [
+        "Chapter 6 inference tasks. One registry for every task across the four",
+        "quadrants (shape × head). The chapter entry points pick a task via a",
+        "TASK constant at the top of the notebook (or --task on the CLI runner).",
+        "Each task entry layers on top of config.json's shared block: later wins.",
+        "Keys starting with '_' are documentation; the engine strips them before",
+        "applying.",
+        "",
+        "Quadrants:",
+        "  - frame_classification     : served by 63_frame_classification_inference",
+        "  - frame_regression         : scaffold (64_frame_regression_inference-WIP)",
+        "  - instance_classification  : scaffold (61_instance_classification_inference-WIP)",
+        "  - instance_regression      : scaffold (62_instance_regression_inference-WIP)",
+        "",
+        "model_name='auto' triggers a trace-file lookup at",
+        "models/_best_models/<task_name>.json. Trace file schema:",
+        "  {\"model_path\": \"<path or HF id>\", \"metrics\": {...optional...}}",
+        "See 6_README.md for the full mechanism."
+    ],
+
+    "frame_classification": {
+        "fp": {
+            "_notes": "Filled-pause detection with the CLASSLA FP-BERT model. Postproc per the model card: drop short peaks + edge events.",
+            "model_name": "classla/wav2vecbert2-filledPause",
+            "task_name":  "fp_frame",
+            "background_class_id": 0,
+            "postproc": {
+                "drop_short":     true,
+                "drop_initial":   true,
+                "drop_final":     true,
+                "short_cutoff_s": 0.08
+            },
+            "keep_frame_labels": false,
+            "write_textgrids":   true
+        },
+        "primary_stress": {
+            "_notes": "Primary-stress detection. Postproc keeps short peaks and edge events: a stressed vowel is often 60-100 ms and initial/final stress is legitimate. 'auto' resolves via models/_best_models/primary_stress.json.",
+            "model_name": "auto",
+            "task_name":  "primary_stress",
+            "background_class_id": 0,
+            "postproc": {
+                "drop_short":     false,
+                "drop_initial":   false,
+                "drop_final":     false,
+                "short_cutoff_s": 0.02
+            },
+            "keep_frame_labels": true,
+            "write_textgrids":   true,
+            "vowel_lang_code":   "SI"
+        }
+    },
+
+    "frame_regression": {
+        "_readme": "SCAFFOLD (2026-11-02) — populated when 64_frame_regression_inference-WIP is wired. The engine itself is still a stub; see 64_frame_regression_inference-WIP.py and utils_frame_infer.py's QUADRANT guard for the port plan."
+    },
+
+    "instance_classification": {
+        "_readme": "SCAFFOLD (2026-11-02) — populated when 61_instance_classification_inference-WIP is wired. Needs utils_instance_infer.py (mirror chapter 3's utils_instance_train.py). First candidates: gender, FP-presence, speaker-id."
+    },
+
+    "instance_regression": {
+        "_readme": "SCAFFOLD (2026-11-02) — populated when 62_instance_regression_inference-WIP is wired. Needs utils_instance_infer.py. First candidates: age, sentiment."
+    }
+}

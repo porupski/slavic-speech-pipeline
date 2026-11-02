@@ -6,9 +6,9 @@ The command-line twin of 63_frame_classification_inference.ipynb — same engine
 tool for FULL inference runs: launch it in tmux and walk away.
 
 Usage:
-  python run_63_frame_classification_inference.py --run_name my_run
-  python run_63_frame_classification_inference.py -m demo -r fp_demo --use_gpu
-  python run_63_frame_classification_inference.py -m full -r fp_full --use_gpu --audio_dir data/inference_input/parliamentary
+  python run_63_frame_classification_inference.py --task fp -m demo -r fp_demo --use_gpu
+  python run_63_frame_classification_inference.py --task primary_stress -m demo -r ps_demo --use_gpu
+  python run_63_frame_classification_inference.py --task fp -m full -r fp_full --use_gpu --audio_dir data/inference_input/parliamentary
 
 Device policy: CPU by default (safe, prompt-free). --use_gpu arms the reserved
 GPU from config.json (shared.reserved_gpu) — the explicit, non-interactive
@@ -32,6 +32,9 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--config", "-c", default=str(HERE / "config.json"),
                    help="path to config.json")
+    p.add_argument("--task", "-t", required=True,
+                   help="task key under tasks.json/frame_classification "
+                        "(e.g. 'fp', 'primary_stress')")
     p.add_argument("--mode", "-m", choices=["test", "demo", "full"], default="full",
                    help="run_mode; caps cap_files")
     p.add_argument("--run_name", "-r", default=None,
@@ -71,7 +74,7 @@ def main() -> None:
     print_project_info()
 
     # ── Config ────────────────────────────────────────────────────────────────
-    cfg = load_config(args.config, run_mode=args.mode)
+    cfg = load_config(args.config, run_mode=args.mode, task=args.task)
     cfg.use_cuda = args.use_gpu
     if args.audio_dir is not None:
         cfg.audio_dir = args.audio_dir

@@ -3,6 +3,12 @@
 Shared by:
   * 63_frame_classification_inference.ipynb / run_63_frame_classification_inference.py
 
+Serves the ``frame_classification`` quadrant of chapter 6. Frame regression
+(quadrant ``frame_regression``) is a scaffold today — see
+``64_frame_regression_inference-WIP.py``. Instance-level inference (quadrants
+``instance_classification`` and ``instance_regression``) lives in
+``utils_instance_infer.py`` (also scaffold, 2026-11-02).
+
 Frame-classification model = one logit vector per ~20 ms audio frame. Runs of
 identical predicted class along the frame axis collapse into events; the events
 are then filtered with the drop_short / drop_initial / drop_final postproc rules
@@ -18,8 +24,9 @@ IMPORT-ORDER CONTRACT (same as chapter 3 — read before importing):
   3. Headless runners should set ``MPLBACKEND=Agg`` before importing (notebooks
      don't need to — the inline backend is already active).
 
-Config flow: ``load_config(path, run_mode=...)`` reads config.json (shared block
-+ mode overrides) and returns a validated ``Config``.
+Config flow: ``load_config(path, run_mode, task)`` reads config.json (shared
+block + mode overrides) and layers the task entry from tasks.json under the
+quadrant ``frame_classification``. See ``QUADRANT`` below.
 """
 
 from __future__ import annotations
@@ -50,6 +57,12 @@ from transformers import AutoFeatureExtractor, AutoModelForAudioFrameClassificat
 # Number of random audio files rendered in the end-of-run examples plot.
 N_PLOT_EXAMPLES = 3
 
+# This engine serves the frame_classification quadrant. load_config reads only
+# tasks under tasks.json["frame_classification"]. The sibling frame_regression
+# quadrant will be served by a future utils_frame_regression_infer.py once the
+# 64 scaffold is wired.
+QUADRANT = "frame_classification"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Config
@@ -64,12 +77,13 @@ class Config:
     # -- Model ---------------------------------------------------------------
     # HF repo id OR local dir containing a frame-classification checkpoint
     # (AutoModelForAudioFrameClassification-compatible). Ch3 utterance-level
-    # checkpoints are NOT compatible — different head.
-    model_name: str = "classla/wav2vecbert2-filledPause"
+    # checkpoints are NOT compatible — different head. Special value "auto"
+    # triggers a trace-file lookup at models/_best_models/<task>.json.
+    model_name: str = "auto"
 
     # Short identifier used in auto-generated run names (mirrors Ch3's
-    # {target}_{task_type} pattern). Change per-model if you swap the default.
-    task_name: str = "fp_frame"
+    # {target}_{task_type} pattern). Set per-task in the task config.
+    task_name: str = ""
 
     # -- Input / output ------------------------------------------------------
     audio_dir: str = "data/inference_input"
@@ -80,7 +94,7 @@ class Config:
     chunk_length_s:  float = 30.0   # 0 disables chunking (must be pre-segmented)
     background_class_id: int | None = 0   # None → emit events for all classes
 
-    # -- Postprocessing (per FP-BERT model card) ----------------------------
+    # -- Postprocessing (per FP-BERT model card; stress overrides in its cfg)
     postproc_drop_short:     bool  = True
     postproc_drop_initial:   bool  = True
     postproc_drop_final:     bool  = True
@@ -89,6 +103,11 @@ class Config:
     # -- Output extras -------------------------------------------------------
     keep_frame_labels: bool = False   # append raw per-frame 0/1 array in JSONL
     write_textgrids:   bool = True
+
+    # -- Language / task extras (used by future vowel-accuracy eval) ---------
+    # Grapheme code that keys into vowels_by_language.json (e.g. "SI"). None
+    # disables vowel-based analyses; frame-level metrics still work.
+    vowel_lang_code: str | None = None
 
     # -- Hardware ------------------------------------------------------------
     reserved_gpu: str = "2"
@@ -103,30 +122,128 @@ def apply_mode(cfg: Config, overrides: dict) -> None:
         setattr(cfg, k, v)
 
 
-def load_config(path: str | Path, run_mode: str = "full") -> Config:
-    """Read config.json, apply the mode overrides, return a Config."""
-    with open(path) as f:
-        raw = json.load(f)
-    shared = raw.get("shared", {})
-    modes  = raw.get("modes", {})
-    if run_mode not in modes:
-        raise KeyError(f"unknown run_mode {run_mode!r}; known: {list(modes)}")
-
-    cfg = Config()
+def _layer_shared_block(cfg: Config, shared: dict, source_label: str) -> None:
+    """Apply a `shared` dict from one JSON layer onto cfg. Nested `postproc`
+    dict is flattened to `postproc_<field>`. Unknown keys are a hard error so
+    a typo does not silently no-op."""
     for k, v in shared.items():
         if k == "postproc" and isinstance(v, dict):
             for pk, pv in v.items():
                 fld = f"postproc_{pk}"
                 if not hasattr(cfg, fld):
-                    raise KeyError(f"unknown postproc field {pk!r}")
+                    raise KeyError(f"{source_label}: unknown postproc field {pk!r}")
                 setattr(cfg, fld, pv)
         elif hasattr(cfg, k):
             setattr(cfg, k, v)
         else:
-            raise KeyError(f"unknown shared config key {k!r}")
+            raise KeyError(f"{source_label}: unknown shared key {k!r}")
 
+
+def _read_trace_file(task: str) -> dict | None:
+    """Look for models/_best_models/<task>.json. Returns the dict on success,
+    None if not present."""
+    p = PROJECT_ROOT / "models" / "_best_models" / f"{task}.json"
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text())
+    except json.JSONDecodeError as e:
+        print(f"⚠️  trace file {p} is invalid JSON: {e}")
+        return None
+
+
+def _resolve_model_name(cfg: Config, task: str) -> str:
+    """Turn cfg.model_name into something HF from_pretrained can consume.
+
+    Resolution order:
+    1. `cfg.model_name == "auto"` → read trace file at
+       ``models/_best_models/<task>.json`` and use its ``model_path``. Raises
+       loudly if the trace is missing.
+    2. cfg.model_name looks like a project-relative dir that exists → return
+       its absolute path (so HF's from_pretrained treats it as a local dir).
+    3. Otherwise pass through as-is (HF repo id or absolute path)."""
+    m = cfg.model_name
+    if m in (None, "", "auto"):
+        if not task:
+            raise ValueError("model_name='auto' but no task supplied to load_config")
+        trace = _read_trace_file(task)
+        if trace is None:
+            raise FileNotFoundError(
+                f"model_name='auto' but no trace file at "
+                f"models/_best_models/{task}.json — either train + emit a "
+                f"trace, or set model_name explicitly in config_{task}.json"
+            )
+        m = trace["model_path"]
+        print(f"🔎 auto-linked model via trace file: {m}")
+        if "metrics" in trace:
+            print(f"   trace metrics: {trace['metrics']}")
+    p = udp.from_project_relative(m)
+    if p.exists() and p.is_dir():
+        return str(p)
+    return m
+
+
+def _strip_underscore_keys(d: dict) -> dict:
+    """Drop keys starting with '_' (docstring / metadata) from a dict so they
+    do not reach the Config layering step."""
+    return {k: v for k, v in d.items() if not k.startswith("_")}
+
+
+def _available_tasks(tasks_raw: dict, quadrant: str) -> list[str]:
+    quadrant_tasks = tasks_raw.get(quadrant, {})
+    return sorted(k for k in quadrant_tasks if not k.startswith("_"))
+
+
+def load_config(path: str | Path, run_mode: str = "full",
+                task: str | None = None) -> Config:
+    """Read config.json + tasks.json (quadrant-scoped), apply run-mode
+    overrides, resolve model_name (trace-file → project-relative → HF id), and
+    return a validated Config.
+
+    Layering (later wins): Config defaults → common ``config.json`` shared
+    block → ``tasks.json[QUADRANT][task]`` → ``modes[run_mode]``.
+
+    Passing ``task=None`` skips the task layer (common config only) — useful
+    for smoke tests. Real inference always sets a task."""
+    common_path = Path(path)
+    with open(common_path) as f:
+        common = json.load(f)
+    shared_common = common.get("shared", {})
+    modes = common.get("modes", {})
+
+    task_shared: dict = {}
+    if task is not None:
+        tasks_path = common_path.parent / "tasks.json"
+        if not tasks_path.exists():
+            raise FileNotFoundError(
+                f"task={task!r} but {tasks_path} not found. "
+                f"Create tasks.json or pass task=None."
+            )
+        with open(tasks_path) as f:
+            tasks_raw = json.load(f)
+        quadrant_tasks = tasks_raw.get(QUADRANT, {})
+        available = _available_tasks(tasks_raw, QUADRANT)
+        if task not in available:
+            raise KeyError(
+                f"task={task!r} not registered under "
+                f"tasks.json/{QUADRANT}. Available: {available}"
+            )
+        task_shared = _strip_underscore_keys(quadrant_tasks[task])
+
+    if run_mode not in modes:
+        raise KeyError(f"unknown run_mode {run_mode!r}; known: {list(modes)}")
+
+    cfg = Config()
+    _layer_shared_block(cfg, _strip_underscore_keys(shared_common),
+                        source_label="config.json")
+    if task_shared:
+        _layer_shared_block(cfg, task_shared,
+                            source_label=f"tasks.json/{QUADRANT}/{task}")
     apply_mode(cfg, modes[run_mode])
     cfg.run_mode = run_mode
+
+    # Resolve model_name last (may hit disk for trace file / local checkpoint).
+    cfg.model_name = _resolve_model_name(cfg, task or "")
     return cfg
 
 

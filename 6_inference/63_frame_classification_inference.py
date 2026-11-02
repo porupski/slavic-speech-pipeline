@@ -1,16 +1,19 @@
 # %% [markdown]
-# # Frame-classification inference (chapter 6 · variant 63)
+# # Frame-classification inference (chapter 6 · 63)
 #
-# Runs a **frame classification** model over a folder of audio, emits a
-# per-file JSONL of events, optional TextGrids for visual QA in Praat, and a
-# small plot of 3 randomly-sampled files. Same modular style as chapter 3:
-# knobs live in `config.json`, the engine lives in **`utils_frame_infer.py`**,
-# and each cell here imports just what it needs.
+# The one entry point for every frame-classification task — the quadrant
+# `frame_classification`. Pick a task via `TASK` below (two live today: `fp`
+# for filled pauses, `primary_stress` for word-level primary stress). The
+# task registry sits in `tasks.json`; add a task there to make it available
+# here.
 #
-# Default model is `classla/wav2vecbert2-filledPause` — the Slavic filled-
-# pause detector (w2v-BERT 2.0 backbone). Any HF repo or local checkpoint that
-# implements `AutoModelForAudioFrameClassification` works; chapter-3
-# utterance-level checkpoints will NOT work here (different head).
+# Common knobs live in `config.json`. Per-task knobs (model, postproc rules,
+# flags) live in `tasks.json` under `frame_classification/<task>`. The engine
+# lives in `utils_frame_infer.py`. Each cell here imports just what it needs.
+#
+# Any HF repo or local checkpoint that implements
+# `AutoModelForAudioFrameClassification` works; chapter-3 utterance-level
+# checkpoints will NOT work here (different head).
 #
 # Prefer hands-off? `run_63_frame_classification_inference.py` drives the same
 # engine from the CLI — no interactive prompts, safe for tmux.
@@ -82,11 +85,12 @@ print_project_info()
 # are skipped. Delete the JSONL to force a full re-run.
 
 # %%
+TASK     = "fp"      # pick one from tasks.json/frame_classification: "fp" | "primary_stress" | ...
 RUN_MODE = "demo"    # "test" | "demo" | "full"
 RUN_NAME = None      # None → auto-generate: {audio_dir_basename}_{task_name}_classification_{ts}
                      # (mirrors Ch3's naming); or set an explicit string here.
 
-cfg = load_config(CONFIG_PATH, run_mode=RUN_MODE)
+cfg = load_config(CONFIG_PATH, run_mode=RUN_MODE, task=TASK)
 # Honour the notebook's GPU guard decision above (overrides config's use_cuda).
 cfg.use_cuda = USE_CUDA
 
@@ -100,11 +104,15 @@ print_config_summary(cfg, device)
 # %% [markdown]
 # # Inference
 #
-# Walks `cfg.audio_dir`, chunks each file into 30 s non-overlapping segments,
-# runs the model, collapses per-frame predictions into events, applies the
-# postproc filters, and streams one JSONL line per file. TextGrids are written
-# side-by-side under `runs/{RUN_NAME}/textgrids/` when `write_textgrids` is
-# true.
+# Walks `cfg.audio_dir`, chunks each file into non-overlapping segments
+# (`chunk_length_s`, default 30 s), runs the model, collapses per-frame
+# predictions into events, applies the postproc filters configured for this
+# task, and streams one JSONL line per file. TextGrids land under
+# `runs/{RUN_NAME}/textgrids/` when `write_textgrids` is true.
+#
+# Postproc defaults depend on the task. FP drops short peaks and edge events
+# (filled pauses are segment-internal). Primary stress keeps everything (a
+# stressed vowel is often 60-100 ms and initial/final stress is legitimate).
 
 # %%
 result = run_inference(cfg, run_name=RUN_NAME)
@@ -113,8 +121,8 @@ result = run_inference(cfg, run_name=RUN_NAME)
 # # Sample plots
 #
 # Reload 3 random files from the JSONL and render `examples.png` in the run
-# folder: waveform on top, red bars beneath marking detected filled-pause
-# intervals — a quick visual check that the model is behaving.
+# folder: waveform on top, overlay bars beneath marking detected intervals —
+# a quick visual check that the model is behaving.
 
 # %%
 sample_plot_examples(result["out_jsonl"], result["run_dir"],

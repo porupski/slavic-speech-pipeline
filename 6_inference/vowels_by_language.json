@@ -1,0 +1,24 @@
+{
+  "_readme": [
+    "Grapheme-level vowel sets per language, keyed by short code.",
+    "Used by the future vowel-nucleus accuracy metric (chapter 4/6):",
+    "an inferred primary-stress interval 'hits' a vowel if the bulk",
+    "of its positive frames sits inside a graphAlign interval whose",
+    "text (lowercased) is in this set.",
+    "",
+    "HR, RS, and SI include 'r' because the South-Slavic family",
+    "treats syllabic /r/ as a valid nucleus (e.g. HR 'prst', 'vrh';",
+    "RS 'crkva'; SI 'vrt', 'trg', 'prst'). CZ and PL do not — their",
+    "orthographies use explicit vowel letters even for syllabic liquids.",
+    "",
+    "Schwa lives in phoneAlign, not graphAlign, so it does not appear",
+    "here; a future phoneme-level dict (SI_phones etc.) can be added",
+    "at the bottom if we go phone-level for evaluation."
+  ],
+
+  "HR": ["a", "e", "i", "o", "u", "r"],
+  "RS": ["a", "e", "i", "o", "u", "r"],
+  "CZ": ["a", "e", "i", "o", "u", "y", "á", "é", "í", "ó", "ú", "ý", "ě", "ů"],
+  "PL": ["a", "e", "i", "o", "u", "y", "ó", "ą", "ę"],
+  "SI": ["a", "e", "i", "o", "u", "r"]
+}
