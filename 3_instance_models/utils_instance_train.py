@@ -1340,7 +1340,9 @@ def model_tag(model_name: str) -> str:
 
 
 def _tee_stdout(run_dir: Path) -> None:
-    """Mirror stdout + stderr to run_dir/run.log for the rest of the process."""
+    """Mirror stdout + stderr to run_dir/run.log for the rest of the process.
+    Proxies any other stream attribute (isatty, fileno, encoding, …) to the
+    underlying real stdout — libraries like transformers probe for these."""
     log_path = run_dir / "run.log"
     class _Tee:
         def __init__(self, *streams): self.streams = streams
@@ -1352,6 +1354,16 @@ def _tee_stdout(run_dir: Path) -> None:
             for s in self.streams:
                 try: s.flush()
                 except Exception: pass
+        def isatty(self):
+            try: return self.streams[0].isatty()
+            except Exception: return False
+        def fileno(self):
+            return self.streams[0].fileno()
+        def __getattr__(self, name):
+            # Last-resort proxy to the real stream so transformers' loading
+            # report, tqdm, click, etc. find what they want (encoding, buffer,
+            # closed, mode, writable, …).
+            return getattr(self.streams[0], name)
     f = open(log_path, "w", encoding="utf-8", buffering=1)
     sys.stdout = _Tee(sys.__stdout__, f)
     sys.stderr = _Tee(sys.__stderr__, f)

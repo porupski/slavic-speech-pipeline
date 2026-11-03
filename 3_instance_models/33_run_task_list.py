@@ -52,29 +52,40 @@ sys.path.insert(0, str(HERE))
 # real Config fields in utils_instance_train.py (typos are a hard error).
 
 TASKS: list[dict] = [
+    # Pick a `target` from the TARGETS registry (see available_targets() in
+    # utils_instance_train.py) — this resolves jsonl_path, label_key and
+    # label_order in one step. Overriding `label_key` alone is wrong: the
+    # jsonl_path stays at whatever the config block pointed at and the split
+    # comes back empty.
+    #
     # Four-way comparison on ParlaSpeech-HR benchmark v3 (demo = 10 epochs).
     # w2v2-base vs xls-r-300m, gender vs speaker-ID. Bigger model gets the
-    # higher LR it needs.
+    # higher LR it needs. One age regression closes the queue.
     {"label": "gender_w2v2-base_lr1e5",
      "model_name":    "facebook/wav2vec2-base",
-     "label_key":     "speaker_gender",
+     "target":        "hr_bench_v3_gender",
      "task_type":     "classification",
      "learning_rate": 1e-5},
     {"label": "gender_xls-r-300m_lr3e5",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "label_key":     "speaker_gender",
+     "target":        "hr_bench_v3_gender",
      "task_type":     "classification",
      "learning_rate": 3e-5},
     {"label": "speakerid_w2v2-base_lr1e5",
      "model_name":    "facebook/wav2vec2-base",
-     "label_key":     "speaker_name",
+     "target":        "hr_bench_v3_speaker_id",
      "task_type":     "classification",
      "learning_rate": 1e-5},
     {"label": "speakerid_xls-r-300m_lr3e5",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "label_key":     "speaker_name",
+     "target":        "hr_bench_v3_speaker_id",
      "task_type":     "classification",
      "learning_rate": 3e-5},
+    {"label": "age_w2v2-base_lr1e5",
+     "model_name":    "facebook/wav2vec2-base",
+     "target":        "hr_bench_v3_age",
+     "task_type":     "regression",
+     "learning_rate": 1e-5},
 ]
 
 
@@ -124,7 +135,8 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
     from utils_instance_train import (
         load_config, validate_config, resolve_device, print_config_summary,
         load_and_cap_splits, build_label_maps, load_feature_extractor,
-        run_phase, plot_test_confusion, spot_check, release_gpu, PROJECT_ROOT,
+        run_phase, plot_test_confusion, plot_test_scatter, spot_check,
+        release_gpu, fit_normalizer, resolve_target, TARGETS, PROJECT_ROOT,
     )
 
     row = {k: "" for k in CSV_FIELDS}
@@ -149,6 +161,17 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
             raise ValueError(f"task {task['label']!r}: unknown Config fields {sorted(unknown)}")
         for k, v in overrides.items():
             setattr(cfg, k, v)
+        # If the task overrode `target`, resolve it again so jsonl_path, label_key
+        # and label_order follow — otherwise the cfg still points at the previous
+        # task's JSONL and splits come back empty.
+        if "target" in overrides:
+            resolve_target(cfg, TARGETS)
+            if cfg.task_type != task_type:
+                raise ValueError(
+                    f"task {task['label']!r}: target {cfg.target!r} is a "
+                    f"{cfg.task_type} preset, but task_type is {task_type!r}"
+                )
+            row["label_key"] = cfg.label_key
         validate_config(cfg)
         device = resolve_device(cfg, use_cuda=args.use_gpu)
 
@@ -162,6 +185,8 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
         train_records, dev_records, test_records = load_and_cap_splits(cfg)
         label2id, id2label, num_labels = build_label_maps(
             cfg, train_records, dev_records, test_records)
+        normalizer = (fit_normalizer(cfg, train_records, dev_records, test_records)
+                      if task_type == "regression" else None)
 
         # List-scoped run/model dirs (all tasks sit under one list_root).
         run_dir   = list_root / task["label"]
@@ -181,6 +206,7 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
             cfg=cfg, run_dir=run_dir, model_dir=model_dir,
             feature_extractor=feature_extractor,
             label2id=label2id, id2label=id2label, device=device,
+            normalizer=normalizer,
         )
         _, phase2_best = run_phase(
             phase_name="phase2_test",
@@ -189,11 +215,14 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
             cfg=cfg, run_dir=run_dir, model_dir=model_dir,
             feature_extractor=feature_extractor,
             label2id=label2id, id2label=id2label, device=device,
+            normalizer=normalizer,
         )
 
         # Top-level summary artefacts
         if task_type == "classification":
             plot_test_confusion(run_dir, phase2_best, label2id, cfg.label_order, show=False)
+        else:
+            plot_test_scatter(run_dir, phase2_best, show=False)
         spot_check(run_dir, phase2_best, task_type)
 
         row.update({
