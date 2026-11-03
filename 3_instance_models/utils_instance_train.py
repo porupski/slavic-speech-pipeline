@@ -1340,56 +1340,15 @@ def model_tag(model_name: str) -> str:
 
 
 def _tee_stdout(run_dir: Path) -> None:
-    """Mirror stdout + stderr to run_dir/run.log via a `tee` subprocess so FD
-    redirection survives fork() — this is critical because the HF Trainer
-    forks a pool of dataloader workers, and a Python-level stdout wrapper
-    with a shared file handle deadlocks the pool.
+    """DISABLED. In-process stdout mirroring interferes with the HF Trainer's
+    forked dataloader workers and deadlocks training. For a run.log, tee at
+    the shell instead:
 
-    How it works: spawn `tee`, dup2 its stdin pipe onto FDs 1 and 2. All
-    workers forked after this inherit the redirected FDs and write to the
-    pipe; the OS-level `tee` demuxes to both the log file and the original
-    terminal. Falls back to a no-op (plus a warning) if `tee` isn't on PATH.
+        python run_32_regression.py --use_gpu 2>&1 | tee runs/<...>/run.log
+
+    (A fork-safe, buffer-safe in-process alternative is on the backlog.)
     """
-    import atexit
-    import shutil
-    import subprocess
-
-    log_path = run_dir / "run.log"
-    tee_bin = shutil.which("tee")
-    if tee_bin is None:
-        print(f"⚠️  'tee' not on PATH — run.log will not be captured.")
-        return
-
-    try:
-        tee_proc = subprocess.Popen(
-            [tee_bin, str(log_path)],
-            stdin=subprocess.PIPE,
-            bufsize=0,
-        )
-    except Exception as e:
-        print(f"⚠️  could not start tee subprocess: {e!r} — run.log not captured.")
-        return
-
-    # Redirect FDs 1 (stdout) and 2 (stderr) at the OS level so forked workers
-    # inherit a clean file descriptor instead of a shared Python object.
-    sys.stdout.flush(); sys.stderr.flush()
-    os.dup2(tee_proc.stdin.fileno(), 1)
-    os.dup2(tee_proc.stdin.fileno(), 2)
-    # Rebind the Python-level handles too — line-buffered so prints land in
-    # the log immediately rather than at process exit.
-    sys.stdout = os.fdopen(1, "w", buffering=1)
-    sys.stderr = os.fdopen(2, "w", buffering=1)
-
-    def _finish():
-        try: sys.stdout.flush()
-        except Exception: pass
-        try: sys.stderr.flush()
-        except Exception: pass
-        try: tee_proc.stdin.close()
-        except Exception: pass
-        try: tee_proc.wait(timeout=5)
-        except Exception: pass
-    atexit.register(_finish)
+    return
 
 
 def make_run_dirs(cfg: Config, train_records: list[dict],
@@ -1409,10 +1368,10 @@ def make_run_dirs(cfg: Config, train_records: list[dict],
     model_dir = udp.from_project_relative(cfg.models_dir) / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     model_dir.mkdir(parents=True, exist_ok=True)
-    _tee_stdout(run_dir)
+    _tee_stdout(run_dir)   # currently a no-op; see docstring for shell-level tee
     print(f"run_dir   = {run_dir.relative_to(PROJECT_ROOT)}    (per-epoch logs)")
     print(f"model_dir = {model_dir.relative_to(PROJECT_ROOT)}  (best_model goes here)")
-    print(f"tee       = {(run_dir / 'run.log').relative_to(PROJECT_ROOT)}  (stdout + stderr)")
+    print(f"to capture: python ... 2>&1 | tee {(run_dir / 'run.log').relative_to(PROJECT_ROOT)}")
 
     (run_dir / "config.json").write_text(json.dumps(asdict(cfg), indent=2, default=str))
     if normalizer is not None:
