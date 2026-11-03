@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>slavic-speech-pipeline</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="top">
+    <a class="brand" href="index.html">
+      <img class="brand-logo" src="img/ssp_logo_v0.png" alt="">
+      slavic-speech-pipeline
+    </a>
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#pipeline">Pipeline</a></li>
+      <li><a href="#showcase">Results</a></li>
+      <li><a href="#chapters">Chapters</a></li>
+      <li><a href="#guide">Guide</a></li>
+      <li><a href="#research">Research</a></li>
+      <li><a href="#citation">Cite</a></li>
+      <li>
+        <a class="colab-nav"
+           href="https://colab.research.google.com/github/porupski/slavic-speech-pipeline/blob/main/colab_demo/ssp-colab_demo-speaker_id.ipynb"
+           target="_blank" rel="noopener"
+           title="Open the demo in Colab">
+          <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab">
+        </a>
+      </li>
+    </ul>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle light/dark theme">
+      <svg class="theme-icon sun" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="12" cy="12" r="4.5"/>
+        <g stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none">
+          <line x1="12" y1="2"  x2="12" y2="4.5"/>
+          <line x1="12" y1="19.5" x2="12" y2="22"/>
+          <line x1="2"  y1="12" x2="4.5" y2="12"/>
+          <line x1="19.5" y1="12" x2="22" y2="12"/>
+          <line x1="4.9" y1="4.9" x2="6.6" y2="6.6"/>
+          <line x1="17.4" y1="17.4" x2="19.1" y2="19.1"/>
+          <line x1="4.9" y1="19.1" x2="6.6" y2="17.4"/>
+          <line x1="17.4" y1="6.6" x2="19.1" y2="4.9"/>
+        </g>
+      </svg>
+      <svg class="theme-icon moon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+      </svg>
+      <span class="theme-thumb"></span>
+    </button>
+  </nav>
+
+  <main>
+    <section id="overview">
+      <div class="hero">
+        <img class="hero-logo" src="img/ssp_logo_v0.png" alt="ssp logo">
+        <h1>slavic-speech-pipeline
+          <span class="subtitle">a toolkit for training speech models on Slavic speech</span>
+        </h1>
+      </div>
+      <div class="pitch">
+        Modern speech models are trained on English. This toolkit takes the same
+        kind of model and teaches it to listen to Slavic speech instead — Croatian,
+        Serbian, Czech, Polish, and Slovenian. It covers the full path from raw
+        audio to a working model: download a corpus, look at it, train on it, and
+        run the trained model on new recordings. One shared code base, numbered
+        chapters, one task string to pick what the model should learn.
+      </div>
+    </section>
+
+    <section id="pipeline">
+      <h2>The pipeline at a glance</h2>
+      <p>
+      Audio comes in on the left, trained models come out on the right. Chapter
+      numbers above each stage match the numbered folders at the repo root.
+      </p>
+      <figure class="flowchart">
+        <img src="img/schema_pipeline_draft_v0.jpeg" alt="End-to-end flowchart of the slavic-speech-pipeline">
+        <figcaption>Flowchart — hand-drawn concept placeholder.</figcaption>
+      </figure>
+    </section>
+
+    <section id="showcase">
+      <h2>What the toolkit produces</h2>
+      <p>Two sample runs from the live chapters. Both plots come straight out of the engine.</p>
+
+      <div class="showcase-grid">
+        <figure>
+          <h3>Who is speaking?
+            <small>Chapter 3 · instance classification · 50 speakers · wav2vec2-base</small>
+          </h3>
+          <div class="img-wrap">
+            <img src="img/ssp_50-class_hero.png" alt="Confusion matrix for 50-class speaker identification on ParlaSpeech-HR">
+          </div>
+          <div class="metrics">
+            <span class="metric"><span class="label">accuracy</span><span class="value">0.992</span></span>
+            <span class="metric"><span class="label">macro F1</span><span class="value">0.992</span></span>
+          </div>
+          <figcaption>
+            Confusion matrix on held-out TEST — one row per true speaker.
+            A bright diagonal means the model picked the right speaker almost
+            every time.
+            <small>ParlaSpeech-HR benchmark v3 · 20 epochs · best at epoch 15.</small>
+          </figcaption>
+        </figure>
+
+        <figure>
+          <h3>Where does the stress land?
+            <small>Chapter 4 · frame classification · classla · w2v-BERT</small>
+          </h3>
+          <div class="img-wrap">
+            <img src="img/ssp_frame_stress_hero.png" alt="Example primary-stress frame predictions per word">
+          </div>
+          <div class="metrics">
+            <span class="metric"><span class="label">pos-F1</span><span class="value">0.900</span></span>
+          </div>
+          <figcaption>
+            One strip per word on TEST. Orange is the gold stress interval,
+            blue is where the model agrees, red is where it fires on the wrong
+            frame.
+            <small>ParlaSpeech-HR benchmark v3 · lr 1e-5 · best at epoch 13.</small>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="chapters">
+      <h2>The chapters
+        <span class="sub">audio in → model out</span>
+      </h2>
+      <p>
+      Each chapter is a folder at the repo root, numbered in the order you walk
+      them. Every chapter ships the same code three ways: <code>.ipynb</code>
+      (narrated notebook), <code>.py</code> (same logic, headless),
+      <code>run_&lt;nn&gt;_*.py</code> (one-line shell wrapper). Pick the one
+      that matches how deep you want to go.
+      </p>
+      <div class="chapters">
+        <div class="chapter-card">
+          <div class="chap-id"><span class="num">0</span></div>
+          <div class="body">
+            <span class="kicker">ENV</span>
+            <div class="head">
+              <span class="title">🧰 Install the environment</span>
+              <span class="badge live">live</span>
+            </div>
+            <p>Two Python environments with pinned versions — a CPU one for data chapters, a CUDA one for model chapters.</p>
+          </div>
+        </div>
+
+        <div class="chapter-card">
+          <div class="chap-id"><span class="num">1</span></div>
+          <div class="body">
+            <span class="kicker">DATA PREP</span>
+            <div class="head">
+              <span class="title">📥 Fetch and tidy the corpora</span>
+              <span class="badge live">live</span>
+            </div>
+            <p>Pull the Slavic speech corpora and convert each one to a canonical JSONL manifest the rest of the toolkit reads.</p>
+          </div>
+        </div>
+
+        <div class="chapter-card">
+          <div class="chap-id"><span class="num">2</span></div>
+          <div class="body">
+            <span class="kicker">ANALYSIS</span>
+            <div class="head">
+              <span class="title">🔍 Look at what you got</span>
+              <span class="badge live">live</span>
+            </div>
+            <p>Verify the data is correct.</p>
+          </div>
+        </div>
+
+        <div class="chapter-card">
+          <div class="chap-id"><span class="num">3</span></div>
+          <div class="body">
+            <span class="kicker">INSTANCE MODELS</span>
+            <div class="head">
+              <span class="title">🎙️ One answer per clip</span>
+              <span class="badge live">live</span>
+            </div>
+            <p>Train a model to answer one question about a whole clip — speaker gender, speaker age, or filled-pause detection.</p>
+          </div>
+        </div>
+
+        <div class="chapter-card">
+          <div class="chap-id"><span class="num">4</span></div>
+          <div class="body">
+            <span class="kicker">FRAME MODELS</span>
+            <div class="head">
+              <span class="title">🎞️ Multiple answers per clip</span>
+              <span class="badge live">live</span>
+            </div>
+            <p>Train a model that answers the question moment by moment inside a clip — where the filled pause sits, where the primary stress lands.</p>
+          </div>
+        </div>
+
+        <div class="chapter-card">
+          <div class="chap-id"><span class="num">5</span></div>
+          <div class="body">
+            <span class="kicker">TG MINTER</span>
+            <div class="head">
+              <span class="title">📝 The human annotator in the loop</span>
+              <span class="badge live">live</span>
+            </div>
+            <p>Round-trip clips through Praat for human annotation, then read the TextGrids back into frame-level JSONL.</p>
+          </div>
+        </div>
+
+        <div class="chapter-card">
+          <div class="chap-id"><span class="num">6</span></div>
+          <div class="body">
+            <span class="kicker">INFERENCE</span>
+            <div class="head">
+              <span class="title">🚀 Deploy the trained model</span>
+              <span class="badge live">live</span>
+            </div>
+            <p>Point a trained model at a folder of new audio and get predictions out. Frame-classification path is wired today; other paths are scaffolded.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="guide">
+      <h2>The guide
+        <span class="sub">run it locally · chapter-by-chapter walkthrough</span>
+      </h2>
+      <div class="path">
+        <p>
+        Rather clone the repo and run the real pipeline on your own box? Install
+        the mamba env and walk the chapters at your own pace. Every entry point
+        ships three modes — <code>test</code> proves the plumbing in seconds,
+        <code>demo</code> returns a tangible number in about an hour,
+        <code>full</code> is for overnight runs.
+        </p>
+        <pre><code>bash 0_env_setup/setup_env_cuda.sh
+mamba activate ssp-cuda</code></pre>
+        <p>
+        The <a href="ssp-guide.html"><b>Under the Hood</b></a> guide walks every
+        chapter end to end — the exact command for each run, what to expect
+        while it runs, where to tweak the knobs, the hiccups that come up.
+        </p>
+        <!-- <a class="cta" href="ssp-guide.html">Open the guide →</a> -->
+      </div>
+    </section>
+
+    <section id="research">
+      <h2>Related research</h2>
+      <p>
+      ParlaSpeech is the resource ssp was built against. Each release has grown
+      the corpora, the annotation layers, and the research around them —
+      downstream papers below. ssp folds all of that into one toolkit so new
+      questions can build on the same foundation.
+      </p>
+
+      <h3 class="research-sub">Current research</h3>
+      <div class="current-research">
+        <ul>
+          <li>Fine-tuning a primary-stress frame model for Slovenian.</li>
+          <li>A filled-pause qualitative classifier (vocalic vs nasalic) at the instance level.</li>
+        </ul>
+      </div>
+
+      <h3 class="research-sub">Resources</h3>
+      <div class="pub-list">
+        <div class="pub-card feature parlaspeech-feature">
+          <img class="parlaspeech-logo" src="img/ParlaSpeech_logo_v0.png" alt="ParlaSpeech logo">
+          <div class="feature-content">
+            <div class="pub-header">
+              <span class="venue-badge">LREC-COLING 2026</span>
+              <span class="pub-year">2026</span>
+            </div>
+            <p class="pub-title">ParlaSpeech 3.0: Richly Annotated Spoken Parliamentary Corpora of Croatian, Czech, Polish, and Serbian</p>
+            <p class="pub-authors">Nikola Ljubešić, Peter Rupnik, <span class="accent">Ivan Porupski</span>, Taja Kuzman Pungeršek</p>
+            <p class="pub-note">
+              Six thousand hours of parliamentary speech across four Slavic
+              languages. Five automatic annotation layers in the 3.0 release.
+              The corpus bundle Chapter 1 downloads by default.
+            </p>
+            <div class="pub-actions">
+              <a class="pub-link" href="https://clarinsi.github.io/parlaspeech/" target="_blank" rel="noopener">Webpage</a>
+              <a class="pub-link" href="https://arxiv.org/abs/2511.01619" target="_blank" rel="noopener">arXiv</a>
+              <button class="cite-btn" onclick="toggleCite(this)">BibTeX</button>
+            </div>
+            <div class="cite-block" hidden>
+<pre>@misc{ljubesic2025parlaspeech30,
+  title         = {{ParlaSpeech} 3.0: Richly Annotated Spoken Parliamentary
+                   Corpora of Croatian, Czech, Polish, and Serbian},
+  author        = {Ljube{\v{s}}i{\'c}, Nikola and Rupnik, Peter and
+                   Porupski, Ivan and {Kuzman Punger{\v{s}}ek}, Taja},
+  year          = {2025},
+  eprint        = {2511.01619},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL},
+  url           = {https://arxiv.org/abs/2511.01619}
+}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="research-sub">Related papers</h3>
+<details class="related-papers">
+  <summary>Papers precursing the pipeline</summary>
+  <div class="pub-list">
+
+    <!-- Umm with Transformers -->
+    <div class="pub-card">
+      <div class="pub-header">
+        <span class="venue-badge">Interspeech 2026</span>
+        <span class="pub-year">2026 · published</span>
+      </div>
+      <p class="pub-title">Umm… With Transformers? Insights from Filled Pause Use across Four Slavic Parliaments</p>
+      <p class="pub-authors"><span class="accent">Ivan Porupski</span>, Branimir Dropuljić, Nikola Ljubešić</p>
+      <p class="pub-note">Proc. Interspeech 2026, pp. 4657–4662</p>
+      <div class="pub-actions">
+        <a class="pub-link" href="https://www.isca-archive.org/interspeech_2026/porupski26_interspeech.html" target="_blank" rel="noopener">ISCA</a>
+        <a class="pub-link" href="https://arxiv.org/abs/2607.05964" target="_blank" rel="noopener">arXiv</a>
+        <button class="cite-btn" onclick="toggleCite(this)">BibTeX</button>
+      </div>
+      <div class="cite-block" hidden>
+<pre>@inproceedings{porupski26_interspeech,
+  title     = {{Umm... With Transformers? Insights from Filled Pause Use
+               across Four Slavic Parliaments}},
+  author    = {Ivan Porupski and Branimir Dropuljić and Nikola Ljubešić},
+  booktitle = {{Interspeech 2026}},
+  year      = {2026},
+  pages     = {4657--4662},
+  doi       = {10.21437/Interspeech.2026-3262}
+}</pre>
+      </div>
+    </div>
+
+    <!-- CLARIN -->
+    <div class="pub-card">
+      <div class="pub-header">
+        <span class="venue-badge">CLARIN 2026</span>
+        <span class="pub-year">2026 · accepted</span>
+      </div>
+      <p class="pub-title">Past the Rapids: Downstream Research on ParlaSpeech</p>
+      <p class="pub-authors"><span class="accent">Ivan Porupski</span>, Nikola Ljubešić</p>
+      <div class="pub-actions">
+        <button class="cite-btn" onclick="toggleCite(this)">BibTeX</button>
+      </div>
+      <div class="cite-block" hidden>
+<pre>@inproceedings{porupski2026rapids,
+  title     = {Past the Rapids: Downstream Research on {ParlaSpeech}},
+  author    = {Porupski, Ivan and Ljube{\v{s}}i{\'c}, Nikola},
+  booktitle = {Proceedings of the CLARIN Annual Conference 2026},
+  year      = {2026},
+  note      = {Accepted}
+}</pre>
+      </div>
+    </div>
+
+    <!-- JTDH -->
+    <div class="pub-card">
+      <div class="pub-header">
+        <span class="venue-badge">JTDH 2026</span>
+        <span class="pub-year">2026 · published</span>
+      </div>
+      <p class="pub-title">Opinionated, Hesitant and Stressed: Three Studies of How Politicians Speak in Four Slavic Parliaments</p>
+      <p class="pub-authors"><span class="accent">Ivan Porupski</span>, Nikola Ljubešić</p>
+      <div class="pub-actions">
+        <a class="pub-link" href="https://zenodo.org/records/22766135" target="_blank" rel="noopener">Zenodo</a>
+        <a class="pub-link" href="https://arxiv.org/abs/2608.30828" target="_blank" rel="noopener">arXiv</a>
+        <button class="cite-btn" onclick="toggleCite(this)">BibTeX</button>
+      </div>
+      <div class="cite-block" hidden>
+<pre>@misc{porupski2026opinionated,
+  title        = {Opinionated, Hesitant and Stressed: Three Studies of How
+                  Politicians Speak in Four Slavic Parliaments},
+  author       = {Porupski, Ivan and Ljubešić, Nikola},
+  year         = {2026},
+  howpublished = {15th Conference on Language Technologies and Digital
+                  Humanities (JT-DH-2026), Ljubljana, Slovenia},
+  doi          = {10.5281/zenodo.22766135},
+  url          = {https://zenodo.org/records/22766135}
+}</pre>
+      </div>
+    </div>
+
+    <!-- Primary Stress 2025 -->
+    <div class="pub-card">
+      <div class="pub-header">
+        <span class="venue-badge">Interspeech 2025</span>
+        <span class="pub-year">2025 · published</span>
+      </div>
+      <p class="pub-title">Identifying Primary Stress Across Related Languages and Dialects with Transformer-based Speech Encoder Models</p>
+      <p class="pub-authors">Nikola Ljubešić, <span class="accent">Ivan Porupski</span>, Peter Rupnik</p>
+      <p class="pub-note">Proc. Interspeech 2025, pp. 5768–5772</p>
+      <div class="pub-actions">
+        <a class="pub-link" href="https://www.isca-archive.org/interspeech_2025/ljubesic25_interspeech.html" target="_blank" rel="noopener">ISCA</a>
+        <a class="pub-link" href="https://arxiv.org/abs/2505.24571" target="_blank" rel="noopener">arXiv</a>
+        <button class="cite-btn" onclick="toggleCite(this)">BibTeX</button>
+      </div>
+      <div class="cite-block" hidden>
+<pre>@inproceedings{ljubesic2025primarystress,
+  title     = {Identifying Primary Stress Across Related Languages and
+               Dialects with Transformer-based Speech Encoder Models},
+  author    = {Ljube{\v{s}}i{\'c}, Nikola and Porupski, Ivan and
+               Rupnik, Peter},
+  booktitle = {Proceedings of Interspeech 2025},
+  pages     = {5768--5772},
+  year      = {2025},
+  doi       = {10.21437/Interspeech.2025-205}
+}</pre>
+      </div>
+    </div>
+
+  </div>
+</details>
+    </section>
+
+    <section id="citation">
+      <h2>Cite the toolkit</h2>
+      <pre><code>@misc{slavic_speech_pipeline_2026,
+  author = {Porupski, Ivan},
+  title  = {slavic-speech-pipeline: Speech encoders on Slavic speech corpora},
+  year   = {2026},
+  note   = {Jožef Stefan Institute},
+  url    = {https://github.com/porupski/slavic-speech-pipeline}
+}</code></pre>
+    </section>
+  </main>
+
+  <footer>
+    <p>MIT · <a href="https://porupski.github.io/cv/">Ivan Porupski</a> · <a href="https://www.ijs.si/">Jožef Stefan Institute</a></p>
+  </footer>
+
+  <script>
+    const KEY = 'ssp-theme';
+    function applyTheme(t) { document.documentElement.setAttribute('data-theme', t); }
+    function toggleTheme() {
+      const now = document.documentElement.getAttribute('data-theme') || 'light';
+      const next = (now === 'light') ? 'dark' : 'light';
+      try { localStorage.setItem(KEY, next); } catch (_) {}
+      applyTheme(next);
+    }
+    (function init() {
+      let saved = null;
+      try { saved = localStorage.getItem(KEY); } catch (_) {}
+      applyTheme(saved === 'dark' ? 'dark' : 'light');
+    })();
+
+    function toggleCite(btn) {
+      const block = btn.closest('.pub-card').querySelector('.cite-block');
+      const hidden = block.hasAttribute('hidden');
+      block.toggleAttribute('hidden', !hidden);
+      btn.textContent = hidden ? 'Hide' : 'BibTeX';
+      if (hidden) {
+        const pre = block.querySelector('pre');
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(pre);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+  </script>
+</body>
+</html>
