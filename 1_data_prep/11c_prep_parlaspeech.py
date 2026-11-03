@@ -1,11 +1,12 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: ipynb,py:percent
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.3
+#       jupytext_version: 1.19.5
 #   kernelspec:
 #     display_name: ssp
 #     language: python
@@ -131,7 +132,7 @@ else:
     if not LANGS:
         raise FileNotFoundError(
             "cfg.lang empty and no ParlaSpeech-{LANG} dirs under data/unpacked/. "
-            "Run 10_download_data.ipynb first.")
+            "Run 10_download_data_clarin.ipynb first.")
 
 if cfg.test_mode:
     udp.banner("🧪 TEST MODE", char="-")
@@ -209,7 +210,7 @@ def locate_jsonl(ctx: dict) -> Path:
     p = PROJECT_ROOT / ctx["jsonl_path"]
     if not p.exists():
         raise FileNotFoundError(
-            f"JSONL not found: {p}\nRun 10_download_data.ipynb for {ctx['DATASET']} first.")
+            f"JSONL not found: {p}\nRun 10_download_data_clarin.ipynb for {ctx['DATASET']} first.")
     print(f"✅ {p.relative_to(PROJECT_ROOT)}  ({p.stat().st_size/1e6:.0f} MB)")
     return p
 

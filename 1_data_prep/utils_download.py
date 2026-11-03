@@ -1,7 +1,7 @@
 """
 utils_download.py
 =================
-Helpers behind ``10_download_data``. The notebook stays thin — config, plan,
+Helpers behind ``10_download_data_clarin``. The notebook stays thin — config, plan,
 execute — and imports everything real from here.
 
 Two source types are supported:
@@ -46,7 +46,7 @@ REGISTRY_FILENAME = "10a_dataset_registry.json"
 
 
 def load_registry(chapter_dir: Path) -> dict[str, Any]:
-    """Load the JSON registry that sits next to ``10_download_data``."""
+    """Load the JSON registry that sits next to ``10_download_data_clarin``."""
     path = chapter_dir / REGISTRY_FILENAME
     if not path.exists():
         raise FileNotFoundError(f"registry not found: {path}")

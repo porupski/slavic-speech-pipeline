@@ -1,11 +1,12 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: ipynb,py:percent
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.3
+#       jupytext_version: 1.19.5
 #   kernelspec:
 #     display_name: ssp
 #     language: python
@@ -23,14 +24,19 @@
 # helpers live in [`utils_download.py`](utils_download.py). To add another source (CLARIN
 # or HF-raw-file), see the `_readme.how_to_extend` note inside the registry JSON.
 #
-# > **Note — ParlaSpeech-HR benchmarks (v1 / v3) are handled elsewhere.**
-# > They are HF datasets in native `datasets` format, pulled inline by
-# > [`11d`](11d_prep_parlaspeech_benchmark_v1.py) and [`11e`](11e_prep_parlaspeech_benchmark_v3.py)
-# > via `load_dataset(...)` — no separate download step. If you only want the benchmarks
-# > for a quick end-to-end pass through the pipeline, skip this notebook and start there.
+# **ParlaSpeech is the gold ssp orients by.** The full ParlaSpeech releases are
+# large (tens of GB per language, hundreds of GB with audio), so most workflows
+# start from the ParlaSpeech-HR benchmarks (v1 / v3) instead — they are HF
+# datasets in native `datasets` format and are pulled inline by
+# [`11d`](11d_get_prep_parlaspeech_benchmark_v1.py) and
+# [`11e`](11e_get_prep_parlaspeech_benchmark_v3.py) via `load_dataset(...)`, no
+# separate download step. If you only want the benchmarks for a quick
+# end-to-end pass through the pipeline, skip this notebook and start there.
 #
-# **Default target: `ROG-Dialog`.** A small (~1.2 GB) complete Slovenian corpus — annotations
-# and audio in one bundle, feeds `11b`. Anything larger you opt into deliberately below.
+# This downloader is for the **full corpora from CLARIN** — ParlaSpeech-{HR,RS,PL,CZ},
+# ROG, GOS — when you need the complete release rather than a benchmark slice.
+# The small default below (`ROG-Dialog`, ~1.2 GB) is a safe starting pick to
+# see the flow; swap in whatever you actually need before running.
 #
 # ---
 #
@@ -66,7 +72,7 @@ print(f"Shorthands:         {sorted(REGISTRY['shorthands'])}")
 #
 # `cfg.datasets` is the list of registry keys (or shorthands) to fetch. Examples:
 #
-# - `["ROG-Dialog"]` — the default; Slovenian dialogue corpus (~1.2 GB, annotations + audio).
+# - `["ROG-Dialog"]` — the starting default; Slovenian dialogue corpus (~1.2 GB, annotations + audio).
 # - `["ParlaSpeech-RS"]` — just Serbian ParlaSpeech annotations (~2 GB, no audio).
 # - `["ParlaSpeech-RS", "ParlaSpeech-RS-audio"]` — Serbian annotations + audio; smallest of the
 #   full ParlaSpeech releases (~65 GB).
@@ -301,7 +307,7 @@ for ds_name in target_datasets:
 # - **GOS** → arrange restricted audio access first.
 #
 # For the ParlaSpeech-HR benchmarks (v1 / v3), skip this notebook and go straight to
-# `11d_prep_parlaspeech_benchmark_v1.ipynb` / `11e_prep_parlaspeech_benchmark_v3.ipynb` —
+# `11d_get_prep_parlaspeech_benchmark_v1.ipynb` / `11e_get_prep_parlaspeech_benchmark_v3.ipynb` —
 # they call `load_dataset(...)` directly, no separate CLARIN-style download needed.
 #
 # Re-running with the same config just prints skip lines — idempotent.

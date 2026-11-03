@@ -11,6 +11,7 @@ test_processed_jsonl/
 ref_files/
 misc/
 *_test.*
+docs/mockup
 
 # --- local backups (created before risky edits) ------------------------------
 *.BACKUP.*

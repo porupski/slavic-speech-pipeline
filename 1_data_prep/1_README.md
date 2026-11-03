@@ -13,8 +13,8 @@ cd 1_data_prep
 
 There are two entry points depending on what you want:
 
-- **Fastest path to a working model** — go straight to `11d`/`11e` (the ParlaSpeech-HR benchmarks). They pull ~9 GB of pre-built audio + labels from Hugging Face via `load_dataset(...)`, no separate download step. One `python 11e_prep_parlaspeech_benchmark_v3.py` and you have five per-task JSONLs ready for chapter 3.
-- **Full corpora** — start with `10_download_data`, then the matching prep notebook. This is the CLARIN track (ParlaSpeech-{HR,RS,PL,CZ}, ROG, GOS) — large downloads, more control.
+- **Fastest path to a working model** — go straight to `11d`/`11e` (the ParlaSpeech-HR benchmarks). They pull ~9 GB of pre-built audio + labels from Hugging Face via `load_dataset(...)`, no separate download step. One `python 11e_get_prep_parlaspeech_benchmark_v3.py` and you have five per-task JSONLs ready for chapter 3.
+- **Full corpora** — start with `10_download_data_clarin`, then the matching prep notebook. This is the CLARIN track (ParlaSpeech-{HR,RS,PL,CZ}, ROG, GOS) — large downloads, more control.
 
 Every prep writes:
 - one or more files under `data/processed_jsonl/` (the canonical JSONL that every downstream chapter reads), and
@@ -27,12 +27,12 @@ Then optionally `2_data_analysis/20_explore_dataset.ipynb` to eyeball the output
 - **`11a_prep_ROG-art.ipynb`** — ROG-Art (EXB), dual output (instance + frame).
 - **`11b_prep_ROG-dia.ipynb`** — ROG-Dialog (EXB), instance.
 - **`11c_prep_parlaspeech.ipynb`** — the workhorse for full ParlaSpeech per language. Reads the v3 JSONL, converts per-utterance FLAC → 16 kHz mono WAV via the multicore splitter, and emits up to three recipes per language: `utterance_instance` (scalar labels — gender, FP presence/count, sentiment, age), `utterance_frame` (50 Hz `filled_pause` sequence), and `word_frame` (one record per primary-stress-annotated word, HR/RS only). One file per instance-shape — multiple label keys live in the same file; the trainer picks one via `label_key`.
-- **`11d_prep_parlaspeech_benchmark_v1.ipynb`** — pull the HR benchmark **v1** from HF (`porupski/ParlaSpeech-HR-benchmark_v1`), extract audio to disk, emit four per-task classification JSONLs (gender / speaker-id / power-status / age). Splits come from the benchmark's per-task columns — no `assign_splits`.
-- **`11e_prep_parlaspeech_benchmark_v3.ipynb`** — same idea, benchmark **v3** (`porupski/ParlaSpeech-HR-benchmark_v3`). Three classification tasks + two regression tasks (age, orientation).
+- **`11d_get_prep_parlaspeech_benchmark_v1.ipynb`** — pull the HR benchmark **v1** from HF (`porupski/ParlaSpeech-HR-benchmark_v1`), extract audio to disk, emit four per-task classification JSONLs (gender / speaker-id / power-status / age). Splits come from the benchmark's per-task columns — no `assign_splits`.
+- **`11e_get_prep_parlaspeech_benchmark_v3.ipynb`** — same idea, benchmark **v3** (`porupski/ParlaSpeech-HR-benchmark_v3`). Three classification tasks + two regression tasks (age, orientation).
 
 Each prep file with a paired `.py` (jupytext percent format) treats the `.py` as the source of truth — regenerate the `.ipynb` with `jupytext --to ipynb <file>.py`.
 
-## Downloading full corpora — `10_download_data`
+## Downloading full corpora — `10_download_data_clarin`
 
 The download catalogue for CLARIN sources lives in **`10a_dataset_registry.json`** (kept out of the notebook so the notebook stays skimmable), and the fetch/unpack helpers live in **`utils_download.py`**. Two source types are supported by the registry:
 
