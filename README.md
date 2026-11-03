@@ -2,10 +2,10 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/porupski/slavic-speech-pipeline/blob/main/colab_demo/ssp-colab_demo-speaker_id.ipynb) (DEMO)
 
-The **slavic-speech-pipeline (ssp)** fine-tunes Wav2Vec2 encoders on Slavic
-speech corpora. The pipeline supports instance-level and frame-level
-tasks with one shared code base. A single config setting selects
-classification or regression.
+The **slavic-speech-pipeline (ssp)** fine-tunes speech encoders — Wav2Vec2
+and w2v-BERT — on Slavic speech corpora. The pipeline supports instance-level
+and frame-level tasks with one shared code base. A single config setting
+selects classification or regression.
 
 The default corpus is **ParlaSpeech** (HR, RS, CZ, PL). Two pre-built
 **ParlaSpeech-HR benchmark** bundles (v1 and v3) give a smaller entry

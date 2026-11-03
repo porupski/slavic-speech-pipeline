@@ -272,9 +272,27 @@ def print_project_info(verbose: bool = False) -> None:
         print(f"HF cache     = <repo>/stock_models/  (via HF_HOME, project-local)")
 
 
+def model_tag(model_name: str) -> str:
+    """Short acronym for a HF model name — goes into run folder names."""
+    s = model_name.split("/")[-1].lower()
+    table = {
+        "wav2vec2-base": "w2v2-base",
+        "wav2vec2-large": "w2v2-large",
+        "wav2vec2-large-960h": "w2v2-large-960h",
+        "wav2vec2-xls-r-300m": "xls-r-300m",
+        "wav2vec2-xls-r-1b": "xls-r-1b",
+        "wav2vec2-xls-r-2b": "xls-r-2b",
+        "wav2vec2-large-xlsr-53": "xlsr-53",
+        "w2v-bert-2.0": "w2v-bert",
+    }
+    if s in table:
+        return table[s]
+    return s.replace("wav2vec2", "w2v2")
+
+
 def make_run_name(cfg: Config) -> str:
     """Auto-generate a run name under the toolkit-wide naming contract:
-        {YYYY-MM-DD}_{HHMMSS}_{data}_{task_name}_classification
+        {YYYY-MM-DD}_{HHMMSS}_{data}_{model_tag}_{task_name}_classification
     where {data} is the leaf folder name of cfg.audio_dir. If the folder name
     is empty (e.g. cfg.audio_dir='/'), falls back to 'audio'.
     Timestamp first → folders sort chronologically. Colon-free time keeps the
@@ -282,7 +300,8 @@ def make_run_name(cfg: Config) -> str:
     audio_dir_p = Path(cfg.audio_dir)
     data_tag = audio_dir_p.name or "audio"
     ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    return f"{ts}_{data_tag}_{cfg.task_name}_classification"
+    m_tag = model_tag(cfg.model_name)
+    return f"{ts}_{data_tag}_{m_tag}_{cfg.task_name}_classification"
 
 
 def print_config_summary(cfg: Config, device: str) -> None:
