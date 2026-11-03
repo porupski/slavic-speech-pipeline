@@ -22,10 +22,10 @@
 #
 # Status today:
 #   * Engine stub: `utils_instance_infer.py` — raises at `load_config`.
-#   * Task registry: `tasks.json/instance_regression` is empty.
+#   * Task registry: `6_tasks.json/instance_regression` is empty.
 #
 # When ready to wire this quadrant, follow the port plan at the top of
-# `utils_instance_infer.py`. Then populate `tasks.json` with a task entry
+# `utils_instance_infer.py`. Then populate `6_tasks.json` with a task entry
 # (`model_name`, `task_name`, `task_type: "regression"`, `normalize`,
 # `label_scale`), and rename this notebook / its `.ipynb` / its runner to
 # drop the `-WIP` suffix.
@@ -33,12 +33,12 @@
 # %% [markdown]
 # # Setup
 #
-# Pick a task (empty until tasks.json/instance_regression is populated)
+# Pick a task (empty until 6_tasks.json/instance_regression is populated)
 # and a run mode, then run the next cell. It will raise cleanly with the
 # port plan.
 
 # %%
-TASK     = ""        # populate once a task is registered under tasks.json/instance_regression
+TASK     = ""        # populate once a task is registered under 6_tasks.json/instance_regression
 RUN_MODE = "demo"    # "test" | "demo" | "full"
 
 import sys
@@ -49,7 +49,7 @@ if HERE.name != "6_inference":
     if candidate.exists():
         HERE = candidate
 sys.path.insert(0, str(HERE))
-CONFIG_PATH = HERE / "config.json"
+CONFIG_PATH = HERE / "6_config.json"
 
 import utils_instance_infer as uii
 cfg = uii.load_config(CONFIG_PATH, run_mode=RUN_MODE, task=TASK,

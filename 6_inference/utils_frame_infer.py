@@ -24,8 +24,8 @@ IMPORT-ORDER CONTRACT (same as chapter 3 — read before importing):
   3. Headless runners should set ``MPLBACKEND=Agg`` before importing (notebooks
      don't need to — the inline backend is already active).
 
-Config flow: ``load_config(path, run_mode, task)`` reads config.json (shared
-block + mode overrides) and layers the task entry from tasks.json under the
+Config flow: ``load_config(path, run_mode, task)`` reads 6_config.json (shared
+block + mode overrides) and layers the task entry from 6_tasks.json under the
 quadrant ``frame_classification``. See ``QUADRANT`` below.
 """
 
@@ -58,7 +58,7 @@ from transformers import AutoFeatureExtractor, AutoModelForAudioFrameClassificat
 N_PLOT_EXAMPLES = 3
 
 # This engine serves the frame_classification quadrant. load_config reads only
-# tasks under tasks.json["frame_classification"]. The sibling frame_regression
+# tasks under 6_tasks.json["frame_classification"]. The sibling frame_regression
 # quadrant will be served by a future utils_frame_regression_infer.py once the
 # 64 scaffold is wired.
 QUADRANT = "frame_classification"
@@ -196,12 +196,12 @@ def _available_tasks(tasks_raw: dict, quadrant: str) -> list[str]:
 
 def load_config(path: str | Path, run_mode: str = "full",
                 task: str | None = None) -> Config:
-    """Read config.json + tasks.json (quadrant-scoped), apply run-mode
+    """Read 6_config.json + 6_tasks.json (quadrant-scoped), apply run-mode
     overrides, resolve model_name (trace-file → project-relative → HF id), and
     return a validated Config.
 
-    Layering (later wins): Config defaults → common ``config.json`` shared
-    block → ``tasks.json[QUADRANT][task]`` → ``modes[run_mode]``.
+    Layering (later wins): Config defaults → common ``6_config.json`` shared
+    block → ``6_tasks.json[QUADRANT][task]`` → ``modes[run_mode]``.
 
     Passing ``task=None`` skips the task layer (common config only) — useful
     for smoke tests. Real inference always sets a task."""
@@ -213,11 +213,11 @@ def load_config(path: str | Path, run_mode: str = "full",
 
     task_shared: dict = {}
     if task is not None:
-        tasks_path = common_path.parent / "tasks.json"
+        tasks_path = common_path.parent / "6_tasks.json"
         if not tasks_path.exists():
             raise FileNotFoundError(
                 f"task={task!r} but {tasks_path} not found. "
-                f"Create tasks.json or pass task=None."
+                f"Create 6_tasks.json or pass task=None."
             )
         with open(tasks_path) as f:
             tasks_raw = json.load(f)
@@ -226,7 +226,7 @@ def load_config(path: str | Path, run_mode: str = "full",
         if task not in available:
             raise KeyError(
                 f"task={task!r} not registered under "
-                f"tasks.json/{QUADRANT}. Available: {available}"
+                f"6_tasks.json/{QUADRANT}. Available: {available}"
             )
         task_shared = _strip_underscore_keys(quadrant_tasks[task])
 
@@ -235,10 +235,10 @@ def load_config(path: str | Path, run_mode: str = "full",
 
     cfg = Config()
     _layer_shared_block(cfg, _strip_underscore_keys(shared_common),
-                        source_label="config.json")
+                        source_label="6_config.json")
     if task_shared:
         _layer_shared_block(cfg, task_shared,
-                            source_label=f"tasks.json/{QUADRANT}/{task}")
+                            source_label=f"6_tasks.json/{QUADRANT}/{task}")
     apply_mode(cfg, modes[run_mode])
     cfg.run_mode = run_mode
 

@@ -25,7 +25,7 @@ same shape as ``utils_frame_infer.py``:
  3. Implement ``run_inference(cfg, run_name)``: walk cfg.audio_dir, read each
     WAV, run the model, emit one JSONL line per file. For regression, decode
     through the normalizer so JSONL values read in natural units.
- 4. Register at least one task per quadrant in ``tasks.json``:
+ 4. Register at least one task per quadrant in ``6_tasks.json``:
       - instance_classification: ``gender``, ``FP_presence``, ``speaker_id``
       - instance_regression:     ``age``, ``sentiment``
  5. Fill in each scaffold's TASK selector and remove its ``-WIP`` suffix.
@@ -61,8 +61,8 @@ class Config:
 
 def load_config(path, run_mode: str, task: str, quadrant: str):
     """SCAFFOLD stub, 2026-11-02. The real loader will mirror
-    ``utils_frame_infer.load_config``: read config.json shared block, apply
-    the task entry from tasks.json/<quadrant>/<task>, overlay the run_mode."""
+    ``utils_frame_infer.load_config``: read 6_config.json shared block, apply
+    the task entry from 6_tasks.json/<quadrant>/<task>, overlay the run_mode."""
     if quadrant not in QUADRANTS:
         raise ValueError(
             f"quadrant={quadrant!r} not served by utils_instance_infer; "

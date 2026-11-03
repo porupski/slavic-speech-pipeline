@@ -2,7 +2,7 @@
 """run_63_frame_classification_inference — frame-classification inference runner (chapter 6).
 
 The command-line twin of 63_frame_classification_inference.ipynb — same engine
-(utils_frame_infer.py), same config.json, no interactive prompts. This is the
+(utils_frame_infer.py), same 6_config.json, no interactive prompts. This is the
 tool for FULL inference runs: launch it in tmux and walk away.
 
 Usage:
@@ -11,7 +11,7 @@ Usage:
   python run_63_frame_classification_inference.py --task fp -m full -r fp_full --use_gpu --audio_dir data/inference_input/parliamentary
 
 Device policy: CPU by default (safe, prompt-free). --use_gpu arms the reserved
-GPU from config.json (shared.reserved_gpu) — the explicit, non-interactive
+GPU from 6_config.json (shared.reserved_gpu) — the explicit, non-interactive
 replacement for the notebook's input-gated GPU guard. We NEVER touch another GPU.
 """
 
@@ -30,10 +30,10 @@ def parse_args() -> argparse.Namespace:
         description=__doc__.splitlines()[0],
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--config", "-c", default=str(HERE / "config.json"),
-                   help="path to config.json")
+    p.add_argument("--config", "-c", default=str(HERE / "6_config.json"),
+                   help="path to 6_config.json")
     p.add_argument("--task", "-t", required=True,
-                   help="task key under tasks.json/frame_classification "
+                   help="task key under 6_tasks.json/frame_classification "
                         "(e.g. 'fp', 'primary_stress')")
     p.add_argument("--mode", "-m", choices=["test", "demo", "full"], default="full",
                    help="run_mode; caps cap_files")

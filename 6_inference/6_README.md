@@ -20,7 +20,7 @@ source of truth, and a CLI twin (`run_*.py`) for unattended runs in tmux.
 ## Tasks
 
 Per-task knobs (which trained model to load, which postproc rules apply,
-what task identifier to stamp into the JSONL) live in `tasks.json`.
+what task identifier to stamp into the JSONL) live in `6_tasks.json`.
 Entries are grouped by quadrant:
 
 ```jsonc
@@ -66,7 +66,7 @@ best run without any config edit.
 ## Common config
 
 Common knobs — the ones shared across every quadrant — live in
-`config.json`: audio directory, runs directory, batch size, chunk length,
+`6_config.json`: audio directory, runs directory, batch size, chunk length,
 reserved GPU, and the three run-mode caps (`test`, `demo`, `full`).
 
 ## Running 63 (the one live entry point)
@@ -151,9 +151,9 @@ correctness verifier.
 | `run_62_instance_regression_inference-WIP.py` | SCAFFOLD CLI twin of 62. |
 | `64_frame_regression_inference-WIP.py` / `.ipynb` | SCAFFOLD (2026-11-02). Entry point for the frame_regression quadrant. Needs a new `utils_frame_regression_infer.py` module (sibling of the live `utils_frame_infer.py`). |
 | `run_64_frame_regression_inference-WIP.py` | SCAFFOLD CLI twin of 64. |
-| `utils_frame_infer.py` | The frame-classification engine. Reads `config.json` + `tasks.json/frame_classification/<task>` + run-mode overrides. Handles chunking, batched forward pass, frames → events + postproc, JSONL + TextGrid writes, waveform plots. `QUADRANT = "frame_classification"`. |
+| `utils_frame_infer.py` | The frame-classification engine. Reads `6_config.json` + `6_tasks.json/frame_classification/<task>` + run-mode overrides. Handles chunking, batched forward pass, frames → events + postproc, JSONL + TextGrid writes, waveform plots. `QUADRANT = "frame_classification"`. |
 | `utils_instance_infer.py` | SCAFFOLD (2026-11-02). Will serve both instance quadrants once wired. Port template: chapter 3's `utils_instance_train.py` predict path. |
-| `config.json` | Common knobs (audio dir, runs dir, batch size, chunk length, reserved GPU, run-mode caps). Shared across every task. |
-| `tasks.json` | Task registry. Entries grouped by quadrant. Each entry carries model, postproc, task identifier, output flags. |
+| `6_config.json` | Common knobs (audio dir, runs dir, batch size, chunk length, reserved GPU, run-mode caps). Shared across every task. |
+| `6_tasks.json` | Task registry. Entries grouped by quadrant. Each entry carries model, postproc, task identifier, output flags. |
 | `vowels_by_language.json` | Grapheme-level vowel sets per language. Used by the future vowel-nucleus accuracy metric. HR, RS, SI include `r` (syllabic liquid). |
 | `6_README.md` | This file. |

@@ -22,9 +22,9 @@ def parse_args() -> argparse.Namespace:
         description=__doc__.splitlines()[0],
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--config", "-c", default=str(HERE / "config.json"))
+    p.add_argument("--config", "-c", default=str(HERE / "6_config.json"))
     p.add_argument("--task", "-t", required=True,
-                   help="task key under tasks.json/frame_regression")
+                   help="task key under 6_tasks.json/frame_regression")
     p.add_argument("--mode", "-m", choices=["test", "demo", "full"], default="full")
     p.add_argument("--run_name", "-r", default=None)
     p.add_argument("--audio_dir", default=None)

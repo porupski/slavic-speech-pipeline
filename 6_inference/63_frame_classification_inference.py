@@ -4,11 +4,11 @@
 # The one entry point for every frame-classification task — the quadrant
 # `frame_classification`. Pick a task via `TASK` below (two live today: `fp`
 # for filled pauses, `primary_stress` for word-level primary stress). The
-# task registry sits in `tasks.json`; add a task there to make it available
+# task registry sits in `6_tasks.json`; add a task there to make it available
 # here.
 #
-# Common knobs live in `config.json`. Per-task knobs (model, postproc rules,
-# flags) live in `tasks.json` under `frame_classification/<task>`. The engine
+# Common knobs live in `6_config.json`. Per-task knobs (model, postproc rules,
+# flags) live in `6_tasks.json` under `frame_classification/<task>`. The engine
 # lives in `utils_frame_infer.py`. Each cell here imports just what it needs.
 #
 # Any HF repo or local checkpoint that implements
@@ -23,7 +23,7 @@
 #
 # One visible block does three things **before** anything heavy loads:
 #
-# 1. Locates this chapter's folder and `config.json`.
+# 1. Locates this chapter's folder and `6_config.json`.
 # 2. Runs the **GPU guard** — same rule as chapter 3: `CUDA_VISIBLE_DEVICES`
 #    must be set before torch's first CUDA touch, and `utils_frame_infer`
 #    imports torch at module level.
@@ -42,7 +42,7 @@ if HERE.name != "6_inference":
     if candidate.exists():
         HERE = candidate
 sys.path.insert(0, str(HERE))          # utils_frame_infer.py lives next to this notebook
-CONFIG_PATH = HERE / "config.json"
+CONFIG_PATH = HERE / "6_config.json"
 
 RESERVED_GPU = json.loads(CONFIG_PATH.read_text())["shared"].get("reserved_gpu", "2")
 _env = os.environ.get("CONDA_DEFAULT_ENV", "")
@@ -85,7 +85,7 @@ print_project_info()
 # are skipped. Delete the JSONL to force a full re-run.
 
 # %%
-TASK     = "fp"      # pick one from tasks.json/frame_classification: "fp" | "primary_stress" | ...
+TASK     = "fp"      # pick one from 6_tasks.json/frame_classification: "fp" | "primary_stress" | ...
 RUN_MODE = "demo"    # "test" | "demo" | "full"
 RUN_NAME = None      # None → auto-generate: {audio_dir_basename}_{task_name}_classification_{ts}
                      # (mirrors Ch3's naming); or set an explicit string here.

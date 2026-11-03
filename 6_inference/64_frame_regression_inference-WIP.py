@@ -27,7 +27,7 @@
 #   * Engine: `utils_frame_infer.py` serves the sibling `frame_classification`
 #     quadrant only (hard-coded via its `QUADRANT` constant). This scaffold
 #     needs a `utils_frame_regression_infer.py` module — not yet written.
-#   * Task registry: `tasks.json/frame_regression` is empty.
+#   * Task registry: `6_tasks.json/frame_regression` is empty.
 #
 # Port plan (dated 2026-11-02):
 #   1. Create `utils_frame_regression_infer.py` by copying
@@ -36,7 +36,7 @@
 #      head), the loss, and the frames→events collapse (regression needs
 #      a per-frame numeric emission, not an event collapse). Set its
 #      `QUADRANT = "frame_regression"`.
-#   2. Register a task under `tasks.json/frame_regression`.
+#   2. Register a task under `6_tasks.json/frame_regression`.
 #   3. Point this notebook at `utils_frame_regression_infer`.
 #   4. Rename this file / its `.ipynb` / its runner to drop the `-WIP`
 #      suffix.
