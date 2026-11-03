@@ -6,10 +6,10 @@ phase-1 (DEV) → phase-2 (TEST) frame-classification run through the same
 engine as ``run_41_classification``.
 aggregates the best DEV + best TEST metrics into a CSV, plots a bar chart
 comparing macro-F1 and positive-class F1 across tasks, and lets you
-fire-and-forget overnight. A crash in one cell does not kill the queue — the
-error is written into that task's CSV row and the next cell runs.
+fire-and-forget overnight. A crash in one task does not kill the queue — the
+error is written into that task's CSV row and the next task runs.
 
-Every cell writes its own ``<list_root>/<label>/`` tree with:
+Every task writes its own ``<list_root>/<label>/`` tree with:
 - per-epoch predictions.json / epoch_summary.json / example_predictions.png
 - top-level confusion_matrix_test.png + example_predictions_test.png
 - effective config snapshot
@@ -48,9 +48,9 @@ TASK_TYPE = "classification"
 # ══════════════════════════════════════════════════════════════════════════
 # TASK LIST — edit this list to change the queue
 # ══════════════════════════════════════════════════════════════════════════
-# Each cell is a dict of Config field overrides. Every key must name a real
+# Each task is a dict of Config field overrides. Every key must name a real
 # Config field in utils_frame_train.py (typos are a hard error). The `label`
-# is not a Config field; it names the cell's sub-directory and CSV row.
+# is not a Config field; it names the task's sub-directory and CSV row.
 #
 # Baseline (facebook/w2v-bert-2.0) got macro-F1 ≈ 0.94 / F1+ ≈ 0.90 at
 # lr=1e-5, bs=64, 15 epochs. The sweep below varies LR around that anchor
@@ -106,7 +106,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--config", "-c", default=str(HERE / "4_config.json"),
                    help="path to 4_config.json (base layer)")
     p.add_argument("--mode", "-m", choices=["test", "demo", "full"], default="full",
-                   help="base run_mode; cell overrides layer on top")
+                   help="base run_mode; task overrides layer on top")
     p.add_argument("--use_gpu", action="store_true",
                    help="arm the reserved GPU (no prompt); default is CPU")
     p.add_argument("--dry_run", action="store_true",
@@ -128,7 +128,7 @@ def print_task_plan(tasks: list[dict]) -> None:
 
 def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
     """Run one task. Returns the CSV row dict (partial on failure)."""
-    # Imports live inside so a failing cell can't kill later ones on import-time
+    # Imports live inside so a failing task can't kill later ones on import-time
     # errors (also so the GPU guard in main() runs before torch is imported).
     from utils_frame_train import (
         load_config, validate_config, resolve_device, print_config_summary,
@@ -151,12 +151,12 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
     try:
         # Base config (4_config.json + mode overrides). Cell overrides layer on top.
         cfg, _ = load_config(args.config, task_type=TASK_TYPE, run_mode=args.mode)
-        overrides = {k: v for k, v in cell.items() if k != "label"}
+        overrides = {k: v for k, v in task.items() if k != "label"}
         from dataclasses import fields as _fields
         valid = {f.name for f in _fields(cfg)}
         unknown = set(overrides) - valid
         if unknown:
-            raise ValueError(f"cell {task['label']!r}: unknown Config fields {sorted(unknown)}")
+            raise ValueError(f"task {task['label']!r}: unknown Config fields {sorted(unknown)}")
         for k, v in overrides.items():
             setattr(cfg, k, v)
         validate_config(cfg)
@@ -311,11 +311,11 @@ def main() -> None:
 
     print_task_plan(tasks)
     list_t0 = time.time()
-    for task_idx, cell in enumerate(tasks, 1):
+    for task_idx, task in enumerate(tasks, 1):
         header = f" TASK {task_idx}/{len(tasks)}: {task['label']} "
         print(f"\n{'='*70}\n{header:=^70}\n{'='*70}")
         row = run_one_task(task_idx, task, args, list_root)
-        # Append + flush after every cell so tail -f works and a mid-sweep
+        # Append + flush after every task so tail -f works and a mid-sweep
         # crash still leaves partial results on disk.
         with open(csv_path, "a", newline="") as f:
             csv.DictWriter(f, fieldnames=CSV_FIELDS).writerow(row)
@@ -323,7 +323,7 @@ def main() -> None:
         elapsed = time.time() - list_t0
         remaining = len(tasks) - task_idx
         eta = elapsed / task_idx * remaining if task_idx else 0.0
-        print(f"\n📊 cell done in {row['wall_time_s']}s  |  "
+        print(f"\n📊 task done in {row['wall_time_s']}s  |  "
               f"elapsed {int(elapsed//60)}m  |  eta {int(eta//60)}m for {remaining} left")
 
     # Aggregate plot

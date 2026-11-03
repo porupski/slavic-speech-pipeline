@@ -1247,21 +1247,15 @@ def model_tag(model_name: str) -> str:
 
 
 def _tee_stdout(run_dir: Path) -> None:
-    """Mirror stdout + stderr to run_dir/run.log for the rest of the process."""
-    log_path = run_dir / "run.log"
-    class _Tee:
-        def __init__(self, *streams): self.streams = streams
-        def write(self, data):
-            for s in self.streams:
-                try: s.write(data); s.flush()
-                except Exception: pass
-        def flush(self):
-            for s in self.streams:
-                try: s.flush()
-                except Exception: pass
-    f = open(log_path, "w", encoding="utf-8", buffering=1)
-    sys.stdout = _Tee(sys.__stdout__, f)
-    sys.stderr = _Tee(sys.__stderr__, f)
+    """DISABLED. In-process stdout mirroring interferes with the HF Trainer's
+    forked dataloader workers and deadlocks training. For a run.log, tee at
+    the shell instead:
+
+        python run_41_classification.py --use_gpu 2>&1 | tee runs/<...>/run.log
+
+    (A fork-safe, buffer-safe in-process alternative is on the backlog.)
+    """
+    return
 
 
 def make_run_dirs(cfg: Config, train_records: list[dict]) -> tuple[Path, Path, str]:
@@ -1276,10 +1270,10 @@ def make_run_dirs(cfg: Config, train_records: list[dict]) -> tuple[Path, Path, s
     model_dir = udp.from_project_relative(cfg.models_dir) / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     model_dir.mkdir(parents=True, exist_ok=True)
-    _tee_stdout(run_dir)
+    _tee_stdout(run_dir)   # currently a no-op; see docstring for shell-level tee
     print(f"run_dir   = {run_dir.relative_to(PROJECT_ROOT)}    (per-epoch logs)")
     print(f"model_dir = {model_dir.relative_to(PROJECT_ROOT)}  (best_model goes here)")
-    print(f"tee       = {(run_dir / 'run.log').relative_to(PROJECT_ROOT)}  (stdout + stderr)")
+    print(f"to capture: python ... 2>&1 | tee {(run_dir / 'run.log').relative_to(PROJECT_ROOT)}")
     (run_dir / "config.json").write_text(json.dumps(asdict(cfg), indent=2, default=str))
     return run_dir, model_dir, run_name
 
