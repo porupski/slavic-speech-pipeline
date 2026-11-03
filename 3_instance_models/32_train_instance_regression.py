@@ -1,3 +1,15 @@
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     formats: ipynb,py:percent
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.5
+# ---
+
 # %% [markdown]
 # # Train instance — regression (chapter 3)
 #
@@ -304,7 +316,7 @@ print_stage_breakdown()
 # ## What's next
 #
 # - Happy with a demo? Flip `run_mode` to `"full"` in `config.json` and hand it
-#   to the py runner — full runs don't belong in a notebook kernel.
+#   to the py runner — full runs may break in a notebook kernel.
 # - Different target: change `regression.target` in `config.json`
 #   (the menu is in the Targets cell above).
 # - Classification targets (gender, filled pauses) live in the twin:

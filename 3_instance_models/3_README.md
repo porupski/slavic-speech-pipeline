@@ -38,6 +38,26 @@ Everything user-facing is in `config.json`:
 
 You should never need to edit the `.py` files — change values in `config.json`.
 
+## Which encoder for which task?
+
+Rule of thumb — pick w2v-BERT when the label depends on *what phoneme was
+spoken at that moment*; pick wav2vec2-base / XLS-R when it depends on
+*voice-timbre or acoustic envelope*.
+
+| Task                         | Content-driven? | Preferred encoder          |
+|------------------------------|-----------------|----------------------------|
+| Gender                       | no              | anything, wav2vec2-base    |
+| Speaker ID (within-speaker)  | no              | wav2vec2-base / XLS-R      |
+| Age (regression)             | partly          | either                     |
+| Filled-pause detection       | yes (phonetic shape) | w2v-BERT              |
+| Primary stress (frame-level) | yes (syllable / prominence) | w2v-BERT       |
+| Sentiment                    | mix             | either                     |
+
+For a bigger model like `xls-r-300m`, bump the learning rate and the epoch
+budget — the demo mode's 10 epochs at `lr 1e-5` under-trains it. On the
+ParlaSpeech-HR benchmark v3 speaker-ID task, `wav2vec2-base` lands at 0.988
+macro-F1 (TEST) while the same demo budget on `xls-r-300m` is still at 0.43.
+
 ## Output
 
 Each run writes:

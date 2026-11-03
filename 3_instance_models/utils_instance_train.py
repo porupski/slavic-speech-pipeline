@@ -1320,24 +1320,64 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
 # Run setup + reporting
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def model_tag(model_name: str) -> str:
+    """Short acronym for a HF model name — goes into run folder names.
+    e.g. 'facebook/wav2vec2-xls-r-300m' -> 'xls-r-300m'."""
+    s = model_name.split("/")[-1].lower()
+    table = {
+        "wav2vec2-base": "w2v2-base",
+        "wav2vec2-large": "w2v2-large",
+        "wav2vec2-large-960h": "w2v2-large-960h",
+        "wav2vec2-xls-r-300m": "xls-r-300m",
+        "wav2vec2-xls-r-1b": "xls-r-1b",
+        "wav2vec2-xls-r-2b": "xls-r-2b",
+        "wav2vec2-large-xlsr-53": "xlsr-53",
+        "w2v-bert-2.0": "w2v-bert",
+    }
+    if s in table:
+        return table[s]
+    return s.replace("wav2vec2", "w2v2")
+
+
+def _tee_stdout(run_dir: Path) -> None:
+    """Mirror stdout + stderr to run_dir/run.log for the rest of the process."""
+    log_path = run_dir / "run.log"
+    class _Tee:
+        def __init__(self, *streams): self.streams = streams
+        def write(self, data):
+            for s in self.streams:
+                try: s.write(data); s.flush()
+                except Exception: pass
+        def flush(self):
+            for s in self.streams:
+                try: s.flush()
+                except Exception: pass
+    f = open(log_path, "w", encoding="utf-8", buffering=1)
+    sys.stdout = _Tee(sys.__stdout__, f)
+    sys.stderr = _Tee(sys.__stderr__, f)
+
+
 def make_run_dirs(cfg: Config, train_records: list[dict],
                   normalizer: "LabelNormalizer | None" = None) -> tuple[Path, Path, str]:
     """Create the timestamped run + model directories, snapshot the effective
     config (and the normalizer stats for regression). Returns
     (run_dir, model_dir, run_name)."""
-    # Naming contract: {YYYY-MM-DD}_{HHMMSS}_{data}_{task}_{params}
+    # Naming contract: {YYYY-MM-DD}_{HHMMSS}_{data}_{model_tag}_{task}
     # Timestamp first → folders sort chronologically by default.
     # Colon-free time keeps the name portable (Windows, URL, CLI).
     dataset_name = train_records[0]["dataset"]
     ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    run_name = f"{ts}_{dataset_name}_{cfg.label_key}_{cfg.task_type}"
+    m_tag = model_tag(cfg.model_name)
+    run_name = f"{ts}_{dataset_name}_{m_tag}_{cfg.label_key}_{cfg.task_type}"
 
     run_dir   = udp.from_project_relative(cfg.runs_dir)   / run_name
     model_dir = udp.from_project_relative(cfg.models_dir) / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     model_dir.mkdir(parents=True, exist_ok=True)
+    _tee_stdout(run_dir)
     print(f"run_dir   = {run_dir.relative_to(PROJECT_ROOT)}    (per-epoch logs)")
     print(f"model_dir = {model_dir.relative_to(PROJECT_ROOT)}  (best_model goes here)")
+    print(f"tee       = {(run_dir / 'run.log').relative_to(PROJECT_ROOT)}  (stdout + stderr)")
 
     (run_dir / "config.json").write_text(json.dumps(asdict(cfg), indent=2, default=str))
     if normalizer is not None:

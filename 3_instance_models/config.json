@@ -70,7 +70,7 @@
     },
     "demo": {
       "cap_train": 20000, "cap_dev": 4000, "cap_test": 4000,
-      "num_epochs": 2
+      "num_epochs": 10
     },
     "full": {
       "cap_train": null, "cap_dev": null, "cap_test": null
