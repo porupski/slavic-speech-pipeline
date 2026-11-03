@@ -16,7 +16,7 @@
 # **Tutorial twin.** Trains a Wav2Vec2 regressor on utterance instances —
 # speaker age and sentiment logit. Its sibling `31_train_instance_classification`
 # is the same pipeline with a classification head; the shared engine lives in
-# **`utils_instance_train.py`**, all knobs live in **`config.json`**, and each
+# **`utils_instance_train.py`**, all knobs live in **`3_config.json`**, and each
 # cell below imports exactly the functions it uses, so you can follow the
 # pipeline step by step.
 #
@@ -31,7 +31,7 @@
 # One visible block does three things **before** anything heavy loads:
 #
 # 1. Picks this notebook's `TASK_TYPE` (the only difference between the twins' setup cells).
-# 2. Finds the chapter folder and `config.json`.
+# 2. Finds the chapter folder and `3_config.json`.
 # 3. Runs the **GPU guard** — the one piece of engine logic that *cannot* live in
 #    `utils_instance_train.py`: the utils module imports torch, and
 #    `CUDA_VISIBLE_DEVICES` must be pinned before torch's first CUDA touch.
@@ -57,7 +57,7 @@ if HERE.name != "3_instance_models":
     if candidate.exists():
         HERE = candidate
 sys.path.insert(0, str(HERE))          # utils_instance_train.py lives next to this notebook
-CONFIG_PATH = HERE / "config.json"
+CONFIG_PATH = HERE / "3_config.json"
 
 RESERVED_GPU = json.loads(CONFIG_PATH.read_text())["shared"].get("reserved_gpu", "2")
 _env = os.environ.get("CONDA_DEFAULT_ENV", "")
@@ -98,7 +98,7 @@ print_project_info()
 # Training targets are **presets** in the `TARGETS` registry inside
 # `utils_instance_train.py` — each one names a JSONL, a `label_key`, a task type,
 # and (for classification) a canonical `label_order`. You pick one by name in
-# `config.json`; this cell just lists what's on the menu for this notebook's
+# `3_config.json`; this cell just lists what's on the menu for this notebook's
 # task type.
 
 # %%
@@ -109,28 +109,28 @@ print_target_menu(TASK_TYPE)
 # %% [markdown]
 # # Config
 #
-# Everything tunable lives in **`config.json`** — you should never need to edit
+# Everything tunable lives in **`3_config.json`** — you should never need to edit
 # the Python to change a run. The loader layers, in order: `Config` defaults →
 # the `shared` block → this task's block → the active run mode's overrides.
 #
-# **Run modes** (`run_mode` in config.json, or the `RUN_MODE` override below):
+# **Run modes** (`run_mode` in 3_config.json, or the `RUN_MODE` override below):
 #
 # - `test` — tiny random model, a few dozen records; proves the plumbing only.
 # - `demo` — real model, capped data (the caps hit train/dev/**test** identically); a tangible number in ~1–2 h.
 # - `full` — caps off, whole corpus. Full runs belong in the **py runner** (tmux, unattended), not the notebook.
 #
 # The commented override spot is for quick one-off experiments; anything you
-# want to keep, promote into `config.json`.
+# want to keep, promote into `3_config.json`.
 
 # %%
 from utils_instance_train import load_config, validate_config, resolve_device, print_config_summary
 
-RUN_MODE = None   # None → take run_mode from config.json; or override here: "test" | "demo" | "full"
+RUN_MODE = None   # None → take run_mode from 3_config.json; or override here: "test" | "demo" | "full"
 
 cfg, raw_config = load_config(CONFIG_PATH, task_type=TASK_TYPE, run_mode=RUN_MODE)
 
 # ── experiment overrides (optional) ────────────────────────────────────────────
-# For one-off experiments, tinker here instead of editing config.json, e.g.:
+# For one-off experiments, tinker here instead of editing 3_config.json, e.g.:
 #   cfg.num_epochs = 5
 #   cfg.target = "parlaspeech_rs_fp_present"; uit.resolve_target(cfg)   # re-resolve after changing target!
 
@@ -162,7 +162,7 @@ print_rough_eta(len(train_records), len(dev_records), cfg)
 # ## Target normalization
 #
 # Regression targets are **z-scored on TRAIN-only** statistics (`normalize:
-# "zscore"` in config.json) — raw magnitudes (e.g. `speaker_age` in the 20–90
+# "zscore"` in 3_config.json) — raw magnitudes (e.g. `speaker_age` in the 20–90
 # range) blow MSE/MAE up and can drive Spearman to NaN. `fit_normalizer`
 # validates that every label is numeric (or covered by `label_scale`), fits on
 # TRAIN with no dev/test leakage, and everything downstream **decodes back to
@@ -315,9 +315,9 @@ print_stage_breakdown()
 # %% [markdown]
 # ## What's next
 #
-# - Happy with a demo? Flip `run_mode` to `"full"` in `config.json` and hand it
+# - Happy with a demo? Flip `run_mode` to `"full"` in `3_config.json` and hand it
 #   to the py runner — full runs may break in a notebook kernel.
-# - Different target: change `regression.target` in `config.json`
+# - Different target: change `regression.target` in `3_config.json`
 #   (the menu is in the Targets cell above).
 # - Classification targets (gender, filled pauses) live in the twin:
 #   `31_train_instance_classification.ipynb`.

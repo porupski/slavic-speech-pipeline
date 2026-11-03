@@ -2,16 +2,16 @@
 """run_31_classification — instance classification runner (chapter 3).
 
 The command-line twin of 31_train_instance_classification.ipynb — same engine
-(utils_instance_train.py), same config.json, no interactive prompts. This is
+(utils_instance_train.py), same 3_config.json, no interactive prompts. This is
 the tool for FULL runs: launch it in tmux and walk away.
 
 Usage:
-  python run_31_classification.py                       # run_mode from config.json, CPU
+  python run_31_classification.py                       # run_mode from 3_config.json, CPU
   python run_31_classification.py --mode demo --use_gpu # demo run on the reserved GPU
   python run_31_classification.py -m full --use_gpu -t parlaspeech_rs_fp_present
 
 Device policy: CPU by default (safe, prompt-free). --use_gpu arms the reserved
-GPU from config.json (shared.reserved_gpu) — the explicit, non-interactive
+GPU from 3_config.json (shared.reserved_gpu) — the explicit, non-interactive
 replacement for the notebook's input-gated GPU guard. We NEVER touch another GPU.
 """
 
@@ -31,12 +31,12 @@ def parse_args() -> argparse.Namespace:
         description=__doc__.splitlines()[0],
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--config", "-c", default=str(HERE / "config.json"),
-                   help="path to config.json")
+    p.add_argument("--config", "-c", default=str(HERE / "3_config.json"),
+                   help="path to 3_config.json")
     p.add_argument("--mode", "-m", choices=["test", "demo", "full"], default=None,
-                   help="override run_mode from config.json")
+                   help="override run_mode from 3_config.json")
     p.add_argument("--target", "-t", default=None,
-                   help="override the classification target preset from config.json")
+                   help="override the classification target preset from 3_config.json")
     p.add_argument("--use_gpu", action="store_true",
                    help="arm the reserved GPU (no prompt); default is CPU")
     return p.parse_args()

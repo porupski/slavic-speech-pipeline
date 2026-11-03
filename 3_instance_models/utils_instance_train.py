@@ -18,7 +18,7 @@ IMPORT-ORDER CONTRACT (read this before importing):
   3. Headless runners should set ``MPLBACKEND=Agg`` before importing (notebooks
      don't need to — the inline backend is already active).
 
-Config flow: ``load_config(path, task_type, run_mode=...)`` reads config.json
+Config flow: ``load_config(path, task_type, run_mode=...)`` reads 3_config.json
 (shared block + per-task block + mode overrides), resolves the TARGETS preset,
 and returns a validated-ready ``Config``. The notebooks/runners never define
 hyperparameters in code.
@@ -112,7 +112,7 @@ def print_stage_breakdown(times: dict[str, float] | None = None) -> None:
 # A preset MAY optionally declare per-target constraints (see
 # TARGET_CONSTRAINT_FIELDS below) — currently just `max_duration_s`. When
 # present, the value overrides the Config default and any shared/task-block
-# value in config.json; mode-level overrides still win.
+# value in 3_config.json; mode-level overrides still win.
 
 TARGETS: dict = {
     # ---- ROG-Art (rog_instance.jsonl) ----------------------------------
@@ -295,7 +295,7 @@ def print_target_menu(task_type: str | None = None) -> None:
 
 # Optional per-target constraint fields. If a TARGETS entry sets one,
 # resolve_target applies it to cfg in addition to the data fields above —
-# mode-level overrides in config.json still win (they apply later in
+# mode-level overrides in 3_config.json still win (they apply later in
 # load_config). Add to this tuple to wire more constraints through.
 TARGET_CONSTRAINT_FIELDS: tuple = ("max_duration_s",)
 
@@ -320,7 +320,7 @@ def resolve_target(cfg, targets: dict = TARGETS) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Config — one dataclass for both twins; config.json fills it
+# Config — one dataclass for both twins; 3_config.json fills it
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
@@ -341,7 +341,7 @@ class Config:
     normalize:   str  = "zscore"
     loss_function: str = "mse"   # "mse" | "l1"
 
-    # -- Run mode (set from config.json / CLI; apply_mode layers the caps) ----
+    # -- Run mode (set from 3_config.json / CLI; apply_mode layers the caps) ----
     run_mode: str = "full"                  # "test" | "demo" | "full"
     demo_sampling: str = "proportional"     # "proportional" | "balanced" — only when pooling >1 lang
     cap_seed: int = 1234                    # deterministic shuffle seed for cap_split
@@ -406,7 +406,7 @@ def apply_mode(cfg: Config, overrides: dict) -> None:
 
 def load_config(path: str | Path, task_type: str,
                 run_mode: str | None = None) -> tuple[Config, dict]:
-    """Build a Config from config.json for one task_type.
+    """Build a Config from 3_config.json for one task_type.
 
     Layering order (later wins): Config defaults → ``shared`` block →
     ``classification``/``regression`` block → ``modes[run_mode]`` overrides.
@@ -1424,8 +1424,9 @@ def best_test_predictions_path(run_dir: Path, phase2_best: dict) -> Path:
 
 def plot_test_confusion(run_dir: Path, phase2_best: dict, label2id: dict,
                         label_order: list, show: bool = True):
-    """Classification: stacked TEST confusion matrices (counts on top,
-    row-norm % below) for the best phase-2 epoch; saved into run_dir."""
+    """Classification: row-normalized TEST confusion matrix (% per row — read as
+    'of the true X clips, what did the model call them?') for the best phase-2
+    epoch; saved into run_dir."""
     preds_path = best_test_predictions_path(run_dir, phase2_best)
     preds_data = json.loads(preds_path.read_text())
     y_true_idx = [int(p["gold_raw"]) for p in preds_data]
@@ -1439,16 +1440,11 @@ def plot_test_confusion(run_dir: Path, phase2_best: dict, label2id: dict,
                        out=np.zeros_like(cm, dtype=float),
                        where=row_sums != 0) * 100.0
 
-    fig, axes = plt.subplots(2, 1, figsize=(max(6, n * 1.1), max(9, n * 1.8)))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="viridis",
-                xticklabels=str_labels, yticklabels=str_labels, ax=axes[0])
-    axes[0].set_xlabel("predicted"); axes[0].set_ylabel("true")
-    axes[0].set_title(f"counts — epoch {phase2_best['epoch']} on TEST")
-
+    fig, ax = plt.subplots(figsize=(max(6, n * 1.1), max(5, n * 0.9)))
     sns.heatmap(cm_rel, annot=True, fmt=".1f", cmap="viridis",
-                xticklabels=str_labels, yticklabels=str_labels, ax=axes[1])
-    axes[1].set_xlabel("predicted"); axes[1].set_ylabel("true")
-    axes[1].set_title(f"row-normalized %  — epoch {phase2_best['epoch']} on TEST")
+                xticklabels=str_labels, yticklabels=str_labels, ax=ax)
+    ax.set_xlabel("predicted"); ax.set_ylabel("true")
+    ax.set_title(f"row-normalized %  — epoch {phase2_best['epoch']} on TEST")
 
     plt.tight_layout()
     cm_png = run_dir / "confusion_matrix_test.png"

@@ -2,7 +2,7 @@
 
 Train a Wav2Vec2 instance classifier or regressor on whole-utterance audio. One target switch picks the task: classification (gender, filled-pause presence/count, ParlaSpeech-HR benchmark tasks) or regression (`speaker_age`, `sentiment_logit`).
 
-The engine lives in `utils_instance_train.py`, every knob lives in `config.json`, and the notebooks are tutorial twins that import only what each cell needs.
+The engine lives in `utils_instance_train.py`, every knob lives in `3_config.json`, and the notebooks are tutorial twins that import only what each cell needs.
 
 ## Run
 
@@ -16,7 +16,7 @@ cd 3_instance_models
 - `31_train_instance_classification.ipynb`
 - `32_train_instance_regression.ipynb`
 
-Open one, run cells top-to-bottom. The first cell is a GPU guard — type `y` to arm the reserved GPU (`shared.reserved_gpu` in `config.json`), anything else runs CPU.
+Open one, run cells top-to-bottom. The first cell is a GPU guard — type `y` to arm the reserved GPU (`shared.reserved_gpu` in `3_config.json`), anything else runs CPU.
 
 **Py runners — full / unattended:**
 
@@ -29,14 +29,14 @@ Same engine, no prompts. Made for `tmux`. This is the right tool for full-corpus
 
 ## Knobs
 
-Everything user-facing is in `config.json`:
+Everything user-facing is in `3_config.json`:
 
 - `run_mode` — `test` (plumbing only), `demo` (capped, ~1–2 h, tangible), `full` (caps off).
 - `classification.target` / `regression.target` — name from the `TARGETS` registry in `utils_instance_train.py`. Call `available_targets()` to list.
 - `shared.*` — model, batch size, LR, epochs, runs/models dirs, reserved GPU.
 - `modes.*` — per-mode overrides on top of `shared`.
 
-You should never need to edit the `.py` files — change values in `config.json`.
+You should never need to edit the `.py` files — change values in `3_config.json`.
 
 ## Which encoder for which task?
 
