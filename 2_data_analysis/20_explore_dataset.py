@@ -1,10 +1,12 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: ipynb,py:percent
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
+#       jupytext_version: 1.19.5
 #   kernelspec:
 #     display_name: ssp
 #     language: python
@@ -83,7 +85,7 @@ plt.rcParams["grid.alpha"] = 0.3
 # any canonical instance JSONL (the per-task files emitted by chapter 1). The
 # rest are display knobs.
 #
-# **Example paths** — after running `11e_prep_parlaspeech_benchmark_v3` at least once:
+# **Example paths** — after running `11e_get_prep_parlaspeech_benchmark_v3` at least once:
 #
 # - Classification example (default): `data/processed_jsonl/parlaspeech_hr_bench_v3_gender.jsonl`
 # - Regression example:               `data/processed_jsonl/parlaspeech_hr_bench_v3_age.jsonl`
