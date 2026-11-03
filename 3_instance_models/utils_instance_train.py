@@ -1340,33 +1340,56 @@ def model_tag(model_name: str) -> str:
 
 
 def _tee_stdout(run_dir: Path) -> None:
-    """Mirror stdout + stderr to run_dir/run.log for the rest of the process.
-    Proxies any other stream attribute (isatty, fileno, encoding, …) to the
-    underlying real stdout — libraries like transformers probe for these."""
+    """Mirror stdout + stderr to run_dir/run.log via a `tee` subprocess so FD
+    redirection survives fork() — this is critical because the HF Trainer
+    forks a pool of dataloader workers, and a Python-level stdout wrapper
+    with a shared file handle deadlocks the pool.
+
+    How it works: spawn `tee`, dup2 its stdin pipe onto FDs 1 and 2. All
+    workers forked after this inherit the redirected FDs and write to the
+    pipe; the OS-level `tee` demuxes to both the log file and the original
+    terminal. Falls back to a no-op (plus a warning) if `tee` isn't on PATH.
+    """
+    import atexit
+    import shutil
+    import subprocess
+
     log_path = run_dir / "run.log"
-    class _Tee:
-        def __init__(self, *streams): self.streams = streams
-        def write(self, data):
-            for s in self.streams:
-                try: s.write(data); s.flush()
-                except Exception: pass
-        def flush(self):
-            for s in self.streams:
-                try: s.flush()
-                except Exception: pass
-        def isatty(self):
-            try: return self.streams[0].isatty()
-            except Exception: return False
-        def fileno(self):
-            return self.streams[0].fileno()
-        def __getattr__(self, name):
-            # Last-resort proxy to the real stream so transformers' loading
-            # report, tqdm, click, etc. find what they want (encoding, buffer,
-            # closed, mode, writable, …).
-            return getattr(self.streams[0], name)
-    f = open(log_path, "w", encoding="utf-8", buffering=1)
-    sys.stdout = _Tee(sys.__stdout__, f)
-    sys.stderr = _Tee(sys.__stderr__, f)
+    tee_bin = shutil.which("tee")
+    if tee_bin is None:
+        print(f"⚠️  'tee' not on PATH — run.log will not be captured.")
+        return
+
+    try:
+        tee_proc = subprocess.Popen(
+            [tee_bin, str(log_path)],
+            stdin=subprocess.PIPE,
+            bufsize=0,
+        )
+    except Exception as e:
+        print(f"⚠️  could not start tee subprocess: {e!r} — run.log not captured.")
+        return
+
+    # Redirect FDs 1 (stdout) and 2 (stderr) at the OS level so forked workers
+    # inherit a clean file descriptor instead of a shared Python object.
+    sys.stdout.flush(); sys.stderr.flush()
+    os.dup2(tee_proc.stdin.fileno(), 1)
+    os.dup2(tee_proc.stdin.fileno(), 2)
+    # Rebind the Python-level handles too — line-buffered so prints land in
+    # the log immediately rather than at process exit.
+    sys.stdout = os.fdopen(1, "w", buffering=1)
+    sys.stderr = os.fdopen(2, "w", buffering=1)
+
+    def _finish():
+        try: sys.stdout.flush()
+        except Exception: pass
+        try: sys.stderr.flush()
+        except Exception: pass
+        try: tee_proc.stdin.close()
+        except Exception: pass
+        try: tee_proc.wait(timeout=5)
+        except Exception: pass
+    atexit.register(_finish)
 
 
 def make_run_dirs(cfg: Config, train_records: list[dict],
