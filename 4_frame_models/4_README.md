@@ -30,5 +30,5 @@ Run cells top-to-bottom. First cell is the same GPU guard pattern as chapter 3 �
 
 ## What's missing
 
-- **The shared-engine refactor** — chapter 4 is still standalone (the whole engine lives inline in `41`). The chapter-3 pattern (`utils_frame_train.py` + `config.json` + py runner) is planned. Full runs should wait for that refactor.
+- **The shared-engine refactor** — chapter 4 is still standalone (the whole engine lives inline in `41`). The chapter-3 pattern (`utils_frame_train.py` + `4_config.json` + py runner) is planned. Full runs should wait for that refactor.
 - **Frame regression engine wiring** — the `42` scaffold is in place, but `utils_frame_train.py` still raises when `task_type='regression'`. Chapter 3's `utils_instance_train.py` is the port template; the step-by-step plan is in `42_train_frame_regression.py` under *What to wire in the engine*.

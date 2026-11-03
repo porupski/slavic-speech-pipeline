@@ -33,14 +33,14 @@
 # What already works in the scaffold (will run until `load_config`):
 #   * GPU guard + heavy import
 #   * `print_target_menu("regression")` — prints nothing yet (empty registry)
-#   * `load_config` layering (classification + regression blocks in config.json)
+#   * `load_config` layering (classification + regression blocks in 4_config.json)
 #
 # What stops at `load_config`:
 #   * `load_config` raises when `task_type="regression"` by design, with a
 #     dated port-plan message. Remove that guard once the engine is ready.
 #
 # **Tutorial twin pattern.** Shared engine lives in `utils_frame_train.py`;
-# every knob lives in `config.json`. For unattended full runs, write a
+# every knob lives in `4_config.json`. For unattended full runs, write a
 # `run_42_regression.py` once the engine is wired (mirror `run_41_classification.py`).
 
 # %% [markdown]
@@ -49,7 +49,7 @@
 # One visible block runs BEFORE the heavy engine imports:
 #
 # 1. Picks this notebook's TASK_TYPE.
-# 2. Finds the chapter folder and `config.json`.
+# 2. Finds the chapter folder and `4_config.json`.
 # 3. GPU guard — pins CUDA_VISIBLE_DEVICES before torch is imported.
 #    Type `y` to arm the reserved GPU; anything else = CPU.
 
@@ -67,7 +67,7 @@ if HERE.name != "4_frame_models":
     if candidate.exists():
         HERE = candidate
 sys.path.insert(0, str(HERE))
-CONFIG_PATH = HERE / "config.json"
+CONFIG_PATH = HERE / "4_config.json"
 
 RESERVED_GPU = json.loads(CONFIG_PATH.read_text())["shared"].get("reserved_gpu", "2")
 _env = os.environ.get("CONDA_DEFAULT_ENV", "")
@@ -98,7 +98,7 @@ print_project_info()
 # # Targets
 #
 # Frame-level TARGETS live in `utils_frame_train.py`. Pick by name in
-# `config.json`; this cell just lists what is on the menu for regression.
+# `4_config.json`; this cell just lists what is on the menu for regression.
 #
 # **Scaffold note (2026-11-02):** no regression frame targets are registered
 # yet. The call below will print an empty menu. Add a regression target with
@@ -113,7 +113,7 @@ print_target_menu(TASK_TYPE)
 # %% [markdown]
 # # Config
 #
-# Everything tunable lives in **`config.json`** — you should never need to
+# Everything tunable lives in **`4_config.json`** — you should never need to
 # edit Python to change a run. Loader layers, in order: `Config` defaults →
 # `shared` block → this task's block (`regression`) → the active run mode's
 # overrides.
@@ -121,7 +121,7 @@ print_target_menu(TASK_TYPE)
 # **Scaffold stop point.** `load_config` raises a dated port-plan error
 # because the engine still hard-blocks regression. See the error message for
 # what to port from `utils_instance_train.py`. The `regression` block in
-# `config.json` carries placeholder knobs mirroring chapter 3.
+# `4_config.json` carries placeholder knobs mirroring chapter 3.
 
 # %%
 from utils_frame_train import load_config, validate_config, resolve_device, print_config_summary
@@ -305,7 +305,7 @@ print_stage_breakdown()
 # %% [markdown]
 # ## What is next
 #
-# - Different target: change `regression.target` in `config.json`
+# - Different target: change `regression.target` in `4_config.json`
 #   (the menu is in the Targets cell above — empty until a regression target
 #   is registered).
 # - Classification targets (filled pauses, primary stress) live in the twin:

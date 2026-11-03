@@ -18,7 +18,7 @@
 # Per-frame classification: feed an utterance (or a word sub-clip of one),
 # predict a class per model frame. Token cross-entropy with
 # `ignore_index=-100`. Shared engine lives in `utils_frame_train.py`; every
-# knob lives in `config.json`. This notebook is a thin tutorial — each cell
+# knob lives in `4_config.json`. This notebook is a thin tutorial — each cell
 # imports exactly the function it uses, so you can follow the pipeline step
 # by step. For unattended full runs use `run_41_classification.py` in tmux.
 
@@ -28,7 +28,7 @@
 # One visible block runs BEFORE the heavy engine imports:
 #
 # 1. Picks this notebook's TASK_TYPE.
-# 2. Finds the chapter folder and `config.json`.
+# 2. Finds the chapter folder and `4_config.json`.
 # 3. GPU guard — pins CUDA_VISIBLE_DEVICES before torch is imported.
 #    Type `y` to arm the reserved GPU; anything else = CPU.
 
@@ -46,7 +46,7 @@ if HERE.name != "4_frame_models":
     if candidate.exists():
         HERE = candidate
 sys.path.insert(0, str(HERE))
-CONFIG_PATH = HERE / "config.json"
+CONFIG_PATH = HERE / "4_config.json"
 
 RESERVED_GPU = json.loads(CONFIG_PATH.read_text())["shared"].get("reserved_gpu", "2")
 _env = os.environ.get("CONDA_DEFAULT_ENV", "")
@@ -77,7 +77,7 @@ print_project_info()
 # # Targets
 #
 # Frame-level TARGETS live in `utils_frame_train.py`. Pick by name in
-# `config.json`; this cell just lists what is on the menu.
+# `4_config.json`; this cell just lists what is on the menu.
 
 # %%
 from utils_frame_train import print_target_menu
@@ -87,7 +87,7 @@ print_target_menu(TASK_TYPE)
 # %% [markdown]
 # # Config
 #
-# Everything tunable lives in **`config.json`** — you should never need to
+# Everything tunable lives in **`4_config.json`** — you should never need to
 # edit Python to change a run. Loader layers, in order: `Config` defaults →
 # `shared` block → this task's block → the active run mode's overrides.
 #
@@ -96,7 +96,7 @@ print_target_menu(TASK_TYPE)
 # - `demo` — real model, capped data (caps hit train/dev/test identically); ~1 h.
 # - `full` — caps off, whole dataset. Full runs belong in the **py runner**.
 #
-# `RUN_MODE = None` takes the mode from `config.json`. Override with
+# `RUN_MODE = None` takes the mode from `4_config.json`. Override with
 # `"test" | "demo" | "full"` for a one-off.
 
 # %%
@@ -296,8 +296,8 @@ print_stage_breakdown()
 # %% [markdown]
 # ## What is next
 #
-# - Happy with a demo? Flip `run_mode` to `"full"` in `config.json` and hand
+# - Happy with a demo? Flip `run_mode` to `"full"` in `4_config.json` and hand
 #   the job to `run_41_classification.py` in tmux — full runs do not belong
 #   in a notebook kernel.
-# - Different target: change `classification.target` in `config.json`.
+# - Different target: change `classification.target` in `4_config.json`.
 # - Regression targets: deferred to `42_train_frame_regression` (future).

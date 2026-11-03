@@ -27,7 +27,7 @@ IMPORT-ORDER CONTRACT (read this before importing):
   3. Headless runners should set MPLBACKEND=Agg before importing.
 
 Config flow: ``load_config(path, task_type, run_mode=...)`` reads
-`config.json` (shared block + task block + mode overrides), resolves the
+`4_config.json` (shared block + task block + mode overrides), resolves the
 TARGETS preset, and returns a validated Config. Consumers never define
 hyperparameters in code.
 """
@@ -232,7 +232,7 @@ def resolve_target(cfg, targets: dict = TARGETS) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Config — one dataclass, config.json fills it
+# Config — one dataclass, 4_config.json fills it
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
@@ -293,7 +293,7 @@ class Config:
 
     # -- Regression knobs (SCAFFOLD, 2026-11-02) -----------------------------
     # Inert placeholders mirroring chapter 3 (utils_instance_train.py). The
-    # fields are present so the regression block in config.json loads
+    # fields are present so the regression block in 4_config.json loads
     # cleanly, but no regression code path consumes them yet. See the port
     # plan in 42_train_frame_regression.py for the wiring list.
     best_metric_regression: str = "spearman"   # "mse" | "mae" | "spearman"
@@ -1315,10 +1315,11 @@ def _best_test_predictions_path(run_dir: Path, phase2_best: dict) -> Path:
 
 def plot_test_confusion(run_dir: Path, phase2_best: dict, label2id: dict,
                         label_order: list, show: bool = True) -> None:
-    """Frame-level confusion matrix on the best phase-2 (TEST) epoch, stacked:
-    absolute counts on top, row-normalized percentages below (each row sums to
-    100 — read it as ``of the true X frames, what did the model call them?``).
-    Saves to ``<run_dir>/confusion_matrix_test.png``."""
+    """Frame-level row-normalized confusion matrix on the best phase-2 (TEST)
+    epoch — each row sums to 100 (read it as ``of the true X frames, what
+    did the model call them?``). Saves to
+    ``<run_dir>/confusion_matrix_test.png``. The absolute-counts matrix is
+    kept as a CSV sibling for anyone who wants the raw numbers."""
     preds_data = json.loads(_best_test_predictions_path(run_dir, phase2_best).read_text())
     y_true = [g for p in preds_data for g in p["gold_raw"]]
     y_pred = [pr for p in preds_data for pr in p["pred_raw"]]
@@ -1331,16 +1332,11 @@ def plot_test_confusion(run_dir: Path, phase2_best: dict, label2id: dict,
                        out=np.zeros_like(cm, dtype=float),
                        where=row_sums != 0) * 100.0
 
-    fig, axes = plt.subplots(2, 1, figsize=(max(6, n * 1.1), max(9, n * 1.8)))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="viridis",
-                xticklabels=str_labels, yticklabels=str_labels, ax=axes[0])
-    axes[0].set_xlabel("predicted"); axes[0].set_ylabel("true")
-    axes[0].set_title(f"frame counts — epoch {phase2_best['epoch']} on TEST")
-
+    fig, ax = plt.subplots(figsize=(max(6, n * 1.1), max(5, n * 0.9)))
     sns.heatmap(cm_rel, annot=True, fmt=".1f", cmap="viridis",
-                xticklabels=str_labels, yticklabels=str_labels, ax=axes[1])
-    axes[1].set_xlabel("predicted"); axes[1].set_ylabel("true")
-    axes[1].set_title(f"row-normalized %  — epoch {phase2_best['epoch']} on TEST")
+                xticklabels=str_labels, yticklabels=str_labels, ax=ax)
+    ax.set_xlabel("predicted"); ax.set_ylabel("true")
+    ax.set_title(f"row-normalized %  — epoch {phase2_best['epoch']} on TEST")
 
     plt.tight_layout()
     out = run_dir / "confusion_matrix_test.png"
@@ -1351,7 +1347,7 @@ def plot_test_confusion(run_dir: Path, phase2_best: dict, label2id: dict,
     else:
         plt.close(fig)
 
-    # Machine-readable twin of the PNG. Rows = true, columns = predicted.
+    # Machine-readable twins of the PNG. Rows = true, columns = predicted.
     _save_confusion_csvs(run_dir, cm, cm_rel, str_labels)
 
 
