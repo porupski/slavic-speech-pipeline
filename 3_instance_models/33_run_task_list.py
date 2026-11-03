@@ -86,6 +86,21 @@ TASKS: list[dict] = [
      "target":        "hr_bench_v3_age",
      "task_type":     "regression",
      "learning_rate": 1e-5},
+    {"label": "age_xls-r-300m_lr3e5",
+     "model_name":    "facebook/wav2vec2-xls-r-300m",
+     "target":        "hr_bench_v3_age",
+     "task_type":     "regression",
+     "learning_rate": 3e-5},
+    {"label": "orientation_w2v2-base_lr1e5",
+     "model_name":    "facebook/wav2vec2-base",
+     "target":        "hr_bench_v3_orientation",
+     "task_type":     "regression",
+     "learning_rate": 1e-5},
+    {"label": "orientation_xls-r-300m_lr3e5",
+     "model_name":    "facebook/wav2vec2-xls-r-300m",
+     "target":        "hr_bench_v3_orientation",
+     "task_type":     "regression",
+     "learning_rate": 3e-5},
 ]
 
 
