@@ -20,10 +20,13 @@ Aggregate summary lands at ``<list_root>/task_list_summary.csv`` +
 list for provenance.
 
 Usage:
-  python 43_run_task_list.py --use_gpu
-  python 43_run_task_list.py --use_gpu --dry_run          # print tasks, exit
-  python 43_run_task_list.py --use_gpu --limit 2          # first 2 tasks only
-  python 43_run_task_list.py --use_gpu --list_dir ch4_demo
+  python -u 43_run_task_list.py --use_gpu
+  python -u 43_run_task_list.py --use_gpu --dry_run          # print tasks, exit
+  python -u 43_run_task_list.py --use_gpu --limit 2          # first 2 tasks only
+  python -u 43_run_task_list.py --use_gpu --list_dir ch4_demo
+
+  # With tee — always use -u to prevent 8 KB stdout block-buffer delay:
+  python -u 43_run_task_list.py --use_gpu 2>&1 | tee ../runs/43_task_list_$(date +%Y-%m-%d_%H%M%S).log
 
 Base config is ``4_config.json`` under the chosen ``--mode`` (default: demo);
 per-task overrides layer on top. Each task may override ``target`` to switch
@@ -333,6 +336,12 @@ def main() -> None:
     else:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
         print(f"🖥️  CPU mode (pass --use_gpu to arm physical GPU {reserved_gpu})")
+    # Flush before the heavy imports so the status line reaches tee immediately
+    # (stdout is block-buffered when piped; without this the first ~8 KB of output
+    # is invisible until the buffer fills — looks like a hang).
+    sys.stdout.flush()
+    print("loading utils + torch + transformers (may take 30–60 s on cold cache) …")
+    sys.stdout.flush()
 
     import utils_frame_train as uft
     from utils_frame_train import print_project_info
