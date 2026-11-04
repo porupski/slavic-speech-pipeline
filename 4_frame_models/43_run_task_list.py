@@ -49,52 +49,84 @@ TASK_TYPE = "classification"   # ch4 engine is classification-only for now
 # ══════════════════════════════════════════════════════════════════════════
 # TASKS — edit this list to change the queue
 # ══════════════════════════════════════════════════════════════════════════
-# Each task is a dict of Config field overrides plus a `label` (sub-dir name,
-# CSV row key). `target` selects a preset from the TARGETS registry in
-# utils_frame_train.py; it resolves jsonl_paths + label_key in one step.
-# All other keys must name real Config fields (typos are a hard error).
+# Two 2×2 comparison tables. Within each table, lr/epochs/batch_size are held
+# constant so the only variable is (a) the model and (b) the data language.
 #
-# Note: parlaspeech_fp_frames requires parlaspeech_{lang}_utterance_frame.jsonl
-# files built by 11c. If those are missing, the FP tasks fail gracefully with a
-# FileNotFoundError in the CSV error column and the queue continues.
+#   Group 1 — Filled pause (FP) detection on ParlaSpeech utterances
+#     Rows : vanilla w2v-bert-2.0  vs  classla/wav2vecbert2-filledPause
+#     Cols : HR (pretrained in-domain)  vs  PL (cross-lingual)
 #
-# TODO (2026-11-04): once parlaspeech_primary_stress_frames JSONL files are
-# built for HR+RS, replace `si_primary_stress_frames` with
-# `parlaspeech_primary_stress_frames` in the stress tasks below and re-run.
-# The SI dataset is a standalone Slovenian pilot; the north-star is a unified
-# HR+RS+SI pool. See TARGETS["parlaspeech_primary_stress_frames"] in
-# utils_frame_train.py for the target spec.
+#   Group 2 — Primary stress detection, word-level frames
+#     Rows : vanilla w2v-bert-2.0  vs  classla/Wav2Vec2BertPrimaryStress...
+#     Cols : HR ParlaSpeech (in-domain for classla)  vs  SI (cross-lingual)
+#            SI has finer phonetic annotation — expected cleaner labels.
+#
+# TODO (2026-11-04): once the ParlaSpeech primary-stress JSONL files cover
+# HR+RS+SI, replace target "si_primary_stress_frames" in the SI stress tasks
+# with "parlaspeech_primary_stress_frames" (langs=["si"]) and re-run. The SI
+# dataset is a standalone pilot; the north-star is a unified HR+RS+SI pool.
+# See TARGETS["parlaspeech_primary_stress_frames"] in utils_frame_train.py.
 
 TASKS: list[dict] = [
-    # ── Filled pause on ParlaSpeech — from-scratch head ──────────────────
-    {"label": "fp_ps_bert_vanilla_lr1e5",
-     "target":        "parlaspeech_fp_frames",
-     "model_name":    "facebook/w2v-bert-2.0",
+    # ═══ GROUP 1 — Filled pause ════════════════════════════════════════════
+    # 15 epochs · lr 1e-5 · batch 64 · demo caps · binary (0=speech, 1=fp)
+
+    # HR, vanilla w2v-bert-2.0
+    {"label": "fp_hr_bert_lr1e5",
+     "target": "parlaspeech_fp_frames", "langs": ["hr"],
+     "model_name": "facebook/w2v-bert-2.0",
      "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 64},
 
-    # ── Filled pause on ParlaSpeech — pretrained FP classifier (warm start)
-    {"label": "fp_ps_classla_fp_lr1e6",
-     "target":        "parlaspeech_fp_frames",
-     "model_name":    "classla/wav2vecbert2-filledPause",
-     "learning_rate": 1e-6, "num_epochs": 10, "batch_size": 64},
+    # HR, pretrained FP classifier (classla warm start — in-domain)
+    {"label": "fp_hr_classla_fp_lr1e5",
+     "target": "parlaspeech_fp_frames", "langs": ["hr"],
+     "model_name": "classla/wav2vecbert2-filledPause",
+     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 64},
 
-    # ── Slovenian primary stress — from-scratch head on w2v-bert-2.0 ─────
-    {"label": "slo_stress_bert_vanilla_lr1e5",
-     "target":        "si_primary_stress_frames",
-     "model_name":    "facebook/w2v-bert-2.0",
+    # PL, vanilla w2v-bert-2.0  (cross-lingual vs HR)
+    {"label": "fp_pl_bert_lr1e5",
+     "target": "parlaspeech_fp_frames", "langs": ["pl"],
+     "model_name": "facebook/w2v-bert-2.0",
+     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 64},
+
+    # PL, pretrained FP classifier (classla warm start — cross-lingual)
+    {"label": "fp_pl_classla_fp_lr1e5",
+     "target": "parlaspeech_fp_frames", "langs": ["pl"],
+     "model_name": "classla/wav2vecbert2-filledPause",
+     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 64},
+
+    # ═══ GROUP 2 — Primary stress ══════════════════════════════════════════
+    # 20 epochs · lr 1e-5 · batch 64 · demo caps · binary (0=unstressed, 1=stressed)
+
+    # HR ParlaSpeech, vanilla w2v-bert-2.0
+    {"label": "stress_hr_bert_lr1e5",
+     "target": "parlaspeech_primary_stress_frames", "langs": ["hr"],
+     "model_name": "facebook/w2v-bert-2.0",
      "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
 
-    # ── Slo primary stress — pretrained HR/RS stress classifier (warm start)
-    {"label": "slo_stress_classla_lr1e5",
-     "target":        "si_primary_stress_frames",
-     "model_name":    "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
+    # HR ParlaSpeech, pretrained stress classifier (classla — in-domain, same lang)
+    {"label": "stress_hr_classla_lr1e5",
+     "target": "parlaspeech_primary_stress_frames", "langs": ["hr"],
+     "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
+     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
+
+    # SI (Slovenian), vanilla w2v-bert-2.0  (cross-lingual vs HR)
+    {"label": "stress_si_bert_lr1e5",
+     "target": "si_primary_stress_frames",
+     "model_name": "facebook/w2v-bert-2.0",
+     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
+
+    # SI (Slovenian), pretrained HR/RS stress classifier (cross-lingual)
+    {"label": "stress_si_classla_lr1e5",
+     "target": "si_primary_stress_frames",
+     "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
      "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
 ]
 
 
 CSV_FIELDS = [
-    "task_idx", "label", "model_name", "learning_rate", "num_epochs", "batch_size",
-    "wall_time_s",
+    "task_idx", "label", "target", "langs", "model_name",
+    "learning_rate", "num_epochs", "batch_size", "wall_time_s",
     "phase1_best_epoch", "phase1_macro_f1", "phase1_f1_pos", "phase1_acc", "phase1_loss",
     "phase2_best_epoch", "phase2_macro_f1", "phase2_f1_pos", "phase2_acc", "phase2_loss",
     "run_dir", "error",
@@ -145,12 +177,14 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
 
     row = {k: "" for k in CSV_FIELDS}
     row.update({
-        "task_idx":       task_idx,
-        "label":          task["label"],
-        "model_name":     task.get("model_name", ""),
-        "learning_rate":  task.get("learning_rate", ""),
-        "num_epochs":     task.get("num_epochs", ""),
-        "batch_size":     task.get("batch_size", ""),
+        "task_idx":      task_idx,
+        "label":         task["label"],
+        "target":        task.get("target", ""),
+        "langs":         str(task.get("langs", [])),
+        "model_name":    task.get("model_name", ""),
+        "learning_rate": task.get("learning_rate", ""),
+        "num_epochs":    task.get("num_epochs", ""),
+        "batch_size":    task.get("batch_size", ""),
     })
     t0 = time.time()
     try:
