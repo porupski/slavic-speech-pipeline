@@ -1240,6 +1240,8 @@ def model_tag(model_name: str) -> str:
         "wav2vec2-xls-r-2b": "xls-r-2b",
         "wav2vec2-large-xlsr-53": "xlsr-53",
         "w2v-bert-2.0": "w2v-bert",
+        "wav2vec2bertprimarystressaudioframeclassifier": "classla-stress",
+        "wav2vecbert2-filledpause": "classla-fp",
     }
     if s in table:
         return table[s]

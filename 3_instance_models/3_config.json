@@ -39,7 +39,7 @@
     "models_dir": "models",
 
     "preprocess_batch_size": 32,
-    "dataloader_num_workers": 16,
+    "dataloader_num_workers": 0,
     "map_num_proc": 8,
     "max_duration_s": 15.0,
 

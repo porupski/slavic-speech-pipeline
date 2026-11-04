@@ -17,6 +17,7 @@ CrossEntropyLoss(ignore_index=-100)`).
 | `facebook/wav2vec2-xls-r-300m` | wav2vec2 | ~300 M | Multilingual pretraining includes Slavic. Better zero-shot on Slavic content. |
 | `facebook/w2v-bert-2.0` | wav2vec2-bert | ~600 M | Meta wav2vec-BERT 2.0. Best on content-heavy tasks (primary stress belongs here). Input is 80-dim log-mel filterbanks. |
 | `classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier` | wav2vec2-bert | ~600 M | HR/RS-finetuned frame classifier from CLASSLA. Loads body + classifier head with `ignore_mismatched_sizes=True`. Great as a warm start for Slovenian. |
+| `classla/wav2vecbert2-filledPause` | wav2vec2-bert | ~600 M | CLASSLA-finetuned binary filled-pause frame classifier. 2-class head matches the `parlaspeech_fp_frames` target exactly; loads with `ignore_mismatched_sizes=True` for safety. Use fine-tune scale LR (1e-6 – 3e-6). |
 
 ## Label alignment
 

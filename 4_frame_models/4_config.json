@@ -45,7 +45,7 @@
     "models_dir": "models",
 
     "preprocess_batch_size": 32,
-    "dataloader_num_workers": 8,
+    "dataloader_num_workers": 0,
     "map_num_proc": 8,
     "enable_max_audio_seconds": false,
     "max_audio_seconds": 15.0,
@@ -86,7 +86,6 @@
     },
     "full": {
       "model_name": "facebook/w2v-bert-2.0",
-      "dataloader_num_workers": 32,
       "map_num_proc": 32,
 
       "cap_train": null, "cap_dev": null, "cap_test": null,

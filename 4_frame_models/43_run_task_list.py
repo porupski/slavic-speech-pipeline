@@ -3,11 +3,11 @@
 
 Walks the ``TASKS`` list below one by one. Each task is a full
 phase-1 (DEV) → phase-2 (TEST) frame-classification run through the same
-engine as ``run_41_classification``.
-aggregates the best DEV + best TEST metrics into a CSV, plots a bar chart
-comparing macro-F1 and positive-class F1 across tasks, and lets you
-fire-and-forget overnight. A crash in one task does not kill the queue — the
-error is written into that task's CSV row and the next task runs.
+engine as ``run_41_classification``. Aggregates the best DEV + best TEST
+metrics into a CSV, plots a bar chart comparing macro-F1 and positive-class F1
+across tasks, and lets you fire-and-forget overnight. A crash in one task does
+not kill the queue — the error is written into that task's CSV row and the
+next task runs.
 
 Every task writes its own ``<list_root>/<label>/`` tree with:
 - per-epoch predictions.json / epoch_summary.json / example_predictions.png
@@ -20,13 +20,14 @@ Aggregate summary lands at ``<list_root>/task_list_summary.csv`` +
 list for provenance.
 
 Usage:
-  python 43_compare_models.py --use_gpu
-  python 43_compare_models.py --use_gpu --dry_run          # print tasks, exit
-  python 43_compare_models.py --use_gpu --limit 3          # first 3 tasks only
-  python 43_compare_models.py --use_gpu --list_dir grid_lr_sweep
+  python 43_run_task_list.py --use_gpu
+  python 43_run_task_list.py --use_gpu --dry_run          # print tasks, exit
+  python 43_run_task_list.py --use_gpu --limit 2          # first 2 tasks only
+  python 43_run_task_list.py --use_gpu --list_dir ch4_demo
 
-Base config is `4_config.json` under the chosen ``--mode`` (default: full);
-per-task overrides layer on top.
+Base config is ``4_config.json`` under the chosen ``--mode`` (default: demo);
+per-task overrides layer on top. Each task may override ``target`` to switch
+datasets; ``resolve_target`` is re-run automatically after any target override.
 """
 
 import argparse
@@ -42,50 +43,52 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-TASK_TYPE = "classification"
+TASK_TYPE = "classification"   # ch4 engine is classification-only for now
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# TASK LIST — edit this list to change the queue
+# TASKS — edit this list to change the queue
 # ══════════════════════════════════════════════════════════════════════════
-# Each task is a dict of Config field overrides. Every key must name a real
-# Config field in utils_frame_train.py (typos are a hard error). The `label`
-# is not a Config field; it names the task's sub-directory and CSV row.
+# Each task is a dict of Config field overrides plus a `label` (sub-dir name,
+# CSV row key). `target` selects a preset from the TARGETS registry in
+# utils_frame_train.py; it resolves jsonl_paths + label_key in one step.
+# All other keys must name real Config fields (typos are a hard error).
 #
-# Baseline (facebook/w2v-bert-2.0) got macro-F1 ≈ 0.94 / F1+ ≈ 0.90 at
-# lr=1e-5, bs=64, 15 epochs. The sweep below varies LR around that anchor
-# for the vanilla body and probes the CLASSLA HR/RS-finetuned head at
-# finetune-scale LRs.
+# Note: parlaspeech_fp_frames requires parlaspeech_{lang}_utterance_frame.jsonl
+# files built by 11c. If those are missing, the FP tasks fail gracefully with a
+# FileNotFoundError in the CSV error column and the queue continues.
+#
+# TODO (2026-11-04): once parlaspeech_primary_stress_frames JSONL files are
+# built for HR+RS, replace `si_primary_stress_frames` with
+# `parlaspeech_primary_stress_frames` in the stress tasks below and re-run.
+# The SI dataset is a standalone Slovenian pilot; the north-star is a unified
+# HR+RS+SI pool. See TARGETS["parlaspeech_primary_stress_frames"] in
+# utils_frame_train.py for the target spec.
 
 TASKS: list[dict] = [
-    # ── facebook/w2v-bert-2.0 (from-scratch head) ────────────────────────
-    {"label": "bert_vanilla_lr1e5", "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
-    {"label": "bert_vanilla_lr3e5", "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 3e-5, "num_epochs": 20, "batch_size": 64},
-    {"label": "bert_vanilla_lr5e5", "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 5e-5, "num_epochs": 20, "batch_size": 64},
-    {"label": "bert_vanilla_lr1e5_bs32", "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 32},
+    # ── Filled pause on ParlaSpeech — from-scratch head ──────────────────
+    {"label": "fp_ps_bert_vanilla_lr1e5",
+     "target":        "parlaspeech_fp_frames",
+     "model_name":    "facebook/w2v-bert-2.0",
+     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 64},
 
-    # ── classla/Wav2Vec2BertPrimaryStress... (already HR/RS-finetuned) ───
-    # Fine-tune scale LRs — the head is already trained on primary stress.
-    {"label": "classla_lr1e6", "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 1e-6, "num_epochs": 15, "batch_size": 64},
-    {"label": "classla_lr3e6", "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 3e-6, "num_epochs": 15, "batch_size": 64},
-    {"label": "classla_lr1e5", "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
-    # {"label": "classla_lr3e5", "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-    #  "learning_rate": 3e-5, "num_epochs": 15, "batch_size": 64},
-    {"label": "classla_lr1e5_bs32", "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 32},
+    # ── Filled pause on ParlaSpeech — pretrained FP classifier (warm start)
+    {"label": "fp_ps_classla_fp_lr1e6",
+     "target":        "parlaspeech_fp_frames",
+     "model_name":    "classla/wav2vecbert2-filledPause",
+     "learning_rate": 1e-6, "num_epochs": 10, "batch_size": 64},
 
-    # ── longer runs, best LR per family ──────────────────────────────────
-    {"label": "bert_vanilla_lr1e5_30ep", "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 1e-5, "num_epochs": 30, "batch_size": 64},
-    {"label": "classla_lr1e5_25ep", "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 1e-5, "num_epochs": 25, "batch_size": 64},
+    # ── Slovenian primary stress — from-scratch head on w2v-bert-2.0 ─────
+    {"label": "slo_stress_bert_vanilla_lr1e5",
+     "target":        "si_primary_stress_frames",
+     "model_name":    "facebook/w2v-bert-2.0",
+     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
+
+    # ── Slo primary stress — pretrained HR/RS stress classifier (warm start)
+    {"label": "slo_stress_classla_lr1e5",
+     "target":        "si_primary_stress_frames",
+     "model_name":    "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
+     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
 ]
 
 
@@ -105,7 +108,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--config", "-c", default=str(HERE / "4_config.json"),
                    help="path to 4_config.json (base layer)")
-    p.add_argument("--mode", "-m", choices=["test", "demo", "full"], default="full",
+    p.add_argument("--mode", "-m", choices=["test", "demo", "full"], default="demo",
                    help="base run_mode; task overrides layer on top")
     p.add_argument("--use_gpu", action="store_true",
                    help="arm the reserved GPU (no prompt); default is CPU")
@@ -119,11 +122,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def print_task_plan(tasks: list[dict]) -> None:
-    w = max(len(c["label"]) for c in tasks) if tasks else 5
+    w = max(len(t["label"]) for t in tasks) if tasks else 5
     print(f"planned {len(tasks)} tasks:")
-    for i, c in enumerate(tasks, 1):
-        print(f"  {i:>2}. {c['label']:<{w}}  model={c['model_name']}  "
-              f"lr={c['learning_rate']}  epochs={c['num_epochs']}  bs={c['batch_size']}")
+    for i, t in enumerate(tasks, 1):
+        extras = " ".join(f"{k}={v}" for k, v in t.items()
+                          if k not in {"label", "model_name", "target"})
+        print(f"  {i:>2}. {t['label']:<{w}}  target={t.get('target', '-')}  "
+              f"model={t.get('model_name', '-')}  {extras}")
 
 
 def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
@@ -135,7 +140,7 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
         load_and_cap_splits, validate_frame_rate, drop_long_records,
         build_label_maps, load_feature_extractor, run_phase,
         plot_test_confusion, plot_test_example_predictions, release_gpu,
-        PROJECT_ROOT,
+        resolve_target, TARGETS, PROJECT_ROOT,
     )
 
     row = {k: "" for k in CSV_FIELDS}
@@ -159,6 +164,10 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
             raise ValueError(f"task {task['label']!r}: unknown Config fields {sorted(unknown)}")
         for k, v in overrides.items():
             setattr(cfg, k, v)
+        # If the task overrode `target`, re-resolve so jsonl_paths + label_key
+        # follow the new target — otherwise cfg still points at the config default.
+        if "target" in overrides:
+            resolve_target(cfg, TARGETS)
         validate_config(cfg)
         device = resolve_device(cfg, use_cuda=args.use_gpu)
         print_config_summary(cfg, device)

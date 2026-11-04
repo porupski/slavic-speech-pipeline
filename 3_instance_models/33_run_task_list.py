@@ -24,6 +24,8 @@ Usage:
   python 33_run_task_list.py --use_gpu --limit 2              # first 2 only
   python 33_run_task_list.py --use_gpu --list_dir my_run_set
 
+  python 33_run_task_list.py --use_gpu 2>&1 | tee ../runs/33_task_list_$(date +%Y-%m-%d_%H%M%S).log
+
 Base config is ``3_config.json`` under the chosen ``--mode`` (default: demo);
 per-task overrides layer on top.
 """
