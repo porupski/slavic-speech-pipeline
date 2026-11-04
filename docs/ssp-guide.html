@@ -234,6 +234,61 @@ jupyter lab 1_data_prep/11c_prep_parlaspeech.ipynb      # prep step</code></pre>
             <img src="img/guide_imgs/1ssp_1data_ps-demo.png" alt="ParlaSpeech-HR downloaded and folder structure sanity check">
             <figcaption>ParlaSpeech-HR downloaded — folder tree for sanity.</figcaption>
           </figure>
+
+          <h4>Expected output — full ParlaSpeech prep (all four languages)</h4>
+          <p>
+          <code>11c_prep_parlaspeech</code> emits three JSONL types: utterance-level
+          instance records, utterance-level frame records (50 Hz label sequences for
+          filled-pause detection), and word-level frame records (50 Hz for primary
+          stress, HR and RS only). The counts below are from a full run on CPU.
+          </p>
+
+          <table class="guide-table">
+            <thead>
+              <tr>
+                <th>Language</th>
+                <th class="num">utterance_instance</th>
+                <th class="num">utterance_frame</th>
+                <th class="num">word_frame</th>
+                <th class="num">Wall-clock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>HR</td>
+                <td class="num">922 676</td>
+                <td class="num">881 235</td>
+                <td class="num">11 341 813</td>
+                <td class="num">~25 min</td>
+              </tr>
+              <tr>
+                <td>RS</td>
+                <td class="num">290 778</td>
+                <td class="num">280 260</td>
+                <td class="num">1 998 020</td>
+                <td class="num">~5 min</td>
+              </tr>
+              <tr>
+                <td>PL</td>
+                <td class="num">535 465</td>
+                <td class="num">531 731</td>
+                <td class="num">—</td>
+                <td class="num">~5 min</td>
+              </tr>
+              <tr>
+                <td>CZ</td>
+                <td class="num">717 675</td>
+                <td class="num">712 321</td>
+                <td class="num">—</td>
+                <td class="num">~7 min</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+          Total ~41 min on CPU only. Word-frame records are primary-stress
+          annotations and are only available for HR and RS. PL and CZ have no
+          primary-stress annotation layer.
+          </p>
         </div>
       </details>
 
