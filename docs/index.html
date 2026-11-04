@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>slavic-speech-pipeline</title>
+  <link rel="icon" type="image/png" href="img/ssp_logo_v0.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -71,12 +72,50 @@
     <section id="pipeline">
       <h2>The pipeline at a glance</h2>
       <p>
-      Audio comes in on the left, trained models come out on the right. Chapter
+      <!-- Audio comes in on the left, trained models come out on the right.  -->
+      The <code>INPUT CORPORA</code> get processed by <code>1 DATA PREP</code> into canonical JSONLs (structured data files). These JSONLs can be opened with <code>2 ANALYSIS</code>, make custom annotations with <code>5 TG MINTER</code>, or train both <code>3 INSTANCE</code> and <code>4 FRAME MODELS</code>. At the end, <code>6 INFERENCE</code> is used to test or deploy the models.</pp>
+      
+      <p>Chapter
       numbers above each stage match the numbered folders at the repo root.
       </p>
+
+      <ul>
+    <li>
+      <code>INPUT CORPORA</code> — Freely available speech corpora
+      (e.g. <a href="#parlaspeech">ParlaSpeech</a>, with 10k hours of richly annotated parliamentary
+      speech in HR, CZ, PL, RS, and SI).
+    </li>
+    <li>
+      <code>1 DATA PREP</code> — Downloads and preprocesses the corpora
+      into canonical JSONLs used downstream by all other pipeline components.
+    </li>
+    <li>
+      <code>2 ANALYSIS</code> — Provides tools to inspect and verify
+      canonical JSONLs (still WIP).
+    </li>
+    <li>
+      <code>3 INSTANCE MODELS</code> — Speech encoder models that take
+      an entire audio clip as input and return a single class or regression value.
+    </li>
+    <li>
+      <code>4 FRAME MODELS</code> — Speech encoder models that take
+      an entire audio clip as input and return a class (or a regression value, WIP) for each audio frame.
+    </li>
+    <li>
+      <code>5 TG MINTER</code> — Generates empty Praat TextGrids from
+      canonical JSONLs for human annotation. The resulting annotations
+      can then be used to fine-tune an instance or frame model for a
+      specific task.
+    </li>
+    <li>
+      <code>6 INFERENCE</code> — Evaluates trained models or uses them
+      for deployment.
+    </li>
+  </ul>
+
       <figure class="flowchart">
-        <img src="img/schema_pipeline_draft_v0.jpeg" alt="End-to-end flowchart of the slavic-speech-pipeline">
-        <figcaption>Flowchart — hand-drawn concept placeholder.</figcaption>
+        <img src="img/schema_pipeline_v1.2.png" alt="End-to-end flowchart of the slavic-speech-pipeline. With the artistic help of Anamarija Kolar Matovina.">
+        <figcaption>Flowchart — hand-drawn conceptualization of the pipeline as respective chapter stages. With the artistic help of Anamarija Kolar Matovina.</figcaption>
       </figure>
     </section>
 
@@ -96,11 +135,21 @@
             <span class="metric"><span class="label">accuracy</span><span class="value">0.992</span></span>
             <span class="metric"><span class="label">macro F1</span><span class="value">0.992</span></span>
           </div>
+          <!-- CITE: comparison point for the 0.992 speaker-ID result.
+               Babu, Arun et al. "XLS-R: Self-supervised Cross-lingual Speech
+               Representation Learning at Scale." Interspeech 2022, pp. 2278–2282.
+               DOI: 10.21437/Interspeech.2022-143  arXiv: 2111.09296
+               Key fact: XLS-R-300M full-parameter fine-tune on VoxCeleb1 → 95.8% speaker-ID accuracy.
+               Note: different dataset (VoxCeleb1 vs ParlaSpeech-HR v3), different number of speakers,
+               different language — not an apples-to-apples comparison, cited as a reference point only.
+               TODO: decide whether to surface this as a visible footnote or add it to the
+               related-papers section with the full pub card. -->
           <figcaption>
             Confusion matrix on held-out TEST — one row per true speaker.
             A bright diagonal means the model picked the right speaker almost
             every time.
-            <small>ParlaSpeech-HR benchmark v3 · 20 epochs · best at epoch 15.</small>
+            <small>ParlaSpeech-HR benchmark v3 · 20 epochs · best at epoch 15.
+            Above the 95.8% published for XLS-R on VoxCeleb1 (Babu et al., Interspeech 2022).</small>
           </figcaption>
         </figure>
 
@@ -223,25 +272,40 @@
     </section>
 
     <section id="guide">
-      <h2>The guide
-        <span class="sub">run it locally · chapter-by-chapter walkthrough</span>
+      <h2>Get started
+        <span class="sub">pick your path</span>
       </h2>
-      <div class="path">
-        <p>
-        Rather clone the repo and run the real pipeline on your own box? Install
-        the mamba env and walk the chapters at your own pace. Every entry point
-        ships three modes — <code>test</code> proves the plumbing in seconds,
-        <code>demo</code> returns a tangible number in about an hour,
-        <code>full</code> is for overnight runs.
-        </p>
-        <pre><code>bash 0_env_setup/setup_env_cuda.sh
+      <div class="cta-split">
+
+        <div class="cta-col colab-side">
+          <h3>Try it in 45 min</h3>
+          <p class="cta-desc">No installation required. Open the notebook,
+          select a free GPU runtime, run all cells — you get a trained
+          speaker-identification model in one session.</p>
+          <span class="cta-tag">Speaker ID · 50 speakers · ParlaSpeech-HR · free GPU</span>
+          <a href="https://colab.research.google.com/github/porupski/slavic-speech-pipeline/blob/main/colab_demo/ssp-colab_demo-speaker_id.ipynb"
+             target="_blank" rel="noopener">
+            <img class="colab-badge-big"
+                 src="https://colab.research.google.com/assets/colab-badge.svg"
+                 alt="Open in Colab">
+          </a>
+          <div class="cta-preview">
+            <img src="img/guide_imgs/ch3_run_task_list/confusion_matrix_test-speaker_base.png"
+                 alt="Speaker-ID confusion matrix — 50 Croatian parliamentary speakers, accuracy 0.990">
+          </div>
+        </div>
+
+        <div class="cta-col local-side">
+          <h3>Run it locally</h3>
+          <p class="cta-desc">Clone the repo, install the environment, walk the
+          chapters at your own pace. Every entry point ships three modes —
+          <code>test</code> in seconds, <code>demo</code> in an hour,
+          <code>full</code> overnight.</p>
+          <pre><code>bash 0_env_setup/setup_env_cuda.sh
 mamba activate ssp-cuda</code></pre>
-        <p>
-        The <a href="ssp-guide.html"><b>Under the Hood</b></a> guide walks every
-        chapter end to end — the exact command for each run, what to expect
-        while it runs, where to tweak the knobs, the hiccups that come up.
-        </p>
-        <!-- <a class="cta" href="ssp-guide.html">Open the guide →</a> -->
+          <a class="cta-guide-link" href="ssp-guide.html">Under the Hood guide →</a>
+        </div>
+
       </div>
     </section>
 
@@ -254,7 +318,7 @@ mamba activate ssp-cuda</code></pre>
       questions can build on the same foundation.
       </p>
 
-      <h3 class="research-sub">Current research</h3>
+      <h3 class="research-sub">Currently ongoing research</h3>
       <div class="current-research">
         <ul>
           <li>Fine-tuning a primary-stress frame model for Slovenian.</li>
@@ -264,7 +328,7 @@ mamba activate ssp-cuda</code></pre>
 
       <h3 class="research-sub">Resources</h3>
       <div class="pub-list">
-        <div class="pub-card feature parlaspeech-feature">
+        <div class="pub-card feature parlaspeech-feature" id="parlaspeech">
           <img class="parlaspeech-logo" src="img/ParlaSpeech_logo_v0.png" alt="ParlaSpeech logo">
           <div class="feature-content">
             <div class="pub-header">
@@ -298,6 +362,13 @@ mamba activate ssp-cuda</code></pre>
             </div>
           </div>
         </div>
+
+        <div class="resource-note">
+          <b>Currently, ParlaSpeech 3.0 is published and consists of 6k hours
+          across HR, CZ, PL, and RS. ParlaSpeech 4.0, adding another 4k
+          hours of Slovenian (SI) speech, is close to full publication.</b>
+        </div>
+
       </div>
 
       <h3 class="research-sub">Related papers</h3>
@@ -426,7 +497,7 @@ mamba activate ssp-cuda</code></pre>
   </main>
 
   <footer>
-    <p>MIT · <a href="https://porupski.github.io/cv/">Ivan Porupski</a> · <a href="https://www.ijs.si/">Jožef Stefan Institute</a></p>
+    <p>MIT License · <a href="https://porupski.github.io/cv/">Ivan Porupski</a> · <a href="https://www.ijs.si/">Jožef Stefan Institute</a> - E8 Knowledge Technologies</p>
   </footer>
 
   <script>
@@ -441,7 +512,7 @@ mamba activate ssp-cuda</code></pre>
     (function init() {
       let saved = null;
       try { saved = localStorage.getItem(KEY); } catch (_) {}
-      applyTheme(saved === 'dark' ? 'dark' : 'light');
+      applyTheme(saved || 'dark');
     })();
 
     function toggleCite(btn) {

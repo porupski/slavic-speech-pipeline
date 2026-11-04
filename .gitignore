@@ -12,6 +12,7 @@ ref_files/
 misc/
 *_test.*
 docs/mockup
+docs/img/guide_imgs/.trash
 
 # --- local backups (created before risky edits) ------------------------------
 *.BACKUP.*

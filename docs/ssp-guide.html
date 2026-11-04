@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Under the Hood of ssp</title>
+  <link rel="icon" type="image/png" href="img/ssp_logo_v0.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -56,6 +57,31 @@
       <h1>Under the Hood of ssp
         <span class="subtitle">a chapter-by-chapter walkthrough of the toolkit end to end</span>
       </h1>
+
+      <div class="path-fork">
+        <div class="path-fork-card colab">
+          <h3>On Colab — no local setup</h3>
+          <p>Open the demo notebook, select a free GPU runtime, run all cells.
+          You get a trained model in 45–60 minutes without installing anything.
+          Skip chapters 0–1 entirely.</p>
+          <div class="fork-cta">
+            <a href="https://colab.research.google.com/github/porupski/slavic-speech-pipeline/blob/main/colab_demo/ssp-colab_demo-speaker_id.ipynb"
+               target="_blank" rel="noopener">
+              <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab">
+            </a>
+            <span class="fork-note">→ skip to the notebook, then come back here for context</span>
+          </div>
+        </div>
+        <div class="path-fork-card local">
+          <h3>Running locally — full pipeline</h3>
+          <p>Install the mamba environment and walk all chapters end to end.
+          Start at chapter 0 below. The guide covers every step — exact
+          commands, expected output, and known hiccups.</p>
+          <div class="fork-cta">
+            <span class="fork-note">↓ continue reading from chapter 0</span>
+          </div>
+        </div>
+      </div>
 
       <h2>Three run modes, one config</h2>
       <p>
@@ -218,6 +244,7 @@ jupyter lab 1_data_prep/11c_prep_parlaspeech.ipynb      # prep step</code></pre>
           <div class="chap-head-col">
             <div class="head">
             <h2>Look at what you got</h2>
+            <span class="tag wip">instance only</span>
             </div>
             <div class="chap-meta">
             <span class="icon">🔍</span>
@@ -226,7 +253,8 @@ jupyter lab 1_data_prep/11c_prep_parlaspeech.ipynb      # prep step</code></pre>
           </div>
         </summary>
         <div class="chap-body">
-          <p class="goal">Read a canonical JSONL and plot the shape of it.</p>
+          <p class="goal">Read a structured data file (JSONL) and plot the shape of it.
+          Instance shape only — frame-shape analysis is in progress.</p>
 
           <h4>Command</h4>
           <pre><code>jupyter lab 2_data_analysis/20_explore_dataset.ipynb</code></pre>
@@ -335,6 +363,29 @@ python 33_run_task_list.py --use_gpu 2>&amp;1 \
   | tee ../runs/33_task_list_$(date +%Y-%m-%d_%H%M%S).log</code></pre>
           <p>Tmux it and walk away.</p>
 
+          <details class="detail-box">
+            <summary>Benchmark splits &amp; run metadata</summary>
+            <div class="detail-body">
+              <table class="guide-table">
+                <thead>
+                  <tr>
+                    <th>Task</th>
+                    <th class="num">Train</th>
+                    <th class="num">Dev</th>
+                    <th class="num">Test</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>Gender (2-class)</td><td class="num">1 000</td><td class="num">2 000</td><td class="num">2 000</td></tr>
+                  <tr><td>Speaker-ID (50-class)</td><td class="num">5 000</td><td class="num">500</td><td class="num">500</td></tr>
+                  <tr><td>Age</td><td class="num">1 200</td><td class="num">1 000</td><td class="num">1 000</td></tr>
+                  <tr><td>Orientation</td><td class="num">2 500</td><td class="num">900</td><td class="num">900</td></tr>
+                </tbody>
+              </table>
+              <p class="detail-meta">GPU: A100 · mode: demo · epochs: 10 · batch: 16 · CNN frozen · total wall-clock: 172 min 9 s · run: 2026-11-04_104138_task_list</p>
+            </div>
+          </details>
+
           <h4>At-a-glance — classification (2 × 2)</h4>
           <p>Same 10-epoch demo budget, same batch size, same ParlaSpeech-HR benchmark v3. w2v2-base runs at lr 1e-5, xls-r-300m at lr 3e-5 (larger model, higher LR).</p>
 
@@ -352,96 +403,128 @@ python 33_run_task_list.py --use_gpu 2>&amp;1 \
               <tr>
                 <td>Gender (2-class)</td>
                 <td>wav2vec2-base</td>
-                <td class="num">0.986</td>
-                <td class="num">0.986</td>
-                <td class="num">~25 min</td>
+                <td class="num">0.993</td>
+                <td class="num">0.992</td>
+                <td class="num">~15 min</td>
               </tr>
               <tr>
                 <td>Gender (2-class)</td>
                 <td>xls-r-300m</td>
                 <td class="num">1.000</td>
                 <td class="num">1.000</td>
-                <td class="num">~50 min</td>
+                <td class="num">~25 min</td>
               </tr>
               <tr>
                 <td>Speaker-ID (50-class)</td>
-                <td><span class="accent">wav2vec2-base</span></td>
-                <td class="num accent">0.988</td>
-                <td class="num accent">0.988</td>
-                <td class="num">~30 min</td>
+                <td>wav2vec2-base</td>
+                <td class="num">0.990</td>
+                <td class="num">0.990</td>
+                <td class="num">~25 min</td>
               </tr>
               <tr>
                 <td>Speaker-ID (50-class)</td>
                 <td>xls-r-300m</td>
-                <td class="num">—</td>
-                <td class="num">—</td>
-                <td class="num">—</td>
+                <td class="num">0.964</td>
+                <td class="num">0.964</td>
+                <td class="num">~45 min</td>
               </tr>
             </tbody>
           </table>
 
           <div class="cm-grid">
             <figure>
-              <img src="img/guide_imgs/ch3_cm_gender_w2v2-base.png" alt="Gender CM, wav2vec2-base">
-              <figcaption>Gender · wav2vec2-base · <span class="result">0.986</span></figcaption>
+              <img src="img/guide_imgs/ch3_run_task_list/confusion_matrix_test-gender_base.png"
+                   alt="Gender CM, wav2vec2-base · acc 0.993 · F1 0.992">
+              <figcaption>Gender · wav2vec2-base · <span class="result">F1 0.992</span></figcaption>
             </figure>
             <figure>
-              <img src="img/guide_imgs/ch3_cm_gender_xls-r.png" alt="Gender CM, xls-r-300m">
-              <figcaption>Gender · xls-r-300m · <span class="result">1.000</span></figcaption>
+              <img src="img/guide_imgs/ch3_run_task_list/confusion_matrix_test-gender_xls.png"
+                   alt="Gender CM, xls-r-300m · acc 1.000 · F1 1.000">
+              <figcaption>Gender · xls-r-300m · <span class="result">F1 1.000</span></figcaption>
             </figure>
             <figure>
-              <img src="img/guide_imgs/ch3_cm_speakerid_w2v2-base.png" alt="Speaker-ID CM, wav2vec2-base">
-              <figcaption>Speaker-ID · wav2vec2-base · <span class="result">0.988</span></figcaption>
+              <img src="img/guide_imgs/ch3_run_task_list/confusion_matrix_test-speaker_base.png"
+                   alt="Speaker-ID CM, wav2vec2-base · acc 0.990 · F1 0.990">
+              <figcaption>Speaker-ID · wav2vec2-base · <span class="result">F1 0.990</span></figcaption>
             </figure>
             <figure>
-              <img src="img/guide_imgs/ch3_cm_speakerid_xls-r.png" alt="Speaker-ID CM, xls-r-300m">
-              <figcaption>Speaker-ID · xls-r-300m · <span class="result">—</span></figcaption>
+              <img src="img/guide_imgs/ch3_run_task_list/confusion_matrix_test-speaker_xls.png"
+                   alt="Speaker-ID CM, xls-r-300m · acc 0.964 · F1 0.964">
+              <figcaption>Speaker-ID · xls-r-300m · <span class="result">F1 0.964</span></figcaption>
             </figure>
           </div>
 
           <h4>At-a-glance — regression (2 × 2)</h4>
-          <p>Same four conditions on continuous targets. Reports mean absolute error (lower is better) and Spearman correlation.</p>
+          <p>Same four conditions on continuous targets. Spearman ρ is the selection metric (higher is better). MAE is in real units (years for age, Likert units for orientation).</p>
 
           <table class="guide-table">
             <thead>
               <tr>
                 <th>Task</th>
                 <th>Encoder</th>
+                <th class="num">TEST Spearman ρ</th>
                 <th class="num">TEST MAE</th>
-                <th class="num">TEST Spearman</th>
                 <th class="num">Wall-clock</th>
               </tr>
             </thead>
             <tbody>
-              <tr><td>Age</td><td>wav2vec2-base</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
-              <tr><td>Age</td><td>xls-r-300m</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
-              <tr><td>Orientation</td><td>wav2vec2-base</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
-              <tr><td>Orientation</td><td>xls-r-300m</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+              <tr>
+                <td>Age</td>
+                <td>wav2vec2-base</td>
+                <td class="num">0.733</td>
+                <td class="num">7.16 yr</td>
+                <td class="num">~10 min</td>
+              </tr>
+              <tr>
+                <td>Age</td>
+                <td>xls-r-300m</td>
+                <td class="num">0.775</td>
+                <td class="num">6.39 yr</td>
+                <td class="num">~15 min</td>
+              </tr>
+              <tr>
+                <td>Orientation</td>
+                <td>wav2vec2-base</td>
+                <td class="num">0.440</td>
+                <td class="num">0.934</td>
+                <td class="num">~15 min</td>
+              </tr>
+              <tr>
+                <td>Orientation</td>
+                <td>xls-r-300m</td>
+                <td class="num">0.345</td>
+                <td class="num">1.145</td>
+                <td class="num">~25 min</td>
+              </tr>
             </tbody>
           </table>
 
           <div class="cm-grid">
             <figure>
-              <img src="img/guide_imgs/ch3_scatter_age_w2v2-base.png" alt="Age scatter, wav2vec2-base">
-              <figcaption>Age · wav2vec2-base</figcaption>
+              <img src="img/guide_imgs/ch3_run_task_list/scatter_plot-age_base.png"
+                   alt="Age scatter, wav2vec2-base · Spearman 0.733">
+              <figcaption>Age · wav2vec2-base · <span class="result">ρ 0.733</span></figcaption>
             </figure>
             <figure>
-              <img src="img/guide_imgs/ch3_scatter_age_xls-r.png" alt="Age scatter, xls-r-300m">
-              <figcaption>Age · xls-r-300m</figcaption>
+              <img src="img/guide_imgs/ch3_run_task_list/scatter_plot-age_xls.png"
+                   alt="Age scatter, xls-r-300m · Spearman 0.775">
+              <figcaption>Age · xls-r-300m · <span class="result">ρ 0.775</span></figcaption>
             </figure>
             <figure>
-              <img src="img/guide_imgs/ch3_scatter_orientation_w2v2-base.png" alt="Orientation scatter, wav2vec2-base">
-              <figcaption>Orientation · wav2vec2-base</figcaption>
+              <img src="img/guide_imgs/ch3_run_task_list/scatter_plot-orient_base.png"
+                   alt="Orientation scatter, wav2vec2-base · Spearman 0.440">
+              <figcaption>Orientation · wav2vec2-base · <span class="result">ρ 0.440</span></figcaption>
             </figure>
             <figure>
-              <img src="img/guide_imgs/ch3_scatter_orientation_xls-r.png" alt="Orientation scatter, xls-r-300m">
-              <figcaption>Orientation · xls-r-300m</figcaption>
+              <img src="img/guide_imgs/ch3_run_task_list/scatter_plot-orient_xls.png"
+                   alt="Orientation scatter, xls-r-300m · Spearman 0.345">
+              <figcaption>Orientation · xls-r-300m · <span class="result">ρ 0.345</span></figcaption>
             </figure>
           </div>
 
           <p>
-          The numbers above come from one hyperparameter choice per model
-          family at demo budget. Learning rate, batch size, epoch count, and
+          The numbers above come from one hyperparameter choice per model family
+          at demo budget (10 epochs, batch 16). Learning rate, epoch count, and
           feature-encoder freezing all move them — tune via <code>TASKS</code>
           and compare the resulting CSV.
           </p>
@@ -702,7 +785,7 @@ python 6_inference/run_63_frame_classification_inference.py \
   </main>
 
   <footer>
-    <p>MIT · <a href="https://porupski.github.io/cv/">Ivan Porupski</a> · <a href="https://www.ijs.si/">Jožef Stefan Institute</a> · <a href="index.html">back to landing</a></p>
+    <p>MIT License · <a href="https://porupski.github.io/cv/">Ivan Porupski</a> · <a href="https://www.ijs.si/">Jožef Stefan Institute</a> - E8 Knowledge Technologies · <a href="index.html">back to landing</a></p>
   </footer>
 
   <script>
@@ -717,7 +800,7 @@ python 6_inference/run_63_frame_classification_inference.py \
     (function init() {
       let saved = null;
       try { saved = localStorage.getItem(KEY); } catch (_) {}
-      applyTheme(saved === 'dark' ? 'dark' : 'light');
+      applyTheme(saved || 'dark');
     })();
 
     /* ───────── scrollspy — highlight the chapter the user is on ───────── */
