@@ -72,58 +72,58 @@ TASK_TYPE = "classification"   # ch4 engine is classification-only for now
 
 TASKS: list[dict] = [
     # ═══ GROUP 1 — Filled pause ════════════════════════════════════════════
-    # 15 epochs · lr 1e-5 · batch 64 · demo caps · binary (0=speech, 1=fp)
+    # 15 epochs · lr 1e-5 · batch 32 · demo caps · binary (0=speech, 1=fp)
 
     # HR, vanilla w2v-bert-2.0
     {"label": "fp_hr_bert_lr1e5",
      "target": "parlaspeech_fp_frames", "langs": ["hr"],
      "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 64},
+     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 8, "grad_accum": 4},
 
     # HR, pretrained FP classifier (classla warm start — in-domain)
     {"label": "fp_hr_classla_fp_lr1e5",
      "target": "parlaspeech_fp_frames", "langs": ["hr"],
      "model_name": "classla/wav2vecbert2-filledPause",
-     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 64},
+     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 8, "grad_accum": 4},
 
     # PL, vanilla w2v-bert-2.0  (cross-lingual vs HR)
     {"label": "fp_pl_bert_lr1e5",
      "target": "parlaspeech_fp_frames", "langs": ["pl"],
      "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 64},
+     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 8, "grad_accum": 4},
 
     # PL, pretrained FP classifier (classla warm start — cross-lingual)
     {"label": "fp_pl_classla_fp_lr1e5",
      "target": "parlaspeech_fp_frames", "langs": ["pl"],
      "model_name": "classla/wav2vecbert2-filledPause",
-     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 64},
+     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 8, "grad_accum": 4},
 
     # ═══ GROUP 2 — Primary stress ══════════════════════════════════════════
-    # 20 epochs · lr 1e-5 · batch 64 · demo caps · binary (0=unstressed, 1=stressed)
+    # 20 epochs · lr 1e-5 · batch 32 · demo caps · binary (0=unstressed, 1=stressed)
 
     # HR ParlaSpeech, vanilla w2v-bert-2.0
     {"label": "stress_hr_bert_lr1e5",
      "target": "parlaspeech_primary_stress_frames", "langs": ["hr"],
      "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
+     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 8, "grad_accum": 4},
 
     # HR ParlaSpeech, pretrained stress classifier (classla — in-domain, same lang)
     {"label": "stress_hr_classla_lr1e5",
      "target": "parlaspeech_primary_stress_frames", "langs": ["hr"],
      "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
+     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 8, "grad_accum": 4},
 
     # SI (Slovenian), vanilla w2v-bert-2.0  (cross-lingual vs HR)
     {"label": "stress_si_bert_lr1e5",
      "target": "si_primary_stress_frames",
      "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
+     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 8, "grad_accum": 4},
 
     # SI (Slovenian), pretrained HR/RS stress classifier (cross-lingual)
     {"label": "stress_si_classla_lr1e5",
      "target": "si_primary_stress_frames",
      "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 64},
+     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 8, "grad_accum": 4},
 ]
 
 
@@ -274,10 +274,16 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
             release_gpu(verbose=False)
         except Exception:
             pass
+    # finally:
+    #     row["wall_time_s"] = round(time.time() - t0, 1)
+    # return row
     finally:
         row["wall_time_s"] = round(time.time() - t0, 1)
+        try:
+            release_gpu(verbose=True)
+        except Exception:
+            pass
     return row
-
 
 def make_comparison_plot(csv_path: Path, out_path: Path) -> None:
     """Horizontal bar chart of macro-F1 + positive-class F1 per task, sorted

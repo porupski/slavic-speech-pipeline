@@ -1031,11 +1031,22 @@ class EpochCheckpointCallback(TrainerCallback):
         epoch_dir = self.logs_dir / f"epoch_{epoch}"
         epoch_dir.mkdir(parents=True, exist_ok=True)
 
+        # eval_trainer = Trainer(
+        #     model=model, args=args,
+        #     compute_metrics=self.compute_metrics, data_collator=self.data_collator,
+        # )
+        # out = eval_trainer.predict(self.eval_dataset)
+        # metrics = {k.replace("test_", "eval_"): v for k, v in out.metrics.items()}
         eval_trainer = Trainer(
             model=model, args=args,
             compute_metrics=self.compute_metrics, data_collator=self.data_collator,
         )
         out = eval_trainer.predict(self.eval_dataset)
+        try:
+            eval_trainer.accelerator.free_memory()
+        except Exception:
+            pass
+        del eval_trainer
         metrics = {k.replace("test_", "eval_"): v for k, v in out.metrics.items()}
 
         train_loss = None
@@ -1102,9 +1113,127 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
     phase_dir = run_dir / phase_name
     phase_dir.mkdir(parents=True, exist_ok=True)
 
+    # print(f"building model config: {cfg.model_name}")
+    # # We need hf_config + family BEFORE preprocess to compute per-record output
+    # # length. build_model is called for the actual weights next.
+    # hf_config_probe = AutoConfig.from_pretrained(cfg.model_name)
+    # family = detect_model_family(hf_config_probe)
+    # print(f"   model_type = {hf_config_probe.model_type}  → family = {family}")
+
+    # train_items = prepare_dataset_dict(train_records, cfg, label2id)
+    # eval_items  = prepare_dataset_dict(eval_records,  cfg, label2id)
+    # train_ds = Dataset.from_list(train_items)
+    # eval_ds  = Dataset.from_list(eval_items)
+
+    # cpu_max = os.cpu_count() or 1
+    # map_num_proc = min(cfg.map_num_proc, cpu_max)
+    # dataloader_num_workers = min(cfg.dataloader_num_workers, cpu_max)
+    # if map_num_proc < cfg.map_num_proc or dataloader_num_workers < cfg.dataloader_num_workers:
+    #     print(f"⚙️  capped CPU workers to os.cpu_count()={cpu_max}: "
+    #           f"map_num_proc {cfg.map_num_proc}→{map_num_proc}, "
+    #           f"dataloader_num_workers {cfg.dataloader_num_workers}→{dataloader_num_workers}")
+
+    # preprocess_fn = make_preprocess_function(feature_extractor, hf_config_probe, family)
+    # print(f"preprocessing {len(train_ds)} train + {len(eval_ds)} eval "
+    #       f"(batch_size={cfg.preprocess_batch_size})…")
+    # train_ds = train_ds.map(
+    #     preprocess_fn, batched=True, batch_size=cfg.preprocess_batch_size,
+    #     remove_columns=train_ds.column_names, num_proc=map_num_proc,
+    # )
+    # eval_ds = eval_ds.map(
+    #     preprocess_fn, batched=True, batch_size=cfg.preprocess_batch_size,
+    #     remove_columns=eval_ds.column_names, num_proc=map_num_proc,
+    # )
+    # audio_key = feature_extractor.model_input_names[0]
+    # train_ds.set_format(type="torch", columns=[audio_key, "labels"])
+    # eval_ds.set_format(type="torch",  columns=[audio_key, "labels"])
+
+    # print(f"building model: {cfg.model_name}")
+    # model, family, _ = build_model(cfg, num_labels=len(cfg.label_order),
+    #                                label2id=label2id, id2label=id2label)
+
+    # data_collator = DataCollatorForFrame(feature_extractor, cfg.task_type)
+    # compute_metrics = compute_frame_metrics
+
+    # steps_per_epoch = max(1, len(train_ds) // (cfg.batch_size * cfg.grad_accum))
+    # total_steps = steps_per_epoch * cfg.num_epochs
+    # warmup_steps = int(total_steps * cfg.warmup_ratio)
+
+    # if isinstance(cfg.logging_steps, str) and cfg.logging_steps == "auto":
+    #     logging_steps = max(1, steps_per_epoch // 10)
+    #     print(f"📝 logging_steps=auto → {logging_steps} (~10/epoch, "
+    #           f"steps_per_epoch={steps_per_epoch})")
+    # else:
+    #     logging_steps = int(cfg.logging_steps)
+
+    # _is_ampere = device == "cuda" and torch.cuda.get_device_capability(0)[0] >= 8
+
+    # training_args = TrainingArguments(
+    #     output_dir=str(phase_dir / "trainer_tmp"),
+    #     eval_strategy="no", save_strategy="no",
+    #     logging_strategy="steps", logging_steps=logging_steps,
+    #     report_to="none", label_names=["labels"],
+    #     per_device_train_batch_size=cfg.batch_size,
+    #     per_device_eval_batch_size=cfg.batch_size,
+    #     num_train_epochs=cfg.num_epochs,
+    #     gradient_accumulation_steps=cfg.grad_accum,
+    #     learning_rate=cfg.learning_rate,
+    #     warmup_steps=warmup_steps, lr_scheduler_type="linear",
+    #     max_grad_norm=cfg.max_grad_norm,
+    #     remove_unused_columns=False,
+    #     use_cpu=(device == "cpu"),
+    #     bf16=(device == "cuda"), tf32=_is_ampere,
+    #     dataloader_num_workers=dataloader_num_workers,
+    # )
+
+    # callback = EpochCheckpointCallback(
+    #     phase_dir=phase_dir, eval_dataset=eval_ds, eval_items=eval_items,
+    #     compute_metrics=compute_metrics, data_collator=data_collator, cfg=cfg,
+    #     label_order=cfg.label_order, id2label=id2label,
+    # )
+
+    # trainer = Trainer(
+    #     model=model, args=training_args,
+    #     train_dataset=train_ds, eval_dataset=eval_ds,
+    #     compute_metrics=compute_metrics,
+    #     data_collator=data_collator, callbacks=[callback],
+    # )
+    # print(f"🚀 training {cfg.num_epochs} epochs "
+    #       f"(bs={cfg.batch_size} ga={cfg.grad_accum} lr={cfg.learning_rate})")
+    # trainer.train()
+
+    # (phase_dir / "all_epochs_summary.json").write_text(
+    #     json.dumps(callback.epoch_results, indent=2)
+    # )
+    # best = best_epoch_of(callback.epoch_results, cfg)
+    # print(f"\n🏆 best epoch in {phase_name}: {best['epoch']}")
+    # for k, v in best.items():
+    #     if isinstance(v, float):
+    #         print(f"   {k}: {v:.4f}")
+    #     else:
+    #         print(f"   {k}: {v}")
+
+    # if save_best_model:
+    #     best_dir = model_dir / "best_model"
+    #     best_dir.mkdir(parents=True, exist_ok=True)
+    #     model.save_pretrained(best_dir)
+    #     feature_extractor.save_pretrained(best_dir)
+    #     src = phase_dir / "epoch_logs" / f"epoch_{best['epoch']}"
+    #     if src.exists():
+    #         for f in src.iterdir():
+    #             shutil.copy(f, best_dir / f.name)
+    #     (best_dir / "run_info.txt").write_text(
+    #         f"run_name: {run_dir.name}\nrun_dir:  {run_dir}\n"
+    #         f"phase:    {phase_name}\nepoch:    {best['epoch']}\n"
+    #     )
+    #     print(f"   saved best model → {best_dir.relative_to(PROJECT_ROOT)}")
+
+    # shutil.rmtree(phase_dir / "trainer_tmp", ignore_errors=True)
+    # del trainer, model
+    # release_gpu(verbose=True)
+    # return callback.epoch_results, best
+
     print(f"building model config: {cfg.model_name}")
-    # We need hf_config + family BEFORE preprocess to compute per-record output
-    # length. build_model is called for the actual weights next.
     hf_config_probe = AutoConfig.from_pretrained(cfg.model_name)
     family = detect_model_family(hf_config_probe)
     print(f"   model_type = {hf_config_probe.model_type}  → family = {family}")
@@ -1137,91 +1266,106 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
     train_ds.set_format(type="torch", columns=[audio_key, "labels"])
     eval_ds.set_format(type="torch",  columns=[audio_key, "labels"])
 
-    print(f"building model: {cfg.model_name}")
-    model, family, _ = build_model(cfg, num_labels=len(cfg.label_order),
-                                   label2id=label2id, id2label=id2label)
 
-    data_collator = DataCollatorForFrame(feature_extractor, cfg.task_type)
-    compute_metrics = compute_frame_metrics
+    if torch.cuda.is_available():
+        free_b, total_b = torch.cuda.mem_get_info()
+        print(f"🧮 GPU free before model build: {free_b/2**30:.1f} / {total_b/2**30:.1f} GiB")
 
-    steps_per_epoch = max(1, len(train_ds) // (cfg.batch_size * cfg.grad_accum))
-    total_steps = steps_per_epoch * cfg.num_epochs
-    warmup_steps = int(total_steps * cfg.warmup_ratio)
+    model = trainer = callback = None
+    try:
+        print(f"building model: {cfg.model_name}")
+        model, family, _ = build_model(cfg, num_labels=len(cfg.label_order),
+                                       label2id=label2id, id2label=id2label)
 
-    if isinstance(cfg.logging_steps, str) and cfg.logging_steps == "auto":
-        logging_steps = max(1, steps_per_epoch // 10)
-        print(f"📝 logging_steps=auto → {logging_steps} (~10/epoch, "
-              f"steps_per_epoch={steps_per_epoch})")
-    else:
-        logging_steps = int(cfg.logging_steps)
+        data_collator = DataCollatorForFrame(feature_extractor, cfg.task_type)
+        compute_metrics = compute_frame_metrics
 
-    _is_ampere = device == "cuda" and torch.cuda.get_device_capability(0)[0] >= 8
+        steps_per_epoch = max(1, len(train_ds) // (cfg.batch_size * cfg.grad_accum))
+        total_steps = steps_per_epoch * cfg.num_epochs
+        warmup_steps = int(total_steps * cfg.warmup_ratio)
 
-    training_args = TrainingArguments(
-        output_dir=str(phase_dir / "trainer_tmp"),
-        eval_strategy="no", save_strategy="no",
-        logging_strategy="steps", logging_steps=logging_steps,
-        report_to="none", label_names=["labels"],
-        per_device_train_batch_size=cfg.batch_size,
-        per_device_eval_batch_size=cfg.batch_size,
-        num_train_epochs=cfg.num_epochs,
-        gradient_accumulation_steps=cfg.grad_accum,
-        learning_rate=cfg.learning_rate,
-        warmup_steps=warmup_steps, lr_scheduler_type="linear",
-        max_grad_norm=cfg.max_grad_norm,
-        remove_unused_columns=False,
-        use_cpu=(device == "cpu"),
-        bf16=(device == "cuda"), tf32=_is_ampere,
-        dataloader_num_workers=dataloader_num_workers,
-    )
-
-    callback = EpochCheckpointCallback(
-        phase_dir=phase_dir, eval_dataset=eval_ds, eval_items=eval_items,
-        compute_metrics=compute_metrics, data_collator=data_collator, cfg=cfg,
-        label_order=cfg.label_order, id2label=id2label,
-    )
-
-    trainer = Trainer(
-        model=model, args=training_args,
-        train_dataset=train_ds, eval_dataset=eval_ds,
-        compute_metrics=compute_metrics,
-        data_collator=data_collator, callbacks=[callback],
-    )
-    print(f"🚀 training {cfg.num_epochs} epochs "
-          f"(bs={cfg.batch_size} ga={cfg.grad_accum} lr={cfg.learning_rate})")
-    trainer.train()
-
-    (phase_dir / "all_epochs_summary.json").write_text(
-        json.dumps(callback.epoch_results, indent=2)
-    )
-    best = best_epoch_of(callback.epoch_results, cfg)
-    print(f"\n🏆 best epoch in {phase_name}: {best['epoch']}")
-    for k, v in best.items():
-        if isinstance(v, float):
-            print(f"   {k}: {v:.4f}")
+        if isinstance(cfg.logging_steps, str) and cfg.logging_steps == "auto":
+            logging_steps = max(1, steps_per_epoch // 10)
+            print(f"📝 logging_steps=auto → {logging_steps} (~10/epoch, "
+                  f"steps_per_epoch={steps_per_epoch})")
         else:
-            print(f"   {k}: {v}")
+            logging_steps = int(cfg.logging_steps)
 
-    if save_best_model:
-        best_dir = model_dir / "best_model"
-        best_dir.mkdir(parents=True, exist_ok=True)
-        model.save_pretrained(best_dir)
-        feature_extractor.save_pretrained(best_dir)
-        src = phase_dir / "epoch_logs" / f"epoch_{best['epoch']}"
-        if src.exists():
-            for f in src.iterdir():
-                shutil.copy(f, best_dir / f.name)
-        (best_dir / "run_info.txt").write_text(
-            f"run_name: {run_dir.name}\nrun_dir:  {run_dir}\n"
-            f"phase:    {phase_name}\nepoch:    {best['epoch']}\n"
+        _is_ampere = device == "cuda" and torch.cuda.get_device_capability(0)[0] >= 8
+
+        training_args = TrainingArguments(
+            output_dir=str(phase_dir / "trainer_tmp"),
+            eval_strategy="no", save_strategy="no",
+            logging_strategy="steps", logging_steps=logging_steps,
+            report_to="none", label_names=["labels"],
+            per_device_train_batch_size=cfg.batch_size,
+            per_device_eval_batch_size=cfg.batch_size,
+            num_train_epochs=cfg.num_epochs,
+            gradient_accumulation_steps=cfg.grad_accum,
+            learning_rate=cfg.learning_rate,
+            warmup_steps=warmup_steps, lr_scheduler_type="linear",
+            max_grad_norm=cfg.max_grad_norm,
+            remove_unused_columns=False,
+            use_cpu=(device == "cpu"),
+            bf16=(device == "cuda"), tf32=_is_ampere,
+            dataloader_num_workers=dataloader_num_workers,
         )
-        print(f"   saved best model → {best_dir.relative_to(PROJECT_ROOT)}")
 
-    shutil.rmtree(phase_dir / "trainer_tmp", ignore_errors=True)
-    del trainer, model
-    release_gpu(verbose=True)
-    return callback.epoch_results, best
+        callback = EpochCheckpointCallback(
+            phase_dir=phase_dir, eval_dataset=eval_ds, eval_items=eval_items,
+            compute_metrics=compute_metrics, data_collator=data_collator, cfg=cfg,
+            label_order=cfg.label_order, id2label=id2label,
+        )
 
+        trainer = Trainer(
+            model=model, args=training_args,
+            train_dataset=train_ds, eval_dataset=eval_ds,
+            compute_metrics=compute_metrics,
+            data_collator=data_collator, callbacks=[callback],
+        )
+        print(f"🚀 training {cfg.num_epochs} epochs "
+              f"(bs={cfg.batch_size} ga={cfg.grad_accum} lr={cfg.learning_rate})")
+        trainer.train()
+
+        epoch_results = callback.epoch_results
+        (phase_dir / "all_epochs_summary.json").write_text(
+            json.dumps(epoch_results, indent=2)
+        )
+        best = best_epoch_of(epoch_results, cfg)
+        print(f"\n🏆 best epoch in {phase_name}: {best['epoch']}")
+        for k, v in best.items():
+            if isinstance(v, float):
+                print(f"   {k}: {v:.4f}")
+            else:
+                print(f"   {k}: {v}")
+
+        if save_best_model:
+            best_dir = model_dir / "best_model"
+            best_dir.mkdir(parents=True, exist_ok=True)
+            model.save_pretrained(best_dir)
+            feature_extractor.save_pretrained(best_dir)
+            src = phase_dir / "epoch_logs" / f"epoch_{best['epoch']}"
+            if src.exists():
+                for f in src.iterdir():
+                    shutil.copy(f, best_dir / f.name)
+            (best_dir / "run_info.txt").write_text(
+                f"run_name: {run_dir.name}\nrun_dir:  {run_dir}\n"
+                f"phase:    {phase_name}\nepoch:    {best['epoch']}\n"
+            )
+            print(f"   saved best model → {best_dir.relative_to(PROJECT_ROOT)}")
+    finally:
+        # Runs on success AND failure. Nulling locals in this frame means a
+        # traceback pinning the frame no longer pins the model/optimizer.
+        if trainer is not None:
+            try:
+                trainer.accelerator.free_memory()
+            except Exception:
+                pass
+        trainer = model = callback = None
+        shutil.rmtree(phase_dir / "trainer_tmp", ignore_errors=True)
+        release_gpu(verbose=True)
+
+    return epoch_results, best
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Run setup + summary

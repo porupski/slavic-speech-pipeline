@@ -47,7 +47,7 @@
     "preprocess_batch_size": 32,
     "dataloader_num_workers": 0,
     "map_num_proc": 8,
-    "enable_max_audio_seconds": false,
+    "enable_max_audio_seconds": true,
     "max_audio_seconds": 15.0,
 
     "n_examples_to_plot": 6,
