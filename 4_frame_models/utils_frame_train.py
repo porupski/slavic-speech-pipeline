@@ -311,6 +311,10 @@ class Config:
     enable_max_audio_seconds: bool = False
     max_audio_seconds: float       = 15.0
 
+    # Drop records whose label_key sequence has no positive frame (no FP /
+    # no stressed frame in the instance). Applied to train/dev/test before the cap.
+    require_positive: bool = True
+    
     # -- Visualization -------------------------------------------------------
     n_examples_to_plot: int = 6
 
@@ -433,24 +437,58 @@ def print_config_summary(cfg: Config, device: str) -> None:
 # Data — load splits, cap
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def load_split(jsonl_paths: list, split: str, label_key: str,
-               *, exclude_multistress: bool) -> tuple[list[dict], int]:
-    """Return (records, n_multistress_dropped) for `split` across every pooled
-    JSONL. Records without the multistress tag are unaffected."""
-    out, n_multi = [], 0
+def instance_duration_s(r: dict, label_key: str) -> float | None:
+    """The instance's OWN duration, never the source file's.
+    end_t - start_t if both exist → metadata.audio_length → len(labels)/hz.
+    None if none of them is available."""
+    st, et = r.get("start_t"), r.get("end_t")
+    if st is not None and et is not None:
+        return float(et) - float(st)
+    al = (r.get("metadata") or {}).get("audio_length")
+    if al is not None:
+        return float(al)
+    seq = (r.get("labels") or {}).get(label_key)
+    hz = r.get("frame_rate_hz")
+    if isinstance(seq, list) and hz:
+        return len(seq) / float(hz)
+    return None
+
+def load_split(jsonl_paths: list, split: str, label_key: str, *,
+               exclude_multistress: bool,
+               max_s: float | None = None,
+               require_positive: bool = False) -> tuple[list[dict], dict]:
+    """Stream every pooled JSONL once for `split`. Per record, in order:
+      1. label_key present + non-empty list  (else skipped, not counted)
+      2. multistress exclusion
+      3. length filter on the instance's own duration (if max_s)
+      4. positive-only filter (if require_positive)
+    Returns (records, stats). stats: loaded / multistress / long / unknown_len / no_pos.
+    Rejected records are never kept in RAM; the result equals load → filter."""
+    out: list[dict] = []
+    st = dict(loaded=0, multistress=0, long=0, unknown_len=0, no_pos=0)
     for jp in jsonl_paths:
         for r in udp.iter_jsonl(jp):
             if r["split"] != split:
                 continue
-            v = r.get("labels", {}).get(label_key)
+            v = (r.get("labels") or {}).get(label_key)
             if v is None or not isinstance(v, list) or len(v) == 0:
                 continue
-            if exclude_multistress and r.get("metadata", {}).get("multistress"):
-                n_multi += 1
+            if exclude_multistress and (r.get("metadata") or {}).get("multistress"):
+                st["multistress"] += 1
+                continue
+            st["loaded"] += 1
+            if max_s is not None:
+                d = instance_duration_s(r, label_key)
+                if d is None:
+                    st["unknown_len"] += 1          # kept, but counted
+                elif d > max_s:
+                    st["long"] += 1
+                    continue
+            if require_positive and not any(v):
+                st["no_pos"] += 1
                 continue
             out.append(r)
-    return out, n_multi
-
+    return out, st
 
 def cap_split(records: list[dict], n, seed: int, sampling: str = "proportional") -> list[dict]:
     if n is None or len(records) <= n:
@@ -482,36 +520,51 @@ def cap_split(records: list[dict], n, seed: int, sampling: str = "proportional")
 
 
 def load_and_cap_splits(cfg: Config) -> tuple[list[dict], list[dict], list[dict]]:
-    """Load train/dev/test, filter by label_key + multistress, then apply the
-    active mode's caps identically to every split."""
-    tr, n_mtr = load_split(cfg.jsonl_paths, "train", cfg.label_key,
-                           exclude_multistress=cfg.exclude_multistress)
-    dv, n_mdv = load_split(cfg.jsonl_paths, "dev",   cfg.label_key,
-                           exclude_multistress=cfg.exclude_multistress)
-    te, n_mte = load_split(cfg.jsonl_paths, "test",  cfg.label_key,
-                           exclude_multistress=cfg.exclude_multistress)
+    """Per split: load → length filter → positive-only filter → cap.
+    Empty-split check runs last, after every filter, and names the stage."""
+    max_s = cfg.max_audio_seconds if cfg.enable_max_audio_seconds else None
+    caps = {"train": cfg.cap_train, "dev": cfg.cap_dev, "test": cfg.cap_test}
 
-    _pre = (len(tr), len(dv), len(te))
-    tr = cap_split(tr, cfg.cap_train, cfg.cap_seed, cfg.demo_sampling)
-    dv = cap_split(dv, cfg.cap_dev,   cfg.cap_seed, cfg.demo_sampling)
-    te = cap_split(te, cfg.cap_test,  cfg.cap_seed, cfg.demo_sampling)
+    pools, stats, capped = {}, {}, {}
+    for s in ("train", "dev", "test"):
+        pools[s], stats[s] = load_split(
+            cfg.jsonl_paths, s, cfg.label_key,
+            exclude_multistress=cfg.exclude_multistress,
+            max_s=max_s, require_positive=cfg.require_positive)
+        capped[s] = cap_split(pools[s], caps[s], cfg.cap_seed, cfg.demo_sampling)
 
-    def _capline(name, pre, post, cap):
-        tag = f"capped→{cap}" if (cap is not None and post < pre) else "uncapped"
-        print(f"   {name:<6} {post:>9d}   (of {pre:>9d}, {tag})")
+    print(f"run_mode={cfg.run_mode}  sampling={cfg.demo_sampling}  "
+          f"max_s={max_s}  require_positive={cfg.require_positive}")
+    empty = []
+    for s in ("train", "dev", "test"):
+        st = stats[s]
+        n_len = st["loaded"] - st["long"]
+        n_pos = n_len - st["no_pos"]
+        n_cap = len(capped[s])
+        cap_tag = f"cap={caps[s]}" if caps[s] is not None else "uncapped"
+        print(f"   {s:<5} loaded {st['loaded']:>9d} → length {n_len:>9d} "
+              f"→ positive {n_pos:>9d} → {cap_tag} {n_cap:>9d}")
+        extra = []
+        if st["multistress"]:  extra.append(f"multistress excluded {st['multistress']}")
+        if st["long"]:         extra.append(f"too long {st['long']}")
+        if st["unknown_len"]:  extra.append(f"unknown length (kept) {st['unknown_len']}")
+        if st["no_pos"]:       extra.append(f"no positive frame {st['no_pos']}")
+        if extra:
+            print(f"         dropped: " + ", ".join(extra))
+        if n_cap == 0:
+            if st["loaded"] == 0:   stage = "load (no records with this split + label_key)"
+            elif n_len == 0:        stage = f"length filter (all >{max_s}s)"
+            elif n_pos == 0:        stage = "positive-only filter (no positive frames anywhere)"
+            else:                   stage = "cap"
+            empty.append(f"{s}: emptied at {stage}")
 
-    print(f"run_mode={cfg.run_mode}  sampling={cfg.demo_sampling}")
-    _capline("train", _pre[0], len(tr), cfg.cap_train)
-    _capline("dev",   _pre[1], len(dv), cfg.cap_dev)
-    _capline("test",  _pre[2], len(te), cfg.cap_test)
-    if cfg.exclude_multistress and (n_mtr + n_mdv + n_mte):
-        print(f"   multistress excluded: train={n_mtr}  dev={n_mdv}  test={n_mte}")
+    if cfg.require_positive:
+        print("   ⚠️  positive-only applies to dev/test too — F1+ is optimistic vs. natural prevalence")
     if len(cfg.jsonl_paths) > 1:
-        print(f"   train lang mix: {dict(Counter(r['dataset'] for r in tr))}")
-    if not tr or not dv or not te:
-        raise ValueError("a split became empty after filtering — check the JSONL")
-    return tr, dv, te
-
+        print(f"   train lang mix: {dict(Counter(r['dataset'] for r in capped['train']))}")
+    if empty:
+        raise ValueError("empty split after filtering — " + "; ".join(empty))
+    return capped["train"], capped["dev"], capped["test"]
 
 def rough_eta_seconds(n_train: int, n_dev: int, cfg: Config, rec_per_s: float) -> float:
     train_recs = (n_train * cfg.num_epochs) + ((n_train + n_dev) * cfg.num_epochs)

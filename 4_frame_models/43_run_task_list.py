@@ -72,58 +72,71 @@ TASK_TYPE = "classification"   # ch4 engine is classification-only for now
 
 TASKS: list[dict] = [
     # ═══ GROUP 1 — Filled pause ════════════════════════════════════════════
-    # 15 epochs · lr 1e-5 · batch 32 · demo caps · binary (0=speech, 1=fp)
+    # 10 epochs · lr 3e-5 · batch 8 · grad_accum 2 · demo caps · binary (0=speech, 1=fp)
+    # FP: positive-only + length cap applied before the cap to keep train on-topic
+    # and avoid the long-utterance OOMs we hit on batch 8.
 
     # HR, vanilla w2v-bert-2.0
     {"label": "fp_hr_bert_lr1e5",
      "target": "parlaspeech_fp_frames", "langs": ["hr"],
      "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 8, "grad_accum": 4},
+     "enable_max_audio_seconds": True,
+     "require_positive": True,
+     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 8, "grad_accum": 2},
 
     # HR, pretrained FP classifier (classla warm start — in-domain)
     {"label": "fp_hr_classla_fp_lr1e5",
      "target": "parlaspeech_fp_frames", "langs": ["hr"],
      "model_name": "classla/wav2vecbert2-filledPause",
-     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 8, "grad_accum": 4},
+     "enable_max_audio_seconds": True,
+     "require_positive": True,
+     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 8, "grad_accum": 2},
 
     # PL, vanilla w2v-bert-2.0  (cross-lingual vs HR)
     {"label": "fp_pl_bert_lr1e5",
      "target": "parlaspeech_fp_frames", "langs": ["pl"],
      "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 8, "grad_accum": 4},
+     "enable_max_audio_seconds": True,
+     "require_positive": True,
+     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 8, "grad_accum": 2},
 
     # PL, pretrained FP classifier (classla warm start — cross-lingual)
     {"label": "fp_pl_classla_fp_lr1e5",
      "target": "parlaspeech_fp_frames", "langs": ["pl"],
      "model_name": "classla/wav2vecbert2-filledPause",
-     "learning_rate": 1e-5, "num_epochs": 15, "batch_size": 8, "grad_accum": 4},
+     "enable_max_audio_seconds": True,
+     "require_positive": True,
+     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 8, "grad_accum": 2},
 
     # ═══ GROUP 2 — Primary stress ══════════════════════════════════════════
-    # 20 epochs · lr 1e-5 · batch 32 · demo caps · binary (0=unstressed, 1=stressed)
+    # 10 epochs · lr 3e-5 · demo caps · binary (0=unstressed, 1=stressed)
+    # Stress is word-level, short, and naturally positive (cfg.require_positive=False).
 
     # HR ParlaSpeech, vanilla w2v-bert-2.0
     {"label": "stress_hr_bert_lr1e5",
      "target": "parlaspeech_primary_stress_frames", "langs": ["hr"],
      "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 8, "grad_accum": 4},
+     "require_positive": False,
+     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 16, "grad_accum": 2},
 
     # HR ParlaSpeech, pretrained stress classifier (classla — in-domain, same lang)
     {"label": "stress_hr_classla_lr1e5",
      "target": "parlaspeech_primary_stress_frames", "langs": ["hr"],
      "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 8, "grad_accum": 4},
+     "require_positive": False,
+     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 16, "grad_accum": 2},
 
     # SI (Slovenian), vanilla w2v-bert-2.0  (cross-lingual vs HR)
     {"label": "stress_si_bert_lr1e5",
      "target": "si_primary_stress_frames",
      "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 8, "grad_accum": 4},
+     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 32, "grad_accum": 1},
 
     # SI (Slovenian), pretrained HR/RS stress classifier (cross-lingual)
     {"label": "stress_si_classla_lr1e5",
      "target": "si_primary_stress_frames",
      "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 1e-5, "num_epochs": 20, "batch_size": 8, "grad_accum": 4},
+     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 32, "grad_accum": 1},
 ]
 
 
@@ -172,7 +185,7 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
     # errors (also so the GPU guard in main() runs before torch is imported).
     from utils_frame_train import (
         load_config, validate_config, resolve_device, print_config_summary,
-        load_and_cap_splits, validate_frame_rate, drop_long_records,
+        load_and_cap_splits, validate_frame_rate,
         build_label_maps, load_feature_extractor, run_phase,
         plot_test_confusion, plot_test_example_predictions, release_gpu,
         resolve_target, TARGETS, PROJECT_ROOT,
@@ -209,14 +222,10 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
         device = resolve_device(cfg, use_cuda=args.use_gpu)
         print_config_summary(cfg, device)
 
-        # Data
+        # Data (length + positive filter are now inside load_and_cap_splits)
         train_records, dev_records, test_records = load_and_cap_splits(cfg)
         for _s, _r in [("train", train_records), ("dev", dev_records), ("test", test_records)]:
             validate_frame_rate(_r, cfg.required_frame_rate_hz)
-        if cfg.enable_max_audio_seconds:
-            train_records, _ = drop_long_records(train_records, cfg.max_audio_seconds)
-            dev_records,   _ = drop_long_records(dev_records,   cfg.max_audio_seconds)
-            test_records,  _ = drop_long_records(test_records,  cfg.max_audio_seconds)
         label2id, id2label, num_labels = build_label_maps(
             cfg, train_records, dev_records, test_records)
 
@@ -284,6 +293,7 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
         except Exception:
             pass
     return row
+
 
 def make_comparison_plot(csv_path: Path, out_path: Path) -> None:
     """Horizontal bar chart of macro-F1 + positive-class F1 per task, sorted

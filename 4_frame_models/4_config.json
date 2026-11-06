@@ -24,7 +24,7 @@
     "42_train_frame_regression.py :: 'What to wire in the engine' for the plan."
   ],
 
-  "run_mode": "test",
+  "run_mode": "demo",
 
   "shared": {
     "model_name": "facebook/w2v-bert-2.0",
@@ -32,8 +32,8 @@
     "head_dropout": 0.1,
 
     "batch_size": 16,
-    "grad_accum": 1,
-    "learning_rate": 1e-5,
+    "grad_accum": 2,
+    "learning_rate": 3e-5,
     "num_epochs": 10,
     "max_grad_norm": 1.0,
     "warmup_ratio": 0.10,
@@ -47,7 +47,7 @@
     "preprocess_batch_size": 32,
     "dataloader_num_workers": 0,
     "map_num_proc": 8,
-    "enable_max_audio_seconds": true,
+    "enable_max_audio_seconds": false,
     "max_audio_seconds": 15.0,
 
     "n_examples_to_plot": 6,
@@ -58,7 +58,7 @@
   },
 
   "classification": {
-    "target": "si_primary_stress_frames",
+    "target": "parlaspeech_fp_frames",
     "langs": [],
     "exclude_multistress": true,
     "best_metric_classification": "frame_f1_positive"
@@ -82,7 +82,7 @@
     },
     "demo": {
       "cap_train": 4000, "cap_dev": 1000, "cap_test": 1000,
-      "num_epochs": 3, "batch_size": 32
+      "num_epochs": 3, "batch_size": 8, "grad_accum": 4
     },
     "full": {
       "model_name": "facebook/w2v-bert-2.0",

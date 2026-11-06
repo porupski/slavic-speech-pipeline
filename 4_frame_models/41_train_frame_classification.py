@@ -1,11 +1,12 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: ipynb,py:percent
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.3
+#       jupytext_version: 1.19.5
 #   kernelspec:
 #     display_name: ssp
 #     language: python
@@ -128,24 +129,18 @@ train_records, dev_records, test_records = load_and_cap_splits(cfg)
 print_rough_eta(len(train_records), len(dev_records), cfg)
 
 # %% [markdown]
-# ## Frame-rate guard + optional length cap
+# ## Frame-rate guard
 #
 # Every frame record must declare `frame_rate_hz == 50` (source labels at any
-# other rate are a hard error). When `enable_max_audio_seconds` is on, longer
-# records are DROPPED (never truncated — truncation would desync the labels).
+# other rate are a hard error). Length and positive-only filtering already ran
+# inside `load_and_cap_splits` (before the cap) — this is a last sanity check.
 
 # %%
-from utils_frame_train import validate_frame_rate, drop_long_records
+from utils_frame_train import validate_frame_rate
 
 for _split, _recs in [("train", train_records), ("dev", dev_records), ("test", test_records)]:
     validate_frame_rate(_recs, cfg.required_frame_rate_hz)
 print(f"✅ all records declare frame_rate_hz={cfg.required_frame_rate_hz}")
-
-if cfg.enable_max_audio_seconds:
-    train_records, n_tr = drop_long_records(train_records, cfg.max_audio_seconds)
-    dev_records,   n_dv = drop_long_records(dev_records,   cfg.max_audio_seconds)
-    test_records,  n_te = drop_long_records(test_records,  cfg.max_audio_seconds)
-    print(f"dropped >{cfg.max_audio_seconds}s: train={n_tr} dev={n_dv} test={n_te}")
 
 # %% [markdown]
 # ## Labels & mappings
