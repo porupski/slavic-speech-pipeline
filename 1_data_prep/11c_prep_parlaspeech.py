@@ -137,7 +137,7 @@ _UNPACK_SUFFIX = {"v3": "", "v4": "-v4"}[cfg.version]
 
 # ── Resolve the set of languages to process ───────────────────────────────────
 if cfg.lang:
-    LANGS = [cfg.lang]
+    LANGS = [cfg.lang.upper()]   # on-disk folders use uppercase (ParlaSpeech-HR-v4)
 else:
     LANGS = [L for L in _KNOWN
              if (PROJECT_ROOT / f"data/unpacked/ParlaSpeech-{L}{_UNPACK_SUFFIX}").exists()]
@@ -153,7 +153,7 @@ print(f"version = {cfg.version} · languages to process: {LANGS}")
 
 def configure(lang: str) -> dict:
     """Per-lang view: paths + recipe registry. (build_recipes defined in §2.)"""
-    L, low = lang, lang.lower()
+    L, low = lang.upper(), lang.lower()   # L is the on-disk code (HR); low drives filenames (hr)
     v = cfg.version
     unpack_name = f"ParlaSpeech-{L}{_UNPACK_SUFFIX}"
     DATASET = f"ParlaSpeech-{L}" if v == "v3" else f"ParlaSpeech-{L}-v4"
