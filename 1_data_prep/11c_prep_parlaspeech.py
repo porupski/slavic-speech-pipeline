@@ -85,8 +85,10 @@ from tqdm.auto import tqdm
 #
 # ## 1. Config
 #
-# - `lang` — `""` → process every ParlaSpeech-{LANG} under `data/unpacked/`; set
-#   (e.g. `"RS"`) to pin one.
+# - `version` — ParlaSpeech release to parse: `"v4"` (default, 5 langs incl. SI) or
+#   `"v3"` (4 langs: HR, RS, PL, CZ — kept for comparability).
+# - `lang` — `""` → process every ParlaSpeech-{LANG} found under `data/unpacked/`
+#   for the chosen version; or pin one, e.g. `"RS"`.
 # - `recipes` — which instance-shapes to emit.
 # - `convert_audio` — FLAC → 16 kHz mono WAV. `False` re-writes JSONLs against
 #   already-converted WAVs without touching audio.
@@ -98,10 +100,12 @@ from tqdm.auto import tqdm
 # driver calls it once per language.
 
 # %%
-KNOWN_LANGS = ["HR", "RS", "PL", "CZ"]
+KNOWN_LANGS_V3 = ["HR", "RS", "PL", "CZ"]
+KNOWN_LANGS_V4 = ["HR", "RS", "PL", "CZ", "SI"]   # SI is new in v4
 
 @dataclass
 class Config:
+    version: str = "v4"                  # "v3" (4 langs) or "v4" (5 langs incl. SI)
     lang: str = ""                       # "" → all found; or pin e.g. "HR"
     recipes: tuple = ("utterance_instance", "utterance_frame", "word_frame")
 
@@ -122,34 +126,52 @@ class Config:
     test_n_records: int  = 500
 
 cfg = Config()
+assert cfg.version in ("v3", "v4"), f"cfg.version must be v3 or v4, got {cfg.version!r}"
+
+# Per-version naming. v3 unpacks at data/unpacked/ParlaSpeech-{L}/ and the JSONL
+# sits inside an inner ParlaSpeech-{L}.v3.0/ folder (textgrid tarball structure).
+# v4 unpacks at data/unpacked/ParlaSpeech-{L}-v4/ with a flat JSONL — the .gz
+# release carries no inner folder.
+_KNOWN = {"v3": KNOWN_LANGS_V3, "v4": KNOWN_LANGS_V4}[cfg.version]
+_UNPACK_SUFFIX = {"v3": "", "v4": "-v4"}[cfg.version]
 
 # ── Resolve the set of languages to process ───────────────────────────────────
 if cfg.lang:
     LANGS = [cfg.lang]
 else:
-    LANGS = [L for L in KNOWN_LANGS
-             if (PROJECT_ROOT / f"data/unpacked/ParlaSpeech-{L}").exists()]
+    LANGS = [L for L in _KNOWN
+             if (PROJECT_ROOT / f"data/unpacked/ParlaSpeech-{L}{_UNPACK_SUFFIX}").exists()]
     if not LANGS:
         raise FileNotFoundError(
-            "cfg.lang empty and no ParlaSpeech-{LANG} dirs under data/unpacked/. "
+            f"cfg.lang empty and no ParlaSpeech-{{LANG}}{_UNPACK_SUFFIX} dirs under "
+            f"data/unpacked/ for version={cfg.version!r}. "
             "Run 10_download_data_clarin.ipynb first.")
 
 if cfg.test_mode:
     udp.banner("🧪 TEST MODE", char="-")
-print(f"languages to process: {LANGS}")
+print(f"version = {cfg.version} · languages to process: {LANGS}")
 
 def configure(lang: str) -> dict:
     """Per-lang view: paths + recipe registry. (build_recipes defined in §2.)"""
     L, low = lang, lang.lower()
-    DATASET = f"ParlaSpeech-{L}"
+    v = cfg.version
+    unpack_name = f"ParlaSpeech-{L}{_UNPACK_SUFFIX}"
+    DATASET = f"ParlaSpeech-{L}" if v == "v3" else f"ParlaSpeech-{L}-v4"
     OUT_DIR = cfg.output_dir if not cfg.test_mode else "data/test_processed_jsonl"
-    WAV_DIR = (f"data/cut_audio/ParlaSpeech-{L}" if not cfg.test_mode
-               else f"data/cut_audio/test/ParlaSpeech-{L}")
+    WAV_DIR = (f"data/cut_audio/{unpack_name}" if not cfg.test_mode
+               else f"data/cut_audio/test/{unpack_name}")
+
+    if v == "v3":
+        jsonl_path = f"data/unpacked/{unpack_name}/ParlaSpeech-{L}.v3.0/ParlaSpeech-{L}.v3.0.jsonl"
+    else:  # v4: flat .gz unpacks to a single jsonl in the unpack dir
+        jsonl_path = f"data/unpacked/{unpack_name}/ParlaSpeech-{L}.v4.0.jsonl"
+    audio_base_dir = f"data/unpacked/{unpack_name}-audio"
+
     ctx = dict(
-        L=L, l=low, DATASET=DATASET, OUT_DIR=OUT_DIR, WAV_DIR=WAV_DIR,
-        jsonl_path=f"data/unpacked/ParlaSpeech-{L}/ParlaSpeech-{L}.v3.0/ParlaSpeech-{L}.v3.0.jsonl",
-        audio_base_dir=f"data/unpacked/ParlaSpeech-{L}-audio",
-        audio_index_cache=f"data/processed_jsonl/parlaspeech_{low}_audio_index.json",
+        L=L, l=low, version=v, DATASET=DATASET, OUT_DIR=OUT_DIR, WAV_DIR=WAV_DIR,
+        jsonl_path=jsonl_path,
+        audio_base_dir=audio_base_dir,
+        audio_index_cache=f"data/processed_jsonl/parlaspeech_{low}_{v}_audio_index.json",
         RECIPES=build_recipes(OUT_DIR, low),
     )
     for name in cfg.recipes:

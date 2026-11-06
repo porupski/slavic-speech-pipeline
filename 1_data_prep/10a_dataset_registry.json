@@ -10,8 +10,12 @@
   },
 
   "shorthands": {
-    "ParlaSpeech":            ["ParlaSpeech-HR", "ParlaSpeech-RS", "ParlaSpeech-PL", "ParlaSpeech-CZ"],
-    "ParlaSpeech-audio":      ["ParlaSpeech-HR-audio", "ParlaSpeech-RS-audio", "ParlaSpeech-PL-audio", "ParlaSpeech-CZ-audio"]
+    "ParlaSpeech":            ["ParlaSpeech-HR-v4", "ParlaSpeech-RS-v4", "ParlaSpeech-PL-v4", "ParlaSpeech-CZ-v4", "ParlaSpeech-SI-v4"],
+    "ParlaSpeech-audio":      ["ParlaSpeech-HR-v4-audio", "ParlaSpeech-RS-v4-audio", "ParlaSpeech-PL-v4-audio", "ParlaSpeech-CZ-v4-audio", "ParlaSpeech-SI-v4-audio"],
+    "ParlaSpeech-v4":         ["ParlaSpeech-HR-v4", "ParlaSpeech-RS-v4", "ParlaSpeech-PL-v4", "ParlaSpeech-CZ-v4", "ParlaSpeech-SI-v4"],
+    "ParlaSpeech-v4-audio":   ["ParlaSpeech-HR-v4-audio", "ParlaSpeech-RS-v4-audio", "ParlaSpeech-PL-v4-audio", "ParlaSpeech-CZ-v4-audio", "ParlaSpeech-SI-v4-audio"],
+    "ParlaSpeech-v3":         ["ParlaSpeech-HR", "ParlaSpeech-RS", "ParlaSpeech-PL", "ParlaSpeech-CZ"],
+    "ParlaSpeech-v3-audio":   ["ParlaSpeech-HR-audio", "ParlaSpeech-RS-audio", "ParlaSpeech-PL-audio", "ParlaSpeech-CZ-audio"]
   },
 
   "datasets": {
@@ -169,6 +173,190 @@
         {"name": "ParlaSpeech-CZ.v1.0.part4.tgz", "size_mb": 22070, "is_large": true}
       ],
       "note": "Czech FLAC audio — ~153 GB across 4 parts. Pair with ParlaSpeech-CZ."
+    },
+
+    "ParlaSpeech-HR-v4": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1885",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1885",
+      "target_dir": "data/raw/ParlaSpeech-HR-v4",
+      "unpack_dir": "data/unpacked/ParlaSpeech-HR-v4",
+      "files": [
+        {"name": "ParlaSpeech-HR.v4.0.jsonl.gz", "size_mb": 2580, "is_large": false},
+        {"name": "ParlaSpeech-HR.v4.0.vert.tgz", "size_mb": 269,  "is_large": false}
+      ],
+      "note": "Croatian ParlaSpeech v4.0 transcripts. 923k sentences, 3,110 h. Pair with ParlaSpeech-HR-v4-audio."
+    },
+
+    "ParlaSpeech-RS-v4": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1885",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1885",
+      "target_dir": "data/raw/ParlaSpeech-RS-v4",
+      "unpack_dir": "data/unpacked/ParlaSpeech-RS-v4",
+      "files": [
+        {"name": "ParlaSpeech-RS.v4.0.jsonl.gz", "size_mb": 599, "is_large": false},
+        {"name": "ParlaSpeech-RS.v4.0.vert.tgz", "size_mb": 76,  "is_large": false}
+      ],
+      "note": "Serbian ParlaSpeech v4.0 transcripts. 291k sentences, 896 h. Pair with ParlaSpeech-RS-v4-audio."
+    },
+
+    "ParlaSpeech-PL-v4": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1885",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1885",
+      "target_dir": "data/raw/ParlaSpeech-PL-v4",
+      "unpack_dir": "data/unpacked/ParlaSpeech-PL-v4",
+      "files": [
+        {"name": "ParlaSpeech-PL.v4.0.jsonl.gz", "size_mb": 428, "is_large": false},
+        {"name": "ParlaSpeech-PL.v4.0.vert.tgz", "size_mb": 106, "is_large": false}
+      ],
+      "note": "Polish ParlaSpeech v4.0 transcripts. 535k sentences, 1,009 h. Pair with ParlaSpeech-PL-v4-audio."
+    },
+
+    "ParlaSpeech-CZ-v4": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1885",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1885",
+      "target_dir": "data/raw/ParlaSpeech-CZ-v4",
+      "unpack_dir": "data/unpacked/ParlaSpeech-CZ-v4",
+      "files": [
+        {"name": "ParlaSpeech-CZ.v4.0.jsonl.gz", "size_mb": 574, "is_large": false},
+        {"name": "ParlaSpeech-CZ.v4.0.vert.tgz", "size_mb": 134, "is_large": false}
+      ],
+      "note": "Czech ParlaSpeech v4.0 transcripts. 718k sentences, 1,218 h. Pair with ParlaSpeech-CZ-v4-audio."
+    },
+
+    "ParlaSpeech-SI-v4": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1885",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1885",
+      "target_dir": "data/raw/ParlaSpeech-SI-v4",
+      "unpack_dir": "data/unpacked/ParlaSpeech-SI-v4",
+      "files": [
+        {"name": "ParlaSpeech-SI.v4.0.jsonl.gz", "size_mb": 1280, "is_large": false},
+        {"name": "ParlaSpeech-SI.v4.0.vert.tgz", "size_mb": 316,  "is_large": false}
+      ],
+      "note": "Slovenian ParlaSpeech v4.0 transcripts — NEW in v4. 1.435M sentences, 4,080 h. Pair with ParlaSpeech-SI-v4-audio."
+    },
+
+    "ParlaSpeech-HR-v4-audio": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1889",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1889",
+      "target_dir": "data/raw/ParlaSpeech-HR-v4-audio",
+      "unpack_dir": "data/unpacked/ParlaSpeech-HR-v4-audio",
+      "files": [
+        {"name": "ParlaSpeech-HR.v4.0.flac1.tgz",  "size_mb": 12630, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac2.tgz",  "size_mb": 12630, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac3.tgz",  "size_mb": 12630, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac4.tgz",  "size_mb": 12600, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac5.tgz",  "size_mb": 12600, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac6.tgz",  "size_mb": 12610, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac7.tgz",  "size_mb": 12600, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac8.tgz",  "size_mb": 12610, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac9.tgz",  "size_mb": 12630, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac10.tgz", "size_mb": 12610, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac11.tgz", "size_mb": 12610, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac12.tgz", "size_mb": 12620, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac13.tgz", "size_mb": 12630, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac14.tgz", "size_mb": 12640, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac15.tgz", "size_mb": 12620, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac16.tgz", "size_mb": 12630, "is_large": true},
+        {"name": "ParlaSpeech-HR.v4.0.flac17.tgz", "size_mb": 4950,  "is_large": true}
+      ],
+      "note": "Croatian ParlaSpeech v4.0 FLAC audio — ~207 GB across 17 parts. Pair with ParlaSpeech-HR-v4."
+    },
+
+    "ParlaSpeech-RS-v4-audio": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1889",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1889",
+      "target_dir": "data/raw/ParlaSpeech-RS-v4-audio",
+      "unpack_dir": "data/unpacked/ParlaSpeech-RS-v4-audio",
+      "files": [
+        {"name": "ParlaSpeech-RS.v4.0.flac1.tgz", "size_mb": 12600, "is_large": true},
+        {"name": "ParlaSpeech-RS.v4.0.flac2.tgz", "size_mb": 12610, "is_large": true},
+        {"name": "ParlaSpeech-RS.v4.0.flac3.tgz", "size_mb": 12610, "is_large": true},
+        {"name": "ParlaSpeech-RS.v4.0.flac4.tgz", "size_mb": 12590, "is_large": true},
+        {"name": "ParlaSpeech-RS.v4.0.flac5.tgz", "size_mb": 12580, "is_large": true}
+      ],
+      "note": "Serbian ParlaSpeech v4.0 FLAC audio — ~63 GB across 5 parts. Pair with ParlaSpeech-RS-v4."
+    },
+
+    "ParlaSpeech-PL-v4-audio": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1889",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1889",
+      "target_dir": "data/raw/ParlaSpeech-PL-v4-audio",
+      "unpack_dir": "data/unpacked/ParlaSpeech-PL-v4-audio",
+      "files": [
+        {"name": "ParlaSpeech-PL.v4.0.flac1.tgz", "size_mb": 12190, "is_large": true},
+        {"name": "ParlaSpeech-PL.v4.0.flac2.tgz", "size_mb": 12220, "is_large": true},
+        {"name": "ParlaSpeech-PL.v4.0.flac3.tgz", "size_mb": 12210, "is_large": true},
+        {"name": "ParlaSpeech-PL.v4.0.flac4.tgz", "size_mb": 12190, "is_large": true},
+        {"name": "ParlaSpeech-PL.v4.0.flac5.tgz", "size_mb": 9750,  "is_large": true}
+      ],
+      "note": "Polish ParlaSpeech v4.0 FLAC audio — ~59 GB across 5 parts. Pair with ParlaSpeech-PL-v4."
+    },
+
+    "ParlaSpeech-CZ-v4-audio": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1889",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1889",
+      "target_dir": "data/raw/ParlaSpeech-CZ-v4-audio",
+      "unpack_dir": "data/unpacked/ParlaSpeech-CZ-v4-audio",
+      "files": [
+        {"name": "ParlaSpeech-CZ.v4.0.flac1.tgz",  "size_mb": 12560, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac2.tgz",  "size_mb": 12510, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac3.tgz",  "size_mb": 12500, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac4.tgz",  "size_mb": 12530, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac5.tgz",  "size_mb": 12680, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac6.tgz",  "size_mb": 12640, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac7.tgz",  "size_mb": 12700, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac8.tgz",  "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac9.tgz",  "size_mb": 12540, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac10.tgz", "size_mb": 12540, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac11.tgz", "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac12.tgz", "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-CZ.v4.0.flac13.tgz", "size_mb": 1690,  "is_large": true}
+      ],
+      "note": "Czech ParlaSpeech v4.0 FLAC audio — ~154 GB across 13 parts. Pair with ParlaSpeech-CZ-v4."
+    },
+
+    "ParlaSpeech-SI-v4-audio": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/1889",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/1889",
+      "target_dir": "data/raw/ParlaSpeech-SI-v4-audio",
+      "unpack_dir": "data/unpacked/ParlaSpeech-SI-v4-audio",
+      "files": [
+        {"name": "ParlaSpeech-SI.v4.0.flac1.tgz",  "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac2.tgz",  "size_mb": 12570, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac3.tgz",  "size_mb": 12570, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac4.tgz",  "size_mb": 12560, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac5.tgz",  "size_mb": 12570, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac6.tgz",  "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac7.tgz",  "size_mb": 12590, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac8.tgz",  "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac9.tgz",  "size_mb": 12570, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac10.tgz", "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac11.tgz", "size_mb": 12570, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac12.tgz", "size_mb": 12570, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac13.tgz", "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac14.tgz", "size_mb": 12560, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac15.tgz", "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac16.tgz", "size_mb": 12570, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac17.tgz", "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac18.tgz", "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac19.tgz", "size_mb": 12570, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac20.tgz", "size_mb": 12570, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac21.tgz", "size_mb": 12560, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac22.tgz", "size_mb": 12580, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac23.tgz", "size_mb": 12570, "is_large": true},
+        {"name": "ParlaSpeech-SI.v4.0.flac24.tgz", "size_mb": 9490,  "is_large": true}
+      ],
+      "note": "Slovenian ParlaSpeech v4.0 FLAC audio — NEW in v4. ~297 GB across 24 parts. Pair with ParlaSpeech-SI-v4."
     }
   }
 }

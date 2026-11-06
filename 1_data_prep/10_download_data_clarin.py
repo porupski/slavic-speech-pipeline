@@ -16,9 +16,10 @@
 # %% [markdown]
 # # Download data — Chapter 1
 #
-# Fetch **CLARIN.SI** source corpora — ParlaSpeech (HR / RS / PL / CZ), ROG, GOS — as raw
-# archives, then unpack them. Idempotent: files already on disk are skipped, partial
-# downloads resume via HTTP `Range`.
+# Fetch **CLARIN.SI** source corpora — ParlaSpeech v4 (HR / RS / PL / CZ / SI) or
+# v3 (HR / RS / PL / CZ), ROG, GOS — as raw archives, then unpack them.
+# Idempotent: files already on disk are skipped, partial downloads resume via
+# HTTP `Range`.
 #
 # The catalogue lives in [`10a_dataset_registry.json`](10a_dataset_registry.json); the
 # helpers live in [`utils_download.py`](utils_download.py). To add another source (CLARIN
@@ -73,11 +74,12 @@ print(f"Shorthands:         {sorted(REGISTRY['shorthands'])}")
 # `cfg.datasets` is the list of registry keys (or shorthands) to fetch. Examples:
 #
 # - `["ROG-Dialog"]` — the starting default; Slovenian dialogue corpus (~1.2 GB, annotations + audio).
-# - `["ParlaSpeech-RS"]` — just Serbian ParlaSpeech annotations (~2 GB, no audio).
-# - `["ParlaSpeech-RS", "ParlaSpeech-RS-audio"]` — Serbian annotations + audio; smallest of the
-#   full ParlaSpeech releases (~65 GB).
-# - `["ParlaSpeech"]` — all four ParlaSpeech annotation sets (no audio).
-# - `["ParlaSpeech-audio"]` — all four ParlaSpeech audio sets. **Hundreds of GB.** Be sure.
+# - `["ParlaSpeech-RS-v4"]` — just Serbian ParlaSpeech v4.0 transcripts (~0.6 GB, no audio).
+# - `["ParlaSpeech-RS-v4", "ParlaSpeech-RS-v4-audio"]` — Serbian v4 transcripts + audio; smallest
+#   of the five v4 releases (~63 GB audio).
+# - `["ParlaSpeech"]` — defaults to v4: all five transcript sets (HR, RS, PL, CZ, SI, no audio).
+# - `["ParlaSpeech-audio"]` — defaults to v4 audio: all five audio sets. **~779 GB.** Be sure.
+# - `["ParlaSpeech-v3"]` / `["ParlaSpeech-v3-audio"]` — legacy v3 (4 langs, no SI).
 
 # %%
 from dataclasses import dataclass, field
@@ -302,8 +304,9 @@ for ds_name in target_datasets:
 #
 # - **ROG-Dialog** → `11b_prep_ROG-dia.ipynb`
 # - **ROG** → `11a_prep_ROG-art.ipynb`
-# - **ParlaSpeech-{HR,RS,PL,CZ}** → `11c_prep_parlaspeech.ipynb` (`cfg.lang` pins one language;
-#   empty = every ParlaSpeech-{LANG} under `data/unpacked/`).
+# - **ParlaSpeech-{HR,RS,PL,CZ,SI} v4** → `11c_prep_parlaspeech.ipynb` (`cfg.version`
+#   selects v4 or v3; `cfg.lang` pins one language; empty = every ParlaSpeech-{LANG}
+#   found under `data/unpacked/` for that version).
 # - **GOS** → arrange restricted audio access first.
 #
 # For the ParlaSpeech-HR benchmarks (v1 / v3), skip this notebook and go straight to
