@@ -161,10 +161,10 @@ def configure(lang: str) -> dict:
     WAV_DIR = (f"data/cut_audio/{unpack_name}" if not cfg.test_mode
                else f"data/cut_audio/test/{unpack_name}")
 
-    if v == "v3":
-        jsonl_path = f"data/unpacked/{unpack_name}/ParlaSpeech-{L}.v3.0/ParlaSpeech-{L}.v3.0.jsonl"
-    else:  # v4: flat .gz unpacks to a single jsonl in the unpack dir
-        jsonl_path = f"data/unpacked/{unpack_name}/ParlaSpeech-{L}.v4.0.jsonl"
+    # Both v3 and v4 nest the JSONL one folder deeper. utils_download strips
+    # `.jsonl.gz` as the stem and extracts into `<stem>/<stem>.jsonl`, so the
+    # layout is `<unpack>/<L>.vN.0/<L>.vN.0.jsonl` regardless of version.
+    jsonl_path = f"data/unpacked/{unpack_name}/ParlaSpeech-{L}.{v}.0/ParlaSpeech-{L}.{v}.0.jsonl"
     audio_base_dir = f"data/unpacked/{unpack_name}-audio"
 
     ctx = dict(
