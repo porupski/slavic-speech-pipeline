@@ -24,7 +24,7 @@ Usage:
   python 43_run_task_list.py --use_gpu --limit 2              # first 2 only
   python 43_run_task_list.py --use_gpu --list_dir my_run_set
 
-  python 43_run_task_list.py --use_gpu 2>&1 | tee ../runs/33_task_list_$(date +%Y-%m-%d_%H%M%S).log
+  python 43_run_task_list.py --use_gpu 2>&1 | tee ../runs/43_task_list_$(date +%Y-%m-%d_%H%M%S).log
 
 Base config is ``4_config.json`` under the chosen ``--mode`` (default: demo);
 per-task overrides layer on top.
@@ -67,41 +67,49 @@ TASKS: list[dict] = [
      "model_name":    "facebook/wav2vec2-base",
      "target":        "hr_bench_v3_gender",
      "task_type":     "classification",
+     "num_epochs": 10,
      "learning_rate": 1e-5},
     {"label": "gender_xls-r-300m_lr3e5",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
      "target":        "hr_bench_v3_gender",
      "task_type":     "classification",
+     "num_epochs": 10,
      "learning_rate": 3e-5},
     {"label": "speakerid_w2v2-base_lr1e5",
      "model_name":    "facebook/wav2vec2-base",
      "target":        "hr_bench_v3_speaker_id",
      "task_type":     "classification",
+     "num_epochs": 10,     
      "learning_rate": 1e-5},
     {"label": "speakerid_xls-r-300m_lr3e5",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
      "target":        "hr_bench_v3_speaker_id",
      "task_type":     "classification",
+     "num_epochs": 10,
      "learning_rate": 3e-5},
     {"label": "age_w2v2-base_lr1e5",
      "model_name":    "facebook/wav2vec2-base",
      "target":        "hr_bench_v3_age",
      "task_type":     "regression",
+     "num_epochs": 20,
      "learning_rate": 1e-5},
     {"label": "age_xls-r-300m_lr3e5",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
      "target":        "hr_bench_v3_age",
      "task_type":     "regression",
+     "num_epochs": 20,
      "learning_rate": 3e-5},
     {"label": "orientation_w2v2-base_lr1e5",
      "model_name":    "facebook/wav2vec2-base",
      "target":        "hr_bench_v3_orientation",
      "task_type":     "regression",
+     "num_epochs": 20,
      "learning_rate": 1e-5},
     {"label": "orientation_xls-r-300m_lr3e5",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
      "target":        "hr_bench_v3_orientation",
      "task_type":     "regression",
+     "num_epochs": 20,
      "learning_rate": 3e-5},
 ]
 

@@ -1060,12 +1060,16 @@ def plot_distribution(gold, pred, out_path: Path):
 class EpochCheckpointCallback(TrainerCallback):
     """After every epoch: predict on the eval split, log metrics, and write the
     per-epoch artifacts (predictions.json + task-specific plots) into
-    ``phase_dir/epoch_logs/epoch_N/``."""
+    ``phase_dir/epoch_logs/epoch_N/``. When `track_best_state=True`, also stash
+    the model state_dict to a tmp file each time the eval metric improves —
+    `run_phase` restores it before `model.save_pretrained(best_dir)`, otherwise
+    best_model/ would silently receive LAST-epoch weights."""
 
     def __init__(self, phase_dir: Path, eval_dataset, eval_items,
                  compute_metrics, data_collator, cfg: Config,
                  label_order=None, id2label=None,
-                 normalizer: "LabelNormalizer | None" = None):
+                 normalizer: "LabelNormalizer | None" = None,
+                 track_best_state: bool = False):
         self.phase_dir = phase_dir
         self.logs_dir = phase_dir / "epoch_logs"
         self.logs_dir.mkdir(parents=True, exist_ok=True)
@@ -1077,6 +1081,19 @@ class EpochCheckpointCallback(TrainerCallback):
         self.label_order = label_order
         self.id2label = id2label
         self.normalizer = normalizer
+
+        # Best-state tracking. Classification is higher-is-better; regression is
+        # lower-is-better for mse/mae, higher-is-better for spearman etc.
+        self.track_best_state = track_best_state
+        if cfg.task_type == "classification":
+            self.best_metric_name = cfg.best_metric_classification
+            self.best_is_higher = True
+        else:
+            self.best_metric_name = cfg.best_metric_regression
+            self.best_is_higher = self.best_metric_name not in ("mse", "mae")
+        self.best_metric_val = (-float("inf") if self.best_is_higher else float("inf"))
+        self.best_state_epoch: int | None = None
+        self.best_state_path = phase_dir / ".best_state.pt"
         self.epoch_results: list[dict] = []
 
     def on_epoch_end(self, args, state, control, model=None, **kwargs):
@@ -1130,6 +1147,21 @@ class EpochCheckpointCallback(TrainerCallback):
 
         (epoch_dir / "epoch_summary.json").write_text(json.dumps(epoch_info, indent=2))
         print(line)
+
+        if self.track_best_state and model is not None:
+            cur = metrics.get(f"eval_{self.best_metric_name}")
+            is_num = cur is not None and not (isinstance(cur, float) and np.isnan(cur))
+            better = (is_num
+                      and ((cur > self.best_metric_val) if self.best_is_higher
+                           else (cur < self.best_metric_val)))
+            if better:
+                self.best_metric_val = cur
+                self.best_state_epoch = epoch
+                torch.save({k: v.detach().cpu() for k, v in model.state_dict().items()},
+                           self.best_state_path)
+                arrow = "↑" if self.best_is_higher else "↓"
+                print(f"   {arrow} new best — epoch {epoch} "
+                      f"({self.best_metric_name}={cur:.4f}); state stashed.")
 
 
 def best_epoch_of(epoch_results: list[dict], cfg: Config) -> dict:
@@ -1266,6 +1298,7 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
         compute_metrics=compute_metrics, data_collator=data_collator, cfg=cfg,
         label_order=cfg.label_order if cfg.task_type == "classification" else None,
         id2label=id2label, normalizer=normalizer,
+        track_best_state=save_best_model,
     )
 
     trainer = Trainer(
@@ -1291,6 +1324,21 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
     if save_best_model:
         best_dir = model_dir / "best_model"
         best_dir.mkdir(parents=True, exist_ok=True)
+
+        # Restore best-epoch weights before saving. Without this, the model
+        # in memory is the LAST epoch (trainer.train() leaves it there), which
+        # would silently mislabel last-epoch weights as "best_model/".
+        if callback.best_state_path.exists():
+            stashed_epoch = callback.best_state_epoch
+            print(f"   restoring best-epoch weights (epoch {stashed_epoch}) "
+                  f"from {callback.best_state_path.name} before save")
+            state = torch.load(callback.best_state_path, map_location="cpu")
+            model.load_state_dict(state)
+            del state
+        else:
+            print("   ⚠️  no best-state stash on disk — saving last-epoch weights. "
+                  "(This should not happen unless track_best_state was off.)")
+
         model.save_pretrained(best_dir)
         feature_extractor.save_pretrained(best_dir)
         src = phase_dir / "epoch_logs" / f"epoch_{best['epoch']}"
@@ -1305,6 +1353,13 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
         ]
         (best_dir / "run_info.txt").write_text("\n".join(info_lines) + "\n")
         print(f"   saved best model → {best_dir.relative_to(PROJECT_ROOT)}")
+
+    # Drop the tmp state stash — the save already consumed it, or we bailed
+    # before saving. Either way, start the next run clean.
+    try:
+        callback.best_state_path.unlink(missing_ok=True)
+    except Exception:
+        pass
 
     # Clean up Trainer's tmp dir
     shutil.rmtree(phase_dir / "trainer_tmp", ignore_errors=True)

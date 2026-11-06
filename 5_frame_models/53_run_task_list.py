@@ -26,7 +26,7 @@ Usage:
   python -u 53_run_task_list.py --use_gpu --list_dir ch4_demo
 
   # With tee — always use -u to prevent 8 KB stdout block-buffer delay:
-  python -u 53_run_task_list.py --use_gpu 2>&1 | tee ../runs/43_task_list_$(date +%Y-%m-%d_%H%M%S).log
+  python -u 53_run_task_list.py --use_gpu 2>&1 | tee ../runs/53_task_list_$(date +%Y-%m-%d_%H%M%S).log
 
 Base config is ``5_config.json`` under the chosen ``--mode`` (default: demo);
 per-task overrides layer on top. Each task may override ``target`` to switch

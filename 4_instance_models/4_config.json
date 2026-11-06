@@ -25,7 +25,7 @@
     "model_name": "facebook/wav2vec2-base",
     "freeze_feature_encoder": true,
 
-    "batch_size": 16,
+    "batch_size": 32,
     "grad_accum": 1,
     "learning_rate": 1e-5,
     "num_epochs": 2,
