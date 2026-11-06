@@ -18,7 +18,7 @@ There are two entry points depending on what you want:
 
 Every prep writes:
 - one or more files under `data/processed_jsonl/` (the canonical JSONL that every downstream chapter reads), and
-- 16 kHz mono WAVs under `data/cut_audio/` (full corpora) or `data/benchmarking/<name>/audio/` (benchmarks).
+- 16 kHz mono WAVs under `data/processed_audio/` (full corpora) or `data/benchmarking/<name>/audio/` (benchmarks).
 
 Then optionally `2_data_analysis/20_explore_dataset.ipynb` to eyeball the output.
 

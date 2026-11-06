@@ -91,6 +91,7 @@ class Config:
     force: bool = False          # re-download things already on disk
     dry_run: bool = False        # plan only, do not touch disk
     download_only: bool = False  # download but skip the unpack step
+    cleanup_raw_after_unpack: bool = True   # delete the raw archive once its unpack dir is populated
 
 cfg = Config()
 print(cfg)
@@ -109,6 +110,7 @@ print(cfg)
 # | `force`         | `False` | Wipe partial downloads and re-fetch from scratch. Leave `False` and interrupted downloads resume where they left off. |
 # | `dry_run`       | `False` | Print the plan and stop. Nothing touches disk. Great for a first pass. |
 # | `download_only` | `False` | Fetch archives but skip the unpack step. Useful when moving data between machines. |
+# | `cleanup_raw_after_unpack` | `True`  | Delete each raw archive (`.tgz`/`.zip`/`.gz`) once its unpack dir is populated. Raw archives are reproducible from CLARIN; set `False` only when debugging unpack. |
 #
 # **Resume is on by default** — Ctrl-C the notebook mid-download and just re-run this cell.
 # CLARIN sources continue via HTTP `Range` on the `.part` file; HF snapshots continue via
@@ -121,11 +123,13 @@ cfg.confirm_large = True
 cfg.force         = False
 cfg.dry_run       = False
 cfg.download_only = False
+cfg.cleanup_raw_after_unpack = True
 
-print(f"  confirm_large = {cfg.confirm_large}")
-print(f"  force         = {cfg.force}")
-print(f"  dry_run       = {cfg.dry_run}")
-print(f"  download_only = {cfg.download_only}")
+print(f"  confirm_large            = {cfg.confirm_large}")
+print(f"  force                    = {cfg.force}")
+print(f"  dry_run                  = {cfg.dry_run}")
+print(f"  download_only            = {cfg.download_only}")
+print(f"  cleanup_raw_after_unpack = {cfg.cleanup_raw_after_unpack}")
 
 # %% [markdown]
 # ---
@@ -274,8 +278,16 @@ else:
                 continue
             try:
                 udl.unpack(p["dest"], unpacked_dir, PROJECT_ROOT)
+                unpack_ok = True
             except Exception as e:
                 print(f"     ❌ unpack failed for {p['item']['name']}: {e}")
+                unpack_ok = False
+            if unpack_ok and cfg.cleanup_raw_after_unpack:
+                try:
+                    p["dest"].unlink()
+                    print(f"     🧹 deleted raw {p['dest'].relative_to(PROJECT_ROOT)}")
+                except Exception as e:
+                    print(f"     ⚠️  failed to delete raw {p['dest'].name}: {e}")
 
 print("\nDone.")
 

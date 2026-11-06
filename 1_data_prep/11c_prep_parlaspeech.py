@@ -116,11 +116,31 @@ class Config:
 
     frame_rate_hz: int = 50
 
+    # FP-centred window for utterance_frame. Trims the frame-head training record
+    # to a window around the FP span (first-FP-start .. last-FP-end), padded by
+    # `fp_context_s` on each side. Asymmetric take-as-much — when a side has less
+    # than `fp_context_s` of context, we take what's there and do NOT compensate
+    # on the other side. Zero-FP utterances become fixed head-of-clip negatives
+    # (0 .. min(audio_length, 2 * fp_context_s)). utterance_instance is NOT
+    # trimmed — scalar labels (incl. filled_pause_count on the full utterance)
+    # stay on that recipe.
+    fp_centred_window: bool  = True
+    fp_context_s:      float = 12.0
+
     split_ratios: tuple = (0.8, 0.1, 0.1)
     split_seed:   str   = "parlaspeech-v1"
     split_group:  str   = "speaker"      # group splits by speaker (no leakage)
 
     min_duration_s: float = 0.1
+
+    # Disk cleanup. Deletes the per-language raw FLAC tree under
+    # data/unpacked/ParlaSpeech-{L}{-v4,-v4-audio}/ *after* sanity() reports
+    # clean and every requested recipe wrote > 0 rows. Default False (opt-in)
+    # — the WAV cache under data/processed_audio/ is the only thing needed for
+    # training, but deleting the unpacked tree means a re-cut needs a fresh
+    # chapter-1 download. Audio-index cache file is deleted too (it points at
+    # paths that no longer exist).
+    cleanup_unpacked_after_processed: bool = False
 
     test_mode:      bool = False    # parse a small slice; outputs go under data/test_processed_jsonl/
     test_n_records: int  = 500
@@ -158,8 +178,8 @@ def configure(lang: str) -> dict:
     unpack_name = f"ParlaSpeech-{L}{_UNPACK_SUFFIX}"
     DATASET = f"ParlaSpeech-{L}" if v == "v3" else f"ParlaSpeech-{L}-v4"
     OUT_DIR = cfg.output_dir if not cfg.test_mode else "data/test_processed_jsonl"
-    WAV_DIR = (f"data/cut_audio/{unpack_name}" if not cfg.test_mode
-               else f"data/cut_audio/test/{unpack_name}")
+    WAV_DIR = (f"data/processed_audio/{unpack_name}" if not cfg.test_mode
+               else f"data/processed_audio/test/{unpack_name}")
 
     # Both v3 and v4 nest the JSONL one folder deeper. utils_download strips
     # `.jsonl.gz` as the stem and extracts into `<stem>/<stem>.jsonl`, so the
@@ -180,7 +200,7 @@ def configure(lang: str) -> dict:
     return ctx
 
 
-# File-path helpers shared by every recipe. `audio_bucket` keeps cut_audio from
+# File-path helpers shared by every recipe. `audio_bucket` keeps processed_audio from
 # ballooning into one 700k-file folder (which crashes GUI file managers and
 # makes VS Code unusable). HR/RS pack audio as `<yt_id>/<yt_id>_<times>.flac`,
 # which already buckets cleanly; CZ/PL/SI pack as `audio/<session>_<times>.flac`,
@@ -450,6 +470,32 @@ def compute_frame_labels(filled_pauses, dur, hz):
     return labels
 
 
+def compute_fp_window(filled_pauses, dur, context_s):
+    """Return `(start_t, end_t)` for the FP-centred window on a frame record.
+
+    - `filled_pauses` non-empty: pad `context_s` around first-FP-start and
+      last-FP-end. When a side has less than `context_s` of lead-in/tail, take
+      what the clip offers; the other side is NOT extended to compensate.
+    - `filled_pauses == []` (no FPs): fixed head-of-clip window of up to
+      `2 * context_s`, used as negatives for the frame-detection head.
+    - Clip shorter than the natural window: whole clip, no trim.
+
+    Bounds are rounded to 3 dp to match the trainer's slice tolerance.
+    """
+    full_end = round(float(dur), 3)
+    if filled_pauses:
+        first_s = float(filled_pauses[0]["time_s"])
+        last_e  = float(filled_pauses[-1]["time_e"])
+        left_pad  = min(context_s, first_s)
+        right_pad = min(context_s, full_end - last_e)
+        start_t = max(0.0, first_s - left_pad)
+        end_t   = min(full_end, last_e + right_pad)
+    else:
+        start_t = 0.0
+        end_t   = min(full_end, 2.0 * context_s)
+    return round(start_t, 3), round(end_t, 3)
+
+
 # Scratch metadata fields used to build recipes; stripped from every written row.
 _SCRATCH = ("filled_pauses", "words_align", "primary_stress")
 
@@ -539,11 +585,30 @@ def build_instance(r):
 def build_frame(r):
     fps = r["metadata"]["filled_pauses"]
     dur = r["metadata"]["audio_length"]
+    hz  = cfg.frame_rate_hz
     out = {k: r[k] for k in ("instance_id", "dataset", "file_id",
                              "audio_path", "speaker", "text", "split")}
-    out["frame_rate_hz"] = cfg.frame_rate_hz
-    out["labels"] = {"filled_pause": compute_frame_labels(fps, dur, cfg.frame_rate_hz)}
-    out["metadata"] = _strip_scratch(r["metadata"])
+    full_labels = compute_frame_labels(fps, dur, hz)
+    md = _strip_scratch(r["metadata"])
+
+    if cfg.fp_centred_window:
+        # Trim audio span + label sequence to the FP-centred window. Trainer
+        # slices the WAV on load via start_t/end_t — same path word_frame uses.
+        start_t, end_t = compute_fp_window(fps, dur, cfg.fp_context_s)
+        s = max(0, round(start_t * hz))
+        e = min(len(full_labels), round(end_t * hz))
+        labels = full_labels[s:e]
+        out["start_t"]       = start_t
+        out["end_t"]         = end_t
+        out["frame_rate_hz"] = hz
+        out["labels"]        = {"filled_pause": labels}
+        md["audio_length"]      = round(end_t - start_t, 3)
+        md["full_audio_length"] = round(float(dur), 3)  # true utterance length, before the window
+    else:
+        out["frame_rate_hz"] = hz
+        out["labels"]        = {"filled_pause": full_labels}
+
+    out["metadata"] = md
     return out
 
 def write_recipes(ctx: dict, records: list[dict]) -> dict:
@@ -574,6 +639,40 @@ def write_recipes(ctx: dict, records: list[dict]) -> dict:
 # ## 11. Sanity checks
 
 # %%
+def cleanup_unpacked(ctx: dict, written: dict) -> None:
+    """Delete the unpacked JSONL + FLAC trees + the stale audio-index cache.
+
+    Opt-in via `cfg.cleanup_unpacked_after_processed`. Guarded: never deletes
+    in test_mode, never deletes if `convert_audio=False` (WAV cache may not be
+    fully in sync with this run), never deletes if `utterance_instance` wrote
+    zero rows (signals a run that failed its core recipe).
+    """
+    if not cfg.cleanup_unpacked_after_processed:
+        return
+    if cfg.test_mode:
+        print("  ⏭  cleanup_unpacked skipped (test_mode)")
+        return
+    if not cfg.convert_audio:
+        print("  ⏭  cleanup_unpacked skipped (convert_audio=False — WAV cache may not be fresh)")
+        return
+    core_ok = written.get("utterance_instance", (None, 0))[1] > 0
+    if not core_ok:
+        print("  ⏭  cleanup_unpacked skipped (utterance_instance wrote 0 rows)")
+        return
+
+    import shutil
+    unpack_name = f"ParlaSpeech-{ctx['L']}{_UNPACK_SUFFIX}"
+    for rel in (f"data/unpacked/{unpack_name}", f"data/unpacked/{unpack_name}-audio"):
+        p = PROJECT_ROOT / rel
+        if p.exists():
+            shutil.rmtree(p)
+            print(f"  🧹 deleted {rel}")
+    idx = PROJECT_ROOT / ctx["audio_index_cache"]
+    if idx.exists():
+        idx.unlink()
+        print(f"  🧹 deleted {ctx['audio_index_cache']}")
+
+
 def sanity(ctx: dict, written: dict) -> None:
     for name, (path, n) in written.items():
         rows = udp.read_jsonl(path)
@@ -620,6 +719,7 @@ for LANG in LANGS:
     records = convert_audio(ctx, records)
     written = write_recipes(ctx, records)
     sanity(ctx, written)
+    cleanup_unpacked(ctx, written)
     summary[LANG] = {name: n for name, (p, n) in written.items()}
     del records                      # free before the next language
     mark(f"{LANG}: done")
@@ -667,9 +767,12 @@ print_stage_breakdown(STAGE_TIMES)
 #
 # ## Next
 #
-# - **Chapter 2** — `20_sniff_dataset.ipynb` at any of the emitted JSONLs.
-# - **Chapter 3** — `31`/`32` train on `..._utterance_instance.jsonl` via the
+# - **Chapter 2** — `20_explore_dataset.ipynb` at any of the emitted JSONLs
+#   (data analysis: label balance, duration, speaker coverage).
+# - **Chapter 3** — `31`/`32` mint/annotate filled-pause sets (ParlaSpeech FP
+#   labels are weakly auto-detected; chapter 3 produces the hand-annotated set).
+# - **Chapter 4** — `41`/`42` train on `..._utterance_instance.jsonl` via the
 #   ParlaSpeech presets in `utils_instance_train.py`'s `TARGETS` registry
 #   (gender, filled-pause presence/count, sentiment, age).
-# - **Chapter 4** — `41` trains the frame head on `..._utterance_frame.jsonl`
+# - **Chapter 5** — `51` trains the frame head on `..._utterance_frame.jsonl`
 #   (filled-pause frames) and `..._word_frame.jsonl` (primary stress, HR/RS).

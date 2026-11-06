@@ -541,7 +541,7 @@ def _selftest() -> None:
     sample = {
         "instance_id": make_instance_id("ROG", "Art-S01-V01", "SPK0", 2.190, 4.580),
         "dataset": "ROG",
-        "audio_path": "data/cut_audio/ROG/example.wav",
+        "audio_path": "data/processed_audio/ROG/example.wav",
         "split": "train",
         "labels": {"sentiment": "neutralPositive"},
         "metadata": {},
