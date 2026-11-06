@@ -1,8 +1,8 @@
-"""utils_instance_train — the chapter-3 instance-training engine.
+"""utils_instance_train — the chapter-4 instance-training engine.
 
 Shared by:
-  * 31_train_instance_classification.ipynb / run_31_classification.py
-  * 32_train_instance_regression.ipynb     / run_32_regression.py
+  * 41_train_instance_classification.ipynb / run_41_classification.py
+  * 42_train_instance_regression.ipynb     / run_42_regression.py
 
 Everything here was lifted verbatim from the (now frozen) standalone twin
 notebooks; only module hygiene changed — globals that the notebooks captured by
@@ -18,7 +18,7 @@ IMPORT-ORDER CONTRACT (read this before importing):
   3. Headless runners should set ``MPLBACKEND=Agg`` before importing (notebooks
      don't need to — the inline backend is already active).
 
-Config flow: ``load_config(path, task_type, run_mode=...)`` reads 3_config.json
+Config flow: ``load_config(path, task_type, run_mode=...)`` reads 4_config.json
 (shared block + per-task block + mode overrides), resolves the TARGETS preset,
 and returns a validated-ready ``Config``. The notebooks/runners never define
 hyperparameters in code.
@@ -112,7 +112,7 @@ def print_stage_breakdown(times: dict[str, float] | None = None) -> None:
 # A preset MAY optionally declare per-target constraints (see
 # TARGET_CONSTRAINT_FIELDS below) — currently just `max_duration_s`. When
 # present, the value overrides the Config default and any shared/task-block
-# value in 3_config.json; mode-level overrides still win.
+# value in 4_config.json; mode-level overrides still win.
 
 TARGETS: dict = {
     # ---- ROG-Art (rog_instance.jsonl) ----------------------------------
@@ -295,7 +295,7 @@ def print_target_menu(task_type: str | None = None) -> None:
 
 # Optional per-target constraint fields. If a TARGETS entry sets one,
 # resolve_target applies it to cfg in addition to the data fields above —
-# mode-level overrides in 3_config.json still win (they apply later in
+# mode-level overrides in 4_config.json still win (they apply later in
 # load_config). Add to this tuple to wire more constraints through.
 TARGET_CONSTRAINT_FIELDS: tuple = ("max_duration_s",)
 
@@ -320,7 +320,7 @@ def resolve_target(cfg, targets: dict = TARGETS) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Config — one dataclass for both twins; 3_config.json fills it
+# Config — one dataclass for both twins; 4_config.json fills it
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
@@ -341,7 +341,7 @@ class Config:
     normalize:   str  = "zscore"
     loss_function: str = "mse"   # "mse" | "l1"
 
-    # -- Run mode (set from 3_config.json / CLI; apply_mode layers the caps) ----
+    # -- Run mode (set from 4_config.json / CLI; apply_mode layers the caps) ----
     run_mode: str = "full"                  # "test" | "demo" | "full"
     demo_sampling: str = "proportional"     # "proportional" | "balanced" — only when pooling >1 lang
     cap_seed: int = 1234                    # deterministic shuffle seed for cap_split
@@ -406,7 +406,7 @@ def apply_mode(cfg: Config, overrides: dict) -> None:
 
 def load_config(path: str | Path, task_type: str,
                 run_mode: str | None = None) -> tuple[Config, dict]:
-    """Build a Config from 3_config.json for one task_type.
+    """Build a Config from 4_config.json for one task_type.
 
     Layering order (later wins): Config defaults → ``shared`` block →
     ``classification``/``regression`` block → ``modes[run_mode]`` overrides.
@@ -1344,7 +1344,7 @@ def _tee_stdout(run_dir: Path) -> None:
     forked dataloader workers and deadlocks training. For a run.log, tee at
     the shell instead:
 
-        python run_32_regression.py --use_gpu 2>&1 | tee runs/<...>/run.log
+        python run_42_regression.py --use_gpu 2>&1 | tee runs/<...>/run.log
 
     (A fork-safe, buffer-safe in-process alternative is on the backlog.)
     """

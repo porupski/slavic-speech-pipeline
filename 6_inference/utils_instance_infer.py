@@ -7,7 +7,7 @@ of chapter 6. The entry-point notebooks are:
   * 61_instance_classification_inference-WIP.* (scaffold)
   * 62_instance_regression_inference-WIP.* (scaffold)
 
-The port template is chapter 3's ``utils_instance_train.py`` — specifically
+The port template is chapter 4's ``utils_instance_train.py`` — specifically
 its model-build + predict path. The training path is NOT needed here; only
 the inference side (load checkpoint, mean-pool over masked frames, emit one
 label or one float per record).
@@ -17,10 +17,10 @@ same shape as ``utils_frame_infer.py``:
 
  1. Add Config fields: ``batch_size``, ``background_class_id`` (classification
     only), ``postproc_*`` (if any), ``normalize`` (regression only — port the
-    chapter-3 z-score normalizer).
+    chapter-4 z-score normalizer).
  2. Implement ``load_model(cfg, device)`` with
     ``AutoModelForAudioClassification`` for classification tasks, and the
-    chapter-3 ``Wav2Vec2ForRegression`` family for regression tasks. Dispatch
+    chapter-4 ``Wav2Vec2ForRegression`` family for regression tasks. Dispatch
     on ``cfg.task_type``.
  3. Implement ``run_inference(cfg, run_name)``: walk cfg.audio_dir, read each
     WAV, run the model, emit one JSONL line per file. For regression, decode
@@ -70,7 +70,7 @@ def load_config(path, run_mode: str, task: str, quadrant: str):
         )
     raise NotImplementedError(
         "utils_instance_infer is a scaffold (2026-11-02). "
-        "Port the predict path from chapter 3's utils_instance_train.py. "
+        "Port the predict path from chapter 4's utils_instance_train.py. "
         f"Target quadrant: {quadrant!r}. Target task: {task!r}. "
         "See the port plan in this module's docstring and in "
         "61_instance_classification_inference-WIP.py / "

@@ -16,7 +16,7 @@
 #
 # Once an annotator has filled in the `fp-annotation` tier on the TextGrids
 # minted by `51`, this notebook turns the annotated folder into a canonical
-# pipeline JSONL ready for chapter 3 — rung 3 in the BLUEPRINT ladder
+# pipeline JSONL ready for chapter 4 — rung 3 in the BLUEPRINT ladder
 # (per-FP-event instance classification: Vocal / Nasal / V-N / Other /
 # FalsePositive).
 #
@@ -92,8 +92,8 @@ from praatio.utilities.constants import INTERVAL_TIER
 
 # Chapter-1 utils: canonical JSONL I/O + the audio cutter used by 11c.
 HERE = Path.cwd()
-if HERE.name != "5_tg_minter":
-    cand = HERE / "5_tg_minter"
+if HERE.name != "3_annotator":
+    cand = HERE / "3_annotator"
     if cand.exists():
         HERE = cand
 sys.path.insert(0, str(HERE.parent / "1_data_prep"))

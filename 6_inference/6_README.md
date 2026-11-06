@@ -3,7 +3,7 @@
 Run pre-trained speech encoders over a folder of audio, emit an inference
 JSONL plus (optionally) per-file TextGrids for visual QA in Praat.
 
-Chapter 6 mirrors chapter 3 and chapter 4 on both axes: **shape** (frame vs
+Chapter 6 mirrors chapter 4 and chapter 5 on both axes: **shape** (frame vs
 instance) and **head** (classification vs regression). The four quadrants
 each have one entry point.
 
@@ -59,7 +59,7 @@ layering.
 3. Anything else — passed through to `from_pretrained` as-is (HF repo
    id or absolute path).
 
-`"auto"` is the preferred form for in-repo checkpoints — the chapter 4
+`"auto"` is the preferred form for in-repo checkpoints — the chapter 5
 training pipeline will emit the trace file so inference finds the current
 best run without any config edit.
 
@@ -152,7 +152,7 @@ correctness verifier.
 | `64_frame_regression_inference-WIP.py` / `.ipynb` | SCAFFOLD (2026-11-02). Entry point for the frame_regression quadrant. Needs a new `utils_frame_regression_infer.py` module (sibling of the live `utils_frame_infer.py`). |
 | `run_64_frame_regression_inference-WIP.py` | SCAFFOLD CLI twin of 64. |
 | `utils_frame_infer.py` | The frame-classification engine. Reads `6_config.json` + `6_tasks.json/frame_classification/<task>` + run-mode overrides. Handles chunking, batched forward pass, frames → events + postproc, JSONL + TextGrid writes, waveform plots. `QUADRANT = "frame_classification"`. |
-| `utils_instance_infer.py` | SCAFFOLD (2026-11-02). Will serve both instance quadrants once wired. Port template: chapter 3's `utils_instance_train.py` predict path. |
+| `utils_instance_infer.py` | SCAFFOLD (2026-11-02). Will serve both instance quadrants once wired. Port template: chapter 4's `utils_instance_train.py` predict path. |
 | `6_config.json` | Common knobs (audio dir, runs dir, batch size, chunk length, reserved GPU, run-mode caps). Shared across every task. |
 | `6_tasks.json` | Task registry. Entries grouped by quadrant. Each entry carries model, postproc, task identifier, output flags. |
 | `vowels_by_language.json` | Grapheme-level vowel sets per language. Used by the future vowel-nucleus accuracy metric. HR, RS, SI include `r` (syllabic liquid). |

@@ -13,12 +13,12 @@
 # ---
 
 # %% [markdown]
-# # Train frame — regression (chapter 4)
+# # Train frame — regression (chapter 5)
 #
 # **⚠️  SCAFFOLD — 2026-11-02. Not yet tested end to end.**
 #
-# This file is the regression twin of `41_train_frame_classification`. It is
-# shipped for structural completeness so chapter 4 shows both heads. No frame
+# This file is the regression twin of `51_train_frame_classification`. It is
+# shipped for structural completeness so chapter 5 shows both heads. No frame
 # regression target exists in the TARGETS registry yet (see
 # `utils_frame_train.py :: _add_*_targets`), and the frame-training engine in
 # `utils_frame_train.py` is wired for classification only. Running this
@@ -26,22 +26,22 @@
 # error that points you here.
 #
 # When the first continuous frame-level target lands, port the regression
-# pieces from chapter 3 (`utils_instance_train.py` already supports both
+# pieces from chapter 4 (`utils_instance_train.py` already supports both
 # heads) into `utils_frame_train.py`. The port plan sits at the bottom of
 # this notebook under "What to wire in the engine".
 #
 # What already works in the scaffold (will run until `load_config`):
 #   * GPU guard + heavy import
 #   * `print_target_menu("regression")` — prints nothing yet (empty registry)
-#   * `load_config` layering (classification + regression blocks in 4_config.json)
+#   * `load_config` layering (classification + regression blocks in 5_config.json)
 #
 # What stops at `load_config`:
 #   * `load_config` raises when `task_type="regression"` by design, with a
 #     dated port-plan message. Remove that guard once the engine is ready.
 #
 # **Tutorial twin pattern.** Shared engine lives in `utils_frame_train.py`;
-# every knob lives in `4_config.json`. For unattended full runs, write a
-# `run_42_regression.py` once the engine is wired (mirror `run_41_classification.py`).
+# every knob lives in `5_config.json`. For unattended full runs, write a
+# `run_42_regression.py` once the engine is wired (mirror `run_51_classification.py`).
 
 # %% [markdown]
 # # Setup
@@ -49,7 +49,7 @@
 # One visible block runs BEFORE the heavy engine imports:
 #
 # 1. Picks this notebook's TASK_TYPE.
-# 2. Finds the chapter folder and `4_config.json`.
+# 2. Finds the chapter folder and `5_config.json`.
 # 3. GPU guard — pins CUDA_VISIBLE_DEVICES before torch is imported.
 #    Type `y` to arm the reserved GPU; anything else = CPU.
 
@@ -62,12 +62,12 @@ import sys
 from pathlib import Path
 
 HERE = Path.cwd()
-if HERE.name != "4_frame_models":
-    candidate = HERE / "4_frame_models"
+if HERE.name != "5_frame_models":
+    candidate = HERE / "5_frame_models"
     if candidate.exists():
         HERE = candidate
 sys.path.insert(0, str(HERE))
-CONFIG_PATH = HERE / "4_config.json"
+CONFIG_PATH = HERE / "5_config.json"
 
 RESERVED_GPU = json.loads(CONFIG_PATH.read_text())["shared"].get("reserved_gpu", "2")
 _env = os.environ.get("CONDA_DEFAULT_ENV", "")
@@ -98,7 +98,7 @@ print_project_info()
 # # Targets
 #
 # Frame-level TARGETS live in `utils_frame_train.py`. Pick by name in
-# `4_config.json`; this cell just lists what is on the menu for regression.
+# `5_config.json`; this cell just lists what is on the menu for regression.
 #
 # **Scaffold note (2026-11-02):** no regression frame targets are registered
 # yet. The call below will print an empty menu. Add a regression target with
@@ -113,7 +113,7 @@ print_target_menu(TASK_TYPE)
 # %% [markdown]
 # # Config
 #
-# Everything tunable lives in **`4_config.json`** — you should never need to
+# Everything tunable lives in **`5_config.json`** — you should never need to
 # edit Python to change a run. Loader layers, in order: `Config` defaults →
 # `shared` block → this task's block (`regression`) → the active run mode's
 # overrides.
@@ -121,7 +121,7 @@ print_target_menu(TASK_TYPE)
 # **Scaffold stop point.** `load_config` raises a dated port-plan error
 # because the engine still hard-blocks regression. See the error message for
 # what to port from `utils_instance_train.py`. The `regression` block in
-# `4_config.json` carries placeholder knobs mirroring chapter 3.
+# `5_config.json` carries placeholder knobs mirroring chapter 4.
 
 # %%
 from utils_frame_train import load_config, validate_config, resolve_device, print_config_summary
@@ -173,7 +173,7 @@ if cfg.enable_max_audio_seconds:
 # %% [markdown]
 # ## Target normalization
 #
-# **Scaffold stub (2026-11-02) — port from chapter 3.**
+# **Scaffold stub (2026-11-02) — port from chapter 4.**
 #
 # Regression targets are z-scored on TRAIN-only statistics so raw magnitudes
 # do not blow MSE/MAE up and so Spearman does not collapse. The port template
@@ -202,7 +202,7 @@ raise NotImplementedError(
 # `DataCollatorForFrame` (pads with IGNORE_INDEX; already handles
 # `task_type="regression"` dtype=float32) → **`build_model`** (needs a
 # `Wav2Vec2ForFrameRegression` + `Wav2Vec2BertForFrameRegression`; the
-# instance-level `Wav2Vec2ForRegression` in chapter 3 is the port template)
+# instance-level `Wav2Vec2ForRegression` in chapter 4 is the port template)
 # → **`make_regression_metrics`** (per-frame MSE / MAE / Spearman computed in
 # real units) → `EpochCheckpointCallback` (per-epoch predictions + scatter /
 # strip plot) → `best_epoch_of` (min for mse/mae, max for spearman).
@@ -278,7 +278,7 @@ spot_check(run_dir, phase2_best)
 #
 # **Scaffold stub (2026-11-02) — port + adapt.**
 #
-# For instance regression chapter 3 uses `plot_test_scatter` (gold-vs-pred
+# For instance regression chapter 4 uses `plot_test_scatter` (gold-vs-pred
 # scatter + distribution overlay). Frame regression needs a per-frame view:
 # either a time-aligned gold-vs-pred strip (matches the classification strip
 # plot) or a flattened scatter. Pick when porting; the strip is more useful
@@ -305,11 +305,11 @@ print_stage_breakdown()
 # %% [markdown]
 # ## What is next
 #
-# - Different target: change `regression.target` in `4_config.json`
+# - Different target: change `regression.target` in `5_config.json`
 #   (the menu is in the Targets cell above — empty until a regression target
 #   is registered).
 # - Classification targets (filled pauses, primary stress) live in the twin:
-#   `41_train_frame_classification.ipynb`.
+#   `51_train_frame_classification.ipynb`.
 
 # %% [markdown]
 # ## What to wire in the engine
@@ -323,12 +323,12 @@ print_stage_breakdown()
 #    that reject `task_type != "classification"`. Replace with regression-
 #    aware validation (`best_metric_regression` ∈ {`mse`, `mae`, `spearman`};
 #    `loss_function` ∈ {`mse`, `l1`}; `normalize` ∈ {`zscore`, `none`}).
-# 2. **Add Config fields** mirroring chapter 3: `best_metric_regression`,
+# 2. **Add Config fields** mirroring chapter 4: `best_metric_regression`,
 #    `normalize`, `loss_function`, `label_scale`.
 # 3. **Register at least one frame regression target** in TARGETS. Candidate
 #    shapes: per-frame prominence score, per-frame log-pitch, per-frame
 #    energy. Set `"task_type": "regression"` on the preset.
-# 4. **Normalizer.** Port `fit_normalizer` from chapter 3. Adapt to per-frame
+# 4. **Normalizer.** Port `fit_normalizer` from chapter 4. Adapt to per-frame
 #    targets — fit over all TRAIN frames pooled, decode per batch.
 # 5. **Model classes.** `Wav2Vec2ForFrameRegression` and
 #    `Wav2Vec2BertForFrameRegression` — Linear(1) head over the encoder's
@@ -342,4 +342,4 @@ print_stage_breakdown()
 #    on the best phase-2 epoch.
 # 9. **`run_phase`.** Accept `normalizer` arg; dispatch model / loss /
 #    metrics on `cfg.task_type`.
-# 10. **CLI runner.** `run_42_regression.py` mirrors `run_41_classification.py`.
+# 10. **CLI runner.** `run_42_regression.py` mirrors `run_51_classification.py`.

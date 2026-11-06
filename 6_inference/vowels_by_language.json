@@ -1,7 +1,7 @@
 {
   "_readme": [
     "Grapheme-level vowel sets per language, keyed by short code.",
-    "Used by the future vowel-nucleus accuracy metric (chapter 4/6):",
+    "Used by the future vowel-nucleus accuracy metric (chapter 5/6):",
     "an inferred primary-stress interval 'hits' a vowel if the bulk",
     "of its positive frames sits inside a graphAlign interval whose",
     "text (lowercased) is in this set.",

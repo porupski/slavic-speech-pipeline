@@ -18,8 +18,8 @@
 # **⚠️  SCAFFOLD — 2026-11-02. Not yet wired end to end.**
 #
 # Entry point for the `frame_regression` quadrant: one float per model
-# frame. Rare today — the training twin (`42_train_frame_regression-WIP`)
-# in chapter 4 is also a scaffold. Candidate wire-ups once a trained
+# frame. Rare today — the training twin (`52_train_frame_regression-WIP`)
+# in chapter 5 is also a scaffold. Candidate wire-ups once a trained
 # per-frame regressor exists: per-frame prominence, per-frame log-pitch,
 # per-frame energy derivative.
 #

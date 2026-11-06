@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""33_run_task_list — chapter-3 sequential task-list runner.
+"""43_run_task_list — chapter-4 sequential task-list runner.
 
 Walks the ``TASKS`` list below one by one. Each task is a full
 phase-1 (DEV) → phase-2 (TEST) instance-classification/regression run through
-the same engine as ``run_31_classification`` / ``run_32_regression``. A crash
+the same engine as ``run_41_classification`` / ``run_42_regression``. A crash
 in one task does not kill the queue — the error lands in that task's CSV row
 and the next task runs. All stdout + stderr is teed into each run folder's
 ``run.log``, so tmux it and walk away.
@@ -19,14 +19,14 @@ Aggregate summary lands at ``<list_root>/task_list_summary.csv`` +
 TASKS list for provenance.
 
 Usage:
-  python 33_run_task_list.py --use_gpu
-  python 33_run_task_list.py --use_gpu --dry_run              # print tasks, exit
-  python 33_run_task_list.py --use_gpu --limit 2              # first 2 only
-  python 33_run_task_list.py --use_gpu --list_dir my_run_set
+  python 43_run_task_list.py --use_gpu
+  python 43_run_task_list.py --use_gpu --dry_run              # print tasks, exit
+  python 43_run_task_list.py --use_gpu --limit 2              # first 2 only
+  python 43_run_task_list.py --use_gpu --list_dir my_run_set
 
-  python 33_run_task_list.py --use_gpu 2>&1 | tee ../runs/33_task_list_$(date +%Y-%m-%d_%H%M%S).log
+  python 43_run_task_list.py --use_gpu 2>&1 | tee ../runs/33_task_list_$(date +%Y-%m-%d_%H%M%S).log
 
-Base config is ``3_config.json`` under the chosen ``--mode`` (default: demo);
+Base config is ``4_config.json`` under the chosen ``--mode`` (default: demo);
 per-task overrides layer on top.
 """
 
@@ -120,8 +120,8 @@ def parse_args() -> argparse.Namespace:
         description=__doc__.splitlines()[0],
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--config", "-c", default=str(HERE / "3_config.json"),
-                   help="path to the chapter-3 3_config.json (base layer)")
+    p.add_argument("--config", "-c", default=str(HERE / "4_config.json"),
+                   help="path to the chapter-4 4_config.json (base layer)")
     p.add_argument("--mode", "-m", choices=["test", "demo", "full"], default="demo",
                    help="base run_mode; per-task overrides layer on top")
     p.add_argument("--use_gpu", action="store_true",
@@ -169,7 +169,7 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
     task_type = task.get("task_type", "classification")
 
     try:
-        # Base config (3_config.json + mode overrides). Per-task overrides layer on top.
+        # Base config (4_config.json + mode overrides). Per-task overrides layer on top.
         cfg, _ = load_config(args.config, task_type=task_type, run_mode=args.mode)
         overrides = {k: v for k, v in task.items() if k not in {"label", "task_type"}}
         valid = {f.name for f in _dc_fields(cfg)}
@@ -303,7 +303,7 @@ def make_comparison_plot(csv_path: Path, out_path: Path) -> None:
     ax.set_yticks(y); ax.set_yticklabels(labels, fontsize=9)
     ax.set_xlabel("score (best TEST epoch)")
     ax.set_xlim(0, 1.05)
-    ax.set_title("Task list — chapter-3 instance classification")
+    ax.set_title("Task list — chapter-4 instance classification")
     ax.legend(loc="lower right")
     plt.tight_layout()
     fig.savefig(out_path, dpi=120, bbox_inches="tight"); plt.close(fig)

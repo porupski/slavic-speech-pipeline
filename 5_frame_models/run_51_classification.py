@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""run_41_classification — frame classification runner (chapter 4).
+"""run_51_classification — frame classification runner (chapter 5).
 
-Command-line twin of 41_train_frame_classification.ipynb — same engine
-(utils_frame_train.py), same 4_config.json, no interactive prompts. This is the
+Command-line twin of 51_train_frame_classification.ipynb — same engine
+(utils_frame_train.py), same 5_config.json, no interactive prompts. This is the
 tool for FULL runs: launch it in tmux and walk away.
 
 Usage:
-  python run_41_classification.py                             # 4_config.json's run_mode, CPU
-  python run_41_classification.py --mode demo --use_gpu
-  python run_41_classification.py -m full --use_gpu -t si_primary_stress_frames
-  python run_41_classification.py -m full --use_gpu --model_name facebook/w2v-bert-2.0
+  python run_51_classification.py                             # 5_config.json's run_mode, CPU
+  python run_51_classification.py --mode demo --use_gpu
+  python run_51_classification.py -m full --use_gpu -t si_primary_stress_frames
+  python run_51_classification.py -m full --use_gpu --model_name facebook/w2v-bert-2.0
 
 Device policy: CPU by default (safe, prompt-free). --use_gpu arms the reserved
-GPU from 4_config.json (shared.reserved_gpu). We NEVER touch another GPU.
+GPU from 5_config.json (shared.reserved_gpu). We NEVER touch another GPU.
 """
 
 import argparse
@@ -31,10 +31,10 @@ def parse_args() -> argparse.Namespace:
         description=__doc__.splitlines()[0],
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--config", "-c", default=str(HERE / "4_config.json"),
-                   help="path to 4_config.json")
+    p.add_argument("--config", "-c", default=str(HERE / "5_config.json"),
+                   help="path to 5_config.json")
     p.add_argument("--mode", "-m", choices=["test", "demo", "full"], default=None,
-                   help="override run_mode from 4_config.json")
+                   help="override run_mode from 5_config.json")
     p.add_argument("--target", "-t", default=None,
                    help="override the classification target preset")
     p.add_argument("--model_name", default=None,

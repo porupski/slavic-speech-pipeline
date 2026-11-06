@@ -1,6 +1,6 @@
-# Supported base models — chapter 4 (frame classification)
+# Supported base models — chapter 5 (frame classification)
 
-Encoder handles the frame trainer accepts in `4_config.json` under `model_name`.
+Encoder handles the frame trainer accepts in `5_config.json` under `model_name`.
 `build_model` dispatches on `hf_config.model_type` and picks the matching head:
 
 | `model_type`     | Head class in this chapter          | Input key         |

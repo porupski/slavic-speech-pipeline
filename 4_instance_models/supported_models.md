@@ -1,7 +1,7 @@
 # Supported base models
 
-This table lists the encoder handles that the chapter-3 trainers accept
-in `3_config.json` under `model_name`. Each row names the input format,
+This table lists the encoder handles that the chapter-4 trainers accept
+in `4_config.json` under `model_name`. Each row names the input format,
 the head compatibility, an approximate VRAM figure, and the tasks where
 the model is a good fit.
 
@@ -19,7 +19,7 @@ length, and mixed-precision settings. Fill in the table after a run.
 
 ## Adding a new model
 
-1. Add the handle to `3_config.json` under `model_name`.
+1. Add the handle to `4_config.json` under `model_name`.
 2. Confirm that the model exposes a sequence-classification head, or
    that the trainer can wrap the model with one.
 3. Run the `test` mode first to check that the input pipeline matches

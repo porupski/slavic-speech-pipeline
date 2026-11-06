@@ -16,7 +16,7 @@
 # # 54 — Nejc's annotated Slovenian TextGrids → `word_frame` JSONL
 #
 # Turns Nejc's ~81 annotated `.TextGrid` files into one canonical JSONL that
-# `41_train_frame_classification` can train on. One JSONL row per multisyllabic
+# `51_train_frame_classification` can train on. One JSONL row per multisyllabic
 # word that carries a primary-stress mark. The frame sequence is 50 Hz binary
 # (`primary_stress = 1` where the stressed vowel lives, else `0`) over the word
 # span. The trainer slices the word from the utterance WAV in memory at load
@@ -65,7 +65,7 @@ SPLIT_SEED         = "nejc-slo-stress-v1"
 SPLIT_OVERRIDE_CSV = "data/nejc_slo_stress/split.csv"   # None to fall back to hash
 
 # --- FRAME RATE -------------------------------------------------------------
-FRAME_RATE_HZ = 50   # hard-locked project-wide; matches chapter 4.
+FRAME_RATE_HZ = 50   # hard-locked project-wide; matches chapter 5.
 
 # --- DATASET TAG ------------------------------------------------------------
 DATASET_TAG = "nejc-slo-stress"
@@ -89,8 +89,8 @@ from collections import Counter, defaultdict
 from praatio import textgrid as tgio
 
 HERE = Path.cwd()
-if HERE.name != "5_tg_minter":
-    cand = HERE / "5_tg_minter"
+if HERE.name != "3_annotator":
+    cand = HERE / "3_annotator"
     if cand.exists():
         HERE = cand
 sys.path.insert(0, str(HERE.parent / "1_data_prep"))
@@ -201,7 +201,7 @@ def extract_words_and_stress(tg, *, tol: float = MATCH_TOLERANCE_S
     """Return (words_align, primary_stress, graph_align, notes).
     `primary_stress` keeps **every** valid `"1"` mark (multi-stress words too).
     `graph_align` is the full non-empty grapheme sequence from `graphAlign`
-    (utterance-relative times) — used later by chapter-4/6 vowel-nucleus
+    (utterance-relative times) — used later by chapter-5/6 vowel-nucleus
     accuracy eval. Empty list if the tier is missing.
     `notes` is a list of `(kind, *args)` tuples for the per-file report:
       - `stress_outside_word` — mark dropped (does not appear in `primary_stress`)
@@ -622,6 +622,6 @@ if per_file_notes:
 # %% [markdown]
 # ## Next
 #
-# - Train: `4_frame_models/41_train_frame_classification.ipynb` — set
+# - Train: `5_frame_models/51_train_frame_classification.ipynb` — set
 #   `Config.target = "si_primary_stress_frames"`. The target entry is
 #   already registered.

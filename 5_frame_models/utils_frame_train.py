@@ -1,13 +1,13 @@
-"""utils_frame_train — the chapter-4 frame-training engine.
+"""utils_frame_train — the chapter-5 frame-training engine.
 
 Shared by:
-  * 41_train_frame_classification.ipynb / run_41_classification.py
-  * 42_train_frame_regression.ipynb (SCAFFOLD, 2026-11-02; engine wiring
+  * 51_train_frame_classification.ipynb / run_51_classification.py
+  * 52_train_frame_regression.ipynb (SCAFFOLD, 2026-11-02; engine wiring
     for regression is not yet implemented — see the port plan at the
-    bottom of 42_train_frame_regression.py)
+    bottom of 52_train_frame_regression.py)
 
-Mirrors chapter 3's `utils_instance_train.py` shape as closely as possible.
-The differences from chapter 3 are frame-level, not instance-level:
+Mirrors chapter 4's `utils_instance_train.py` shape as closely as possible.
+The differences from chapter 4 are frame-level, not instance-level:
   * per-frame classifier head with IGNORE_INDEX-aware cross-entropy
   * per-record label alignment to the model's actual output frame count
   * two model families supported at once — Wav2Vec2 (raw waveform, CNN
@@ -27,7 +27,7 @@ IMPORT-ORDER CONTRACT (read this before importing):
   3. Headless runners should set MPLBACKEND=Agg before importing.
 
 Config flow: ``load_config(path, task_type, run_mode=...)`` reads
-`4_config.json` (shared block + task block + mode overrides), resolves the
+`5_config.json` (shared block + task block + mode overrides), resolves the
 TARGETS preset, and returns a validated Config. Consumers never define
 hyperparameters in code.
 """
@@ -151,7 +151,7 @@ def _add_parlaspeech_frame_targets(targets: dict) -> None:
 
 def _add_nejc_slo_stress_targets(targets: dict) -> None:
     """Slovenian primary-stress `word_frame` from Nejc's annotated TGs (built
-    by `5_tg_minter/54_stress_tg_to_jsonl.py`). Independent of the HR/RS
+    by `3_annotator/34_stress_tg_to_jsonl.py`). Independent of the HR/RS
     pool — Slovenian stress is a different phenomenon."""
     targets["si_primary_stress_frames"] = {
         "jsonl_path":  "data/processed_jsonl/si_primary_stress_word_frame.jsonl",
@@ -232,7 +232,7 @@ def resolve_target(cfg, targets: dict = TARGETS) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Config — one dataclass, 4_config.json fills it
+# Config — one dataclass, 5_config.json fills it
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
@@ -292,10 +292,10 @@ class Config:
     best_metric_classification: str = "frame_macro_f1"
 
     # -- Regression knobs (SCAFFOLD, 2026-11-02) -----------------------------
-    # Inert placeholders mirroring chapter 3 (utils_instance_train.py). The
-    # fields are present so the regression block in 4_config.json loads
+    # Inert placeholders mirroring chapter 4 (utils_instance_train.py). The
+    # fields are present so the regression block in 5_config.json loads
     # cleanly, but no regression code path consumes them yet. See the port
-    # plan in 42_train_frame_regression.py for the wiring list.
+    # plan in 52_train_frame_regression.py for the wiring list.
     best_metric_regression: str = "spearman"   # "mse" | "mae" | "spearman"
     normalize:              str = "zscore"     # "zscore" | "none"
     loss_function:          str = "mse"        # "mse" | "l1"
@@ -342,15 +342,15 @@ def load_config(path: str | Path, task_type: str,
     (``classification``) → ``modes[run_mode]``. Returns (cfg, raw)."""
     raw = json.loads(Path(path).read_text())
     if task_type != "classification":
-        # SCAFFOLD guard, 2026-11-02. 42_train_frame_regression ships as a
+        # SCAFFOLD guard, 2026-11-02. 52_train_frame_regression ships as a
         # structural scaffold; the engine (this file) is still classification-
         # only. To wire regression end to end, port from utils_instance_train
-        # (chapter 3) per the plan at the bottom of
-        # 42_train_frame_regression.py and remove this guard + the twin in
+        # (chapter 4) per the plan at the bottom of
+        # 52_train_frame_regression.py and remove this guard + the twin in
         # validate_config().
         raise NotImplementedError(
             f"utils_frame_train supports only task_type='classification', got {task_type!r}. "
-            "42_train_frame_regression is a scaffold — see its 'What to wire in the engine' "
+            "52_train_frame_regression is a scaffold — see its 'What to wire in the engine' "
             "section (dated 2026-11-02) for the port plan from utils_instance_train.py."
         )
     cfg = Config(task_type=task_type)
@@ -379,7 +379,7 @@ def validate_config(cfg: Config) -> None:
         # SCAFFOLD guard, 2026-11-02. Twin of the load_config guard above.
         raise NotImplementedError(
             f"validate_config supports task_type='classification' only, got {cfg.task_type!r}. "
-            "See 42_train_frame_regression.py :: 'What to wire in the engine' for the port plan."
+            "See 52_train_frame_regression.py :: 'What to wire in the engine' for the port plan."
         )
     if not cfg.label_order or len(cfg.label_order) < 2:
         raise ValueError("label_order must have ≥2 entries. Binary = [0, 1].")
@@ -1450,7 +1450,7 @@ def _tee_stdout(run_dir: Path) -> None:
     forked dataloader workers and deadlocks training. For a run.log, tee at
     the shell instead:
 
-        python run_41_classification.py --use_gpu 2>&1 | tee runs/<...>/run.log
+        python run_51_classification.py --use_gpu 2>&1 | tee runs/<...>/run.log
 
     (A fork-safe, buffer-safe in-process alternative is on the backlog.)
     """

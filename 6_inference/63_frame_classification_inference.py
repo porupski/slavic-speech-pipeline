@@ -12,7 +12,7 @@
 # lives in `utils_frame_infer.py`. Each cell here imports just what it needs.
 #
 # Any HF repo or local checkpoint that implements
-# `AutoModelForAudioFrameClassification` works; chapter-3 utterance-level
+# `AutoModelForAudioFrameClassification` works; chapter-4 utterance-level
 # checkpoints will NOT work here (different head).
 #
 # Prefer hands-off? `run_63_frame_classification_inference.py` drives the same
@@ -24,7 +24,7 @@
 # One visible block does three things **before** anything heavy loads:
 #
 # 1. Locates this chapter's folder and `6_config.json`.
-# 2. Runs the **GPU guard** — same rule as chapter 3: `CUDA_VISIBLE_DEVICES`
+# 2. Runs the **GPU guard** — same rule as chapter 4: `CUDA_VISIBLE_DEVICES`
 #    must be set before torch's first CUDA touch, and `utils_frame_infer`
 #    imports torch at module level.
 # 3. Reserves the project GPU (from config) or falls back to CPU. Type `y` for

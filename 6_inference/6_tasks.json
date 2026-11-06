@@ -56,7 +56,7 @@
     },
 
     "instance_classification": {
-        "_readme": "SCAFFOLD (2026-11-02) — populated when 61_instance_classification_inference-WIP is wired. Needs utils_instance_infer.py (mirror chapter 3's utils_instance_train.py). First candidates: gender, FP-presence, speaker-id."
+        "_readme": "SCAFFOLD (2026-11-02) — populated when 61_instance_classification_inference-WIP is wired. Needs utils_instance_infer.py (mirror chapter 4's utils_instance_train.py). First candidates: gender, FP-presence, speaker-id."
     },
 
     "instance_regression": {

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""43_run_task_list — chapter-4 sequential task-list runner.
+"""53_run_task_list — chapter-5 sequential task-list runner.
 
 Walks the ``TASKS`` list below one by one. Each task is a full
 phase-1 (DEV) → phase-2 (TEST) frame-classification run through the same
-engine as ``run_41_classification``. Aggregates the best DEV + best TEST
+engine as ``run_51_classification``. Aggregates the best DEV + best TEST
 metrics into a CSV, plots a bar chart comparing macro-F1 and positive-class F1
 across tasks, and lets you fire-and-forget overnight. A crash in one task does
 not kill the queue — the error is written into that task's CSV row and the
@@ -20,15 +20,15 @@ Aggregate summary lands at ``<list_root>/task_list_summary.csv`` +
 list for provenance.
 
 Usage:
-  python -u 43_run_task_list.py --use_gpu
-  python -u 43_run_task_list.py --use_gpu --dry_run          # print tasks, exit
-  python -u 43_run_task_list.py --use_gpu --limit 2          # first 2 tasks only
-  python -u 43_run_task_list.py --use_gpu --list_dir ch4_demo
+  python -u 53_run_task_list.py --use_gpu
+  python -u 53_run_task_list.py --use_gpu --dry_run          # print tasks, exit
+  python -u 53_run_task_list.py --use_gpu --limit 2          # first 2 tasks only
+  python -u 53_run_task_list.py --use_gpu --list_dir ch4_demo
 
   # With tee — always use -u to prevent 8 KB stdout block-buffer delay:
-  python -u 43_run_task_list.py --use_gpu 2>&1 | tee ../runs/43_task_list_$(date +%Y-%m-%d_%H%M%S).log
+  python -u 53_run_task_list.py --use_gpu 2>&1 | tee ../runs/43_task_list_$(date +%Y-%m-%d_%H%M%S).log
 
-Base config is ``4_config.json`` under the chosen ``--mode`` (default: demo);
+Base config is ``5_config.json`` under the chosen ``--mode`` (default: demo);
 per-task overrides layer on top. Each task may override ``target`` to switch
 datasets; ``resolve_target`` is re-run automatically after any target override.
 """
@@ -46,7 +46,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-TASK_TYPE = "classification"   # ch4 engine is classification-only for now
+TASK_TYPE = "classification"   # ch5 engine is classification-only for now
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -154,8 +154,8 @@ def parse_args() -> argparse.Namespace:
         description=__doc__.splitlines()[0],
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--config", "-c", default=str(HERE / "4_config.json"),
-                   help="path to 4_config.json (base layer)")
+    p.add_argument("--config", "-c", default=str(HERE / "5_config.json"),
+                   help="path to 5_config.json (base layer)")
     p.add_argument("--mode", "-m", choices=["test", "demo", "full"], default="demo",
                    help="base run_mode; task overrides layer on top")
     p.add_argument("--use_gpu", action="store_true",
@@ -204,7 +204,7 @@ def run_one_task(task_idx: int, task: dict, args, list_root: "Path") -> dict:
     })
     t0 = time.time()
     try:
-        # Base config (4_config.json + mode overrides). Cell overrides layer on top.
+        # Base config (5_config.json + mode overrides). Cell overrides layer on top.
         cfg, _ = load_config(args.config, task_type=TASK_TYPE, run_mode=args.mode)
         overrides = {k: v for k, v in task.items() if k != "label"}
         from dataclasses import fields as _fields
@@ -330,7 +330,7 @@ def make_comparison_plot(csv_path: Path, out_path: Path) -> None:
     ax.set_yticks(y); ax.set_yticklabels(labels, fontsize=9)
     ax.set_xlabel("score (best TEST epoch)")
     ax.set_xlim(0, 1.05)
-    ax.set_title("Task list — chapter-4 frame classification")
+    ax.set_title("Task list — chapter-5 frame classification")
     ax.legend(loc="lower right")
     plt.tight_layout()
     fig.savefig(out_path, dpi=120, bbox_inches="tight"); plt.close(fig)

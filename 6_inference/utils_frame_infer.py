@@ -14,7 +14,7 @@ identical predicted class along the frame axis collapse into events; the events
 are then filtered with the drop_short / drop_initial / drop_final postproc rules
 documented on the FP-BERT model card.
 
-IMPORT-ORDER CONTRACT (same as chapter 3 — read before importing):
+IMPORT-ORDER CONTRACT (same as chapter 4 — read before importing):
   1. The GPU guard must run BEFORE this module is imported. This module imports
      torch at the top, and ``CUDA_VISIBLE_DEVICES`` only takes effect if set
      before torch's first CUDA touch. Consumers keep a tiny visible guard block

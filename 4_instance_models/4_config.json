@@ -1,6 +1,6 @@
 {
   "_readme": [
-    "Notebook and runner knobs for chapter 3. Never edit the .py; change values here.",
+    "Notebook and runner knobs for chapter 4. Never edit the .py; change values here.",
     "Layering: Config defaults -> 'shared' -> 'classification'/'regression' -> modes[run_mode].",
     "Every key must name a real Config field in utils_instance_train.py (typos are hard errors).",
     "Targets are preset names from the TARGETS registry; list them with available_targets().",
