@@ -171,13 +171,33 @@ def configure(lang: str) -> dict:
         L=L, l=low, version=v, DATASET=DATASET, OUT_DIR=OUT_DIR, WAV_DIR=WAV_DIR,
         jsonl_path=jsonl_path,
         audio_base_dir=audio_base_dir,
-        audio_index_cache=f"data/processed_jsonl/parlaspeech_{low}_{v}_audio_index.json",
-        RECIPES=build_recipes(OUT_DIR, low),
+        audio_index_cache=f"data/processed_jsonl/parlaspeech_{v}_{low}_audio_index.json",
+        RECIPES=build_recipes(OUT_DIR, low, v),
     )
     for name in cfg.recipes:
         if name not in ctx["RECIPES"]:
             raise ValueError(f"unknown recipe {name!r}. Known: {sorted(ctx['RECIPES'])}")
     return ctx
+
+
+# File-path helpers shared by every recipe. `audio_bucket` keeps cut_audio from
+# ballooning into one 700k-file folder (which crashes GUI file managers and
+# makes VS Code unusable). HR/RS pack audio as `<yt_id>/<yt_id>_<times>.flac`,
+# which already buckets cleanly; CZ/PL/SI pack as `audio/<session>_<times>.flac`,
+# which dumps everything into one folder. We fall back to the session-id prefix
+# (everything before the trailing `_<times>` in the stem) as the bucket name so
+# every corpus gets at least per-session folders.
+def audio_bucket(raw_audio: str | None, stem: str) -> str:
+    if raw_audio:
+        parts = Path(raw_audio).parts
+        # Prefer the source's parent folder when it carries semantic info,
+        # i.e. not the generic "audio/" bucket used by CZ/PL/SI.
+        if parts and parts[0] not in ("", "audio"):
+            return parts[0]
+    # Fallback for generic `audio/` layouts: split off the `_<start>-<end>` tail.
+    if "_" in stem:
+        return stem.rsplit("_", 1)[0]
+    return stem[:2] if len(stem) >= 2 else "misc"
 
 
 # %% [markdown]
@@ -188,24 +208,29 @@ def configure(lang: str) -> dict:
 # A *recipe* is an instance-shape: `(unit × cut × instance|frame)`. Multiple label
 # keys can live in one recipe — task type is a downstream parameter, not a reason
 # to split files. This mirrors the `TARGETS` dict in `utils_instance_train.py`
-# (chapter 3).
+# (chapter 4).
 #
 # `requires` gates corpus-specific tiers (e.g. `primary_stress` is HR/RS only) so a
 # recipe fails loudly on a corpus that lacks them rather than emitting garbage.
 
 # %%
-def build_recipes(OUT_DIR: str, l: str) -> dict:
+def build_recipes(OUT_DIR: str, l: str, v: str) -> dict:
+    # Output JSONLs carry the corpus version so a v3 run and a v4 run do not
+    # silently clobber each other in data/processed_jsonl/. Every downstream
+    # consumer (targets registry in 4_instance_models + 5_frame_models, the
+    # benchmark preps, inference) needs to be updated to match.
+    tag = f"parlaspeech_{v}_{l}"
     return {
         # ---- emitted here (whole utterance, no cut) -------------------------
         "utterance_instance": dict(
             unit="utterance", level="instance", cut=False, requires=(),
-            out=f"{OUT_DIR}/parlaspeech_{l}_utterance_instance.jsonl"),
+            out=f"{OUT_DIR}/{tag}_utterance_instance.jsonl"),
         "utterance_frame": dict(
             unit="utterance", level="frame", cut=False, requires=("filled_pauses",),
             label_key="filled_pause",
-            out=f"{OUT_DIR}/parlaspeech_{l}_utterance_frame.jsonl"),
+            out=f"{OUT_DIR}/{tag}_utterance_frame.jsonl"),
 
-        # ---- word-as-instance, sliced in memory by 41 (no word WAVs) --------
+        # ---- word-as-instance, sliced in memory by 51 (no word WAVs) --------
         # One record per primary-stress-annotated (multisyllabic) word. audio_path
         # is the utterance WAV; start_t/end_t mark the word's span within it, which
         # the frame trainer slices at load time. HR/RS only (needs primary_stress
@@ -214,7 +239,7 @@ def build_recipes(OUT_DIR: str, l: str) -> dict:
             unit="word", level="frame", cut=False,
             requires=("primary_stress", "words_align"),
             label_key="primary_stress",
-            out=f"{OUT_DIR}/parlaspeech_{l}_word_frame.jsonl"),
+            out=f"{OUT_DIR}/{tag}_word_frame.jsonl"),
 
         # ---- future (need cut=True via utils_audio_splitter) ----------------
         # "event_instance": one record per FP event; label = FP quality
@@ -293,13 +318,15 @@ def parse_records(ctx: dict, jsonl_path: Path) -> list[dict]:
         fps = r.get("filled_pauses")                 # None = failed; [] = none
         sent = r.get("sentiment") or {}
         raw_audio = r.get("audio")
-        file_hash = Path(raw_audio).parts[0] if raw_audio else None
         stem      = Path(raw_audio).stem if raw_audio else r["id"]
+        # file_id = the source's parent folder when it carries info (HR/RS YouTube id);
+        # otherwise fall back to the stem's session-id prefix (CZ/PL/SI pattern).
+        file_id = audio_bucket(raw_audio, stem)
         return {
             "instance_id": r["id"],
             "dataset":     DATASET,
-            "file_id":     file_hash,
-            "audio_path":  f"{WAV_DIR}/{file_hash}/{stem}.wav",
+            "file_id":     file_id,
+            "audio_path":  f"{WAV_DIR}/{file_id}/{stem}.wav",
             "speaker":     si.get("Speaker_ID", "unknown"),
             "text":        r.get("text"),
             "labels": {
@@ -444,6 +471,7 @@ def build_word_frame_rows(r, hz):
     ps_list = md.get("primary_stress")
     if not wa or not ps_list:
         return []
+    utt_text = r.get("text") or ""
     base = {k: r[k] for k in ("dataset", "file_id", "speaker", "split")}
     rows = []
     for ps in ps_list:
@@ -464,11 +492,18 @@ def build_word_frame_rows(r, hz):
             e = min(n, round((float(raw[1]) - w_s) * hz))
             for i in range(s, e):
                 labels[i] = 1
+        # Word text — v3/v4 words_align entries carry char_s/char_e offsets into
+        # the utterance text (word.get("text") is empty in v4). Slice it out.
+        word_text = word.get("text") or ""
+        if not word_text:
+            cs, ce = word.get("char_s"), word.get("char_e")
+            if cs is not None and ce is not None and utt_text:
+                word_text = utt_text[cs:ce]
         rows.append({
             **base,
             "instance_id":  f"{r['instance_id']}#w{wai}",
             "audio_path":   r["audio_path"],
-            "text":         word.get("text", ""),
+            "text":         word_text,
             "start_t":      round(w_s, 3),   # word span within the utterance WAV
             "end_t":        round(w_e, 3),
             "frame_rate_hz": hz,

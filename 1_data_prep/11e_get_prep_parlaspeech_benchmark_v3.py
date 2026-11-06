@@ -389,4 +389,4 @@ print_stage_breakdown(STAGE_TIMES)
 # The heavy alignment layers (`words`, `words_align`, `chars_align`, `primary_stress`,
 # `linguistic_annotation`, inlined TextGrids) live in the `alignments` config on HF, opt-in
 # via `load_dataset("porupski/ParlaSpeech-HR-benchmark_v3", "alignments")`. Not used here —
-# they feed future frame-stress modelling in chapter 4.
+# they feed future frame-stress modelling in chapter 5.

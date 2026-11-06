@@ -184,7 +184,10 @@
       "files": [
         {"name": "ParlaSpeech-HR.v4.0.jsonl.gz", "size_mb": 2580, "is_large": false}
       ],
-      "note": "Croatian ParlaSpeech v4.0 transcripts (JSONL only — vert.tgz is a vertical-format mirror unused by ssp). 923k sentences, 3,110 h. Pair with ParlaSpeech-HR-v4-audio."
+      "_files_optional_not_downloaded": [
+        {"name": "ParlaSpeech-HR.v4.0.vert.tgz", "size_mb": 269, "is_large": false, "_why_skipped": "vertical-format mirror of the JSONL; ssp reads JSONL only"}
+      ],
+      "note": "Croatian ParlaSpeech v4.0 transcripts (JSONL only; vert.tgz listed under _files_optional_not_downloaded for reference). 923k sentences, 3,110 h. Pair with ParlaSpeech-HR-v4-audio."
     },
 
     "ParlaSpeech-RS-v4": {
@@ -196,7 +199,10 @@
       "files": [
         {"name": "ParlaSpeech-RS.v4.0.jsonl.gz", "size_mb": 599, "is_large": false}
       ],
-      "note": "Serbian ParlaSpeech v4.0 transcripts (JSONL only). 291k sentences, 896 h. Pair with ParlaSpeech-RS-v4-audio."
+      "_files_optional_not_downloaded": [
+        {"name": "ParlaSpeech-RS.v4.0.vert.tgz", "size_mb": 76, "is_large": false, "_why_skipped": "vertical-format mirror of the JSONL; ssp reads JSONL only"}
+      ],
+      "note": "Serbian ParlaSpeech v4.0 transcripts (JSONL only; vert.tgz listed under _files_optional_not_downloaded for reference). 291k sentences, 896 h. Pair with ParlaSpeech-RS-v4-audio."
     },
 
     "ParlaSpeech-PL-v4": {
@@ -208,7 +214,10 @@
       "files": [
         {"name": "ParlaSpeech-PL.v4.0.jsonl.gz", "size_mb": 428, "is_large": false}
       ],
-      "note": "Polish ParlaSpeech v4.0 transcripts (JSONL only). 535k sentences, 1,009 h. Pair with ParlaSpeech-PL-v4-audio."
+      "_files_optional_not_downloaded": [
+        {"name": "ParlaSpeech-PL.v4.0.vert.tgz", "size_mb": 106, "is_large": false, "_why_skipped": "vertical-format mirror of the JSONL; ssp reads JSONL only"}
+      ],
+      "note": "Polish ParlaSpeech v4.0 transcripts (JSONL only; vert.tgz listed under _files_optional_not_downloaded for reference). 535k sentences, 1,009 h. Pair with ParlaSpeech-PL-v4-audio."
     },
 
     "ParlaSpeech-CZ-v4": {
@@ -220,7 +229,10 @@
       "files": [
         {"name": "ParlaSpeech-CZ.v4.0.jsonl.gz", "size_mb": 574, "is_large": false}
       ],
-      "note": "Czech ParlaSpeech v4.0 transcripts (JSONL only). 718k sentences, 1,218 h. Pair with ParlaSpeech-CZ-v4-audio."
+      "_files_optional_not_downloaded": [
+        {"name": "ParlaSpeech-CZ.v4.0.vert.tgz", "size_mb": 134, "is_large": false, "_why_skipped": "vertical-format mirror of the JSONL; ssp reads JSONL only"}
+      ],
+      "note": "Czech ParlaSpeech v4.0 transcripts (JSONL only; vert.tgz listed under _files_optional_not_downloaded for reference). 718k sentences, 1,218 h. Pair with ParlaSpeech-CZ-v4-audio."
     },
 
     "ParlaSpeech-SI-v4": {
@@ -232,7 +244,10 @@
       "files": [
         {"name": "ParlaSpeech-SI.v4.0.jsonl.gz", "size_mb": 1280, "is_large": false}
       ],
-      "note": "Slovenian ParlaSpeech v4.0 transcripts (JSONL only) — NEW in v4. 1.435M sentences, 4,080 h. Pair with ParlaSpeech-SI-v4-audio."
+      "_files_optional_not_downloaded": [
+        {"name": "ParlaSpeech-SI.v4.0.vert.tgz", "size_mb": 316, "is_large": false, "_why_skipped": "vertical-format mirror of the JSONL; ssp reads JSONL only"}
+      ],
+      "note": "Slovenian ParlaSpeech v4.0 transcripts (JSONL only; vert.tgz listed under _files_optional_not_downloaded for reference) — NEW in v4. 1.435M sentences, 4,080 h. Pair with ParlaSpeech-SI-v4-audio."
     },
 
     "ParlaSpeech-HR-v4-audio": {
