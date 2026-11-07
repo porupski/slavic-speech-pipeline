@@ -18,9 +18,9 @@
       <li><a href="#ch0">0 Env</a></li>
       <li><a href="#ch1">1 Data</a></li>
       <li><a href="#ch2">2 Analysis</a></li>
-      <li><a href="#ch3">3 Instance</a></li>
-      <li><a href="#ch4">4 Frame</a></li>
-      <li><a href="#ch5">5 TG</a></li>
+      <li><a href="#ch3">3 Annotator</a></li>
+      <li><a href="#ch4">4 Instance</a></li>
+      <li><a href="#ch5">5 Frame</a></li>
       <li><a href="#ch6">6 Inference</a></li>
       <li>
         <a class="colab-nav"
@@ -28,6 +28,16 @@
            target="_blank" rel="noopener"
            title="Open the demo in Colab">
           <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab">
+        </a>
+      </li>
+      <li>
+        <a class="github-nav"
+           href="https://github.com/porupski/slavic-speech-pipeline"
+           target="_blank" rel="noopener"
+           title="View on GitHub" aria-label="GitHub repository">
+          <svg class="github-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
         </a>
       </li>
     </ul>
@@ -54,7 +64,7 @@
 
   <main>
     <section id="intro">
-      <h1>Under the Hood of ssp
+      <h1>Under the Hood of <img class="inline-logo" src="img/ssp_logo_v0.png" alt="ssp">
         <span class="subtitle">a chapter-by-chapter walkthrough of the toolkit end to end</span>
       </h1>
 
@@ -83,12 +93,161 @@
         </div>
       </div>
 
-      <h2>Three run modes, one config</h2>
+      <h2>What a speech encoder is</h2>
       <p>
-      Every training and inference entry point reads one of three run modes
-      from <code>&lt;N&gt;_config.json</code> (or <code>6_tasks.json</code> in
-      chapter 6). Start with <code>test</code> every time. It proves the
-      plumbing before you commit hardware.
+      A speech encoder is a neural network that reads raw audio and returns a
+      stack of vectors — one vector per short time step. Nothing above it sees
+      the waveform directly. Everything above it sees the encoder's output.
+      In <code>ssp</code> the encoder runs at <strong>50 Hz</strong>, so one
+      second of speech becomes 50 vectors. A classifier head reads those
+      vectors and gives you one answer per clip (chapter 4) or one answer per
+      frame (chapter 5).
+      </p>
+      <p>
+      The encoder learns to produce those vectors in two stages. First is
+      <strong>self-supervised pre-training</strong> on a very large pile of
+      unlabeled audio. The network gets slices of audio with small parts
+      masked out and must guess what was hidden. After enough of that, the
+      vectors it emits carry phonetic content, speaker identity, prosody,
+      and a lot of language-level structure — even though no one ever told
+      the network what any of these are. This is where the big encoders come
+      from: <code>wav2vec2</code>, <code>wav2vec2-XLS-R</code>, and
+      <code>w2v-BERT 2.0</code> all follow this recipe at different scales
+      and across different mixes of languages.
+      </p>
+      <p>
+      Second is <strong>fine-tuning</strong>. The pre-trained encoder gets a
+      small head on top — a linear layer for classification or a scalar head
+      for regression — and the whole stack is trained end to end on a
+      labeled Slavic corpus. The pre-trained encoder does most of the heavy
+      lifting; the head just reads it out. This is what every training entry
+      point in <code>ssp</code> is doing. Chapters 4 and 5 both fine-tune a
+      base encoder: chapter 4 pools the 50 Hz frames into one vector per
+      clip and reads out a single label; chapter 5 keeps the full frame
+      sequence and reads out one label per frame.
+      </p>
+      <p>
+      The toolkit ships with four pre-trained encoders in reach. Facebook's
+      <code>wav2vec2-base</code> is small, fast, and good for fit-check
+      experiments. <code>wav2vec2-XLS-R-300m</code> is bigger and multilingual
+      — the right default when you want a serious baseline. Meta's
+      <code>w2v-BERT 2.0</code> is the current strongest encoder we support
+      for Slavic frame work. <code>classla</code>'s Croatian/Slovenian
+      <code>w2v-BERT</code> fine-tunes give you a warm start for filled-pause
+      and primary-stress tasks. Each chapter lists which of these it
+      recommends under its <code>supported_models.md</code>.
+      </p>
+
+      <figure class="flowchart">
+        <img src="img/schema_pipeline_v2.png" alt="End-to-end flowchart of the slavic-speech-pipeline. With the artistic help of Anamarija Kolar Matovina.">
+        <figcaption>Flowchart — hand-drawn conceptualization of the pipeline as respective chapter stages. With the artistic help of Anamarija Kolar Matovina.</figcaption>
+      </figure>
+
+      <h2>Get started</h2>
+      <div class="audience-cards">
+
+        <details class="audience-card">
+          <summary>
+            <span class="audience-label">Just Browsing</span>
+          </summary>
+          <div class="audience-body">
+            <p>Browse as much as you like. If the research or the approach caught your interest, that is great! Enjoy your stay.</p>
+          </div>
+        </details>
+
+        <details class="audience-card">
+          <summary>
+            <span class="audience-label">Beginner &amp; Demo</span>
+          </summary>
+          <div class="audience-body">
+            <p>Start with the interactive demo. No local setup required. Open the notebook, select a free GPU runtime, and run all cells — you get a trained classification model in one session. Skip chapters 0–1 entirely.</p>
+            <p>The demo covers <strong>speaker gender (binary)</strong> and <strong>speaker identification (50 speakers)</strong>:</p>
+            <div class="preface-colab">
+              <a href="https://colab.research.google.com/github/porupski/slavic-speech-pipeline/blob/main/colab_demo/ssp-colab_demo-speaker_id.ipynb"
+                 target="_blank" rel="noopener">
+                <img class="colab-badge-inline" src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab">
+              </a>
+            </div>
+            <p>Frame classification demo — coming soon (WIP).</p>
+          </div>
+        </details>
+
+        <details class="audience-card">
+          <summary>
+            <span class="audience-label">Intermediate</span>
+          </summary>
+          <div class="audience-body">
+            <p class="card-first-links"><a href="https://github.com/porupski/slavic-speech-pipeline" target="_blank" rel="noopener">GitHub repo</a></p>
+            <p>Walk the notebooks step by step. Understand how the pipeline works, edit the config, and set up your own task list with models from the ParlaSpeech benchmark or ParlaSpeech v4.</p>
+            <ul class="file-list">
+              <li><span class="ch-label">Ch 0</span> <code>0_env_setup/</code> — environment setup, start here</li>
+              <li><span class="ch-label">Ch 1</span>
+                <ul>
+                  <li><code>1_data_prep/10_download_data_clarin.ipynb</code></li>
+                  <li><code>1_data_prep/11c_prep_parlaspeech.ipynb</code></li>
+                  <li><code>1_data_prep/11e_get_prep_parlaspeech_benchmark_v3.ipynb</code></li>
+                </ul>
+              </li>
+              <li><span class="ch-label">Ch 2</span> WIP</li>
+              <li><span class="ch-label">Ch 4</span>
+                <ul>
+                  <li><code>4_instance_models/41_train_instance_classification.ipynb</code></li>
+                  <li><code>4_instance_models/42_train_instance_regression.ipynb</code></li>
+                </ul>
+              </li>
+              <li><span class="ch-label">Ch 5</span> <code>5_frame_models/51_train_frame_classification.ipynb</code></li>
+              <li><span class="ch-label">Ch 6</span> WIP</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="audience-card">
+          <summary>
+            <span class="audience-label">Advanced</span>
+          </summary>
+          <div class="audience-body">
+            <p class="card-first-links"><a href="https://github.com/porupski/slavic-speech-pipeline" target="_blank" rel="noopener">GitHub repo</a></p>
+            <p>Add custom datasets, register your own models, and run everything headless from the command line.</p>
+
+            <p><strong>Add custom hosted data (Ch 1):</strong></p>
+            <ul class="file-list">
+              <li><code>1_data_prep/10a_dataset_registry.json</code></li>
+              <li><code>1_data_prep/10_download_data_clarin.py</code></li>
+              <li><code>1_data_prep/11c_prep_parlaspeech.py</code></li>
+              <li><code>1_data_prep/11e_get_prep_parlaspeech_benchmark_v3.py</code></li>
+            </ul>
+
+            <p>Ch 2 — WIP. Ch 3 — WIP but functional for filled pauses and primary stress; more involved to use at this stage.</p>
+
+            <p><strong>Add custom models (Ch 4):</strong></p>
+            <ul class="file-list">
+              <li><code>4_instance_models/supported_models.md</code></li>
+            </ul>
+
+            <p><strong>Headless runners (Ch 4):</strong></p>
+            <ul class="file-list">
+              <li><code>4_instance_models/run_41_classification.py</code></li>
+              <li><code>4_instance_models/run_42_regression.py</code></li>
+              <li><code>4_instance_models/43_run_task_list.py</code></li>
+            </ul>
+
+            <p><strong>Frame models (Ch 5 — WIP but functional):</strong></p>
+            <ul class="file-list">
+              <li><code>5_frame_models/supported_models.md</code></li>
+              <li><code>5_frame_models/run_51_classification.py</code></li>
+              <li><code>5_frame_models/53_run_task_list.py</code></li>
+            </ul>
+          </div>
+        </details>
+
+      </div>
+
+      <h3>Three run modes — test / demo / full</h3>
+      <p>
+        Every training and inference entry point reads one of three run modes
+        from <code>&lt;N&gt;_config.json</code> (or <code>6_tasks.json</code> in
+        chapter 6). Start with <code>test</code> every time. It proves the
+        plumbing before you commit hardware.
       </p>
       <div class="modes">
         <div class="mode">
@@ -107,12 +266,11 @@
       <div class="tweak">
         <strong>Where to tweak.</strong> Chapter-level knobs live in
         <code>&lt;chapter&gt;/&lt;N&gt;_config.json</code> (e.g.
-        <code>3_instance_models/3_config.json</code>). Per-mode overrides
+        <code>4_instance_models/4_config.json</code>). Per-mode overrides
         (worker counts, model name, caps) go inside the mode block, not in
         <code>shared</code>. Chapter 6 adds <code>6_tasks.json</code>, which
         picks which model trace to load for each task string.
       </div>
-
       <div class="hardware-note">
         <strong>Hardware for the timings below.</strong>
         One NVIDIA A100-PCIE 40 GB on an AMD EPYC 7742 64-core host. Your
@@ -123,20 +281,22 @@
 
     <section id="chapters-walkthrough">
       <h2>The chapters</h2>
-      <p>Click any chapter to expand it. The nav tracks what you're reading.</p>
+      <p style="margin-top:0.4rem;color:var(--fg-muted);font-size:0.9rem;">Expand any chapter to read the full walkthrough. The nav tracks what you are reading.</p>
 
       <!-- ──────────────────── CHAPTER 0 ──────────────────── -->
       <details id="ch0" class="walkthrough-chapter">
         <summary>
-          <span class="chap-num-big">0</span>
-          <div class="chap-head-col">
+          <div class="chap-id">
+            <span class="num">0</span>
+            <img class="chap-icon" src="img/chapter_imgs/0_env_icon.png" alt="" width="200" height="200" loading="lazy">
+          </div>
+          <div class="body">
+            <span class="kicker">ENV</span>
             <div class="head">
-            <h2>Install the environment</h2>
+              <span class="title">🧰 Install the environment</span>
+              <span class="badge live">live</span>
             </div>
-            <div class="chap-meta">
-            <span class="icon">🧰</span>
-            <span class="chap-num">CHAPTER 0 · ENV</span>
-            </div>
+            <p>Two Python environments with pinned versions — a CPU one for data chapters, a CUDA one for model chapters.</p>
           </div>
         </summary>
         <div class="chap-body">
@@ -164,21 +324,28 @@ python -c "import torch; print(torch.__version__, torch.cuda.is_available())"</c
             <img src="img/guide_imgs/0ssp_0env_made.png" alt="Terminal output after a successful env build">
             <figcaption>End of a successful <code>setup_env_cuda.sh</code> run.</figcaption>
           </figure>
+
+          <div class="hiccup">
+            <strong>Windows (WIP).</strong> The setup scripts are <code>bash</code> scripts. Run them under <strong>Git Bash</strong> (from Git for Windows), not PowerShell or CMD. Before running the script you need to: (1) enable long file paths in the registry (<code>LongPathsEnabled = 1</code>), (2) add Miniforge to your Git Bash <code>PATH</code> via <code>~/.bashrc</code>, and (3) run Git Bash as Administrator. Full steps in <code>0_env_setup/README.md § Windows users</code>. Developed and tested on Linux only — treat this as a community-tested starting point, not official support.
+          </div>
         </div>
       </details>
 
       <!-- ──────────────────── CHAPTER 1 ──────────────────── -->
       <details id="ch1" class="walkthrough-chapter">
         <summary>
-          <span class="chap-num-big">1</span>
-          <div class="chap-head-col">
+          <div class="chap-id">
+            <span class="num">1</span>
+            <img class="chap-icon" src="img/chapter_imgs/1_data_icon.png" alt="" width="200" height="200" loading="lazy">
+          </div>
+          <div class="body">
+            <span class="kicker">DATA PREP</span>
             <div class="head">
-            <h2>Fetch and prepare the corpora</h2>
+              <span class="title">📥 Fetch and tidy the corpora</span>
+              <span class="badge live">live</span>
+              <span class="badge corpus">PSv4</span>
             </div>
-            <div class="chap-meta">
-            <span class="icon">📥</span>
-            <span class="chap-num">CHAPTER 1 · DATA PREP</span>
-            </div>
+            <p>Pull the Slavic speech corpora and convert each one to a canonical JSONL manifest the rest of the toolkit reads.</p>
           </div>
         </summary>
         <div class="chap-body">
@@ -295,16 +462,17 @@ jupyter lab 1_data_prep/11c_prep_parlaspeech.ipynb      # prep step</code></pre>
       <!-- ──────────────────── CHAPTER 2 ──────────────────── -->
       <details id="ch2" class="walkthrough-chapter">
         <summary>
-          <span class="chap-num-big">2</span>
-          <div class="chap-head-col">
+          <div class="chap-id">
+            <span class="num">2</span>
+            <img class="chap-icon" src="img/chapter_imgs/2_analysis_icon.png" alt="" width="200" height="200" loading="lazy">
+          </div>
+          <div class="body">
+            <span class="kicker">ANALYSIS</span>
             <div class="head">
-            <h2>Look at what you got</h2>
-            <span class="tag wip">instance only</span>
+              <span class="title">🔍 Look at what you got</span>
+              <span class="badge wip">wip</span>
             </div>
-            <div class="chap-meta">
-            <span class="icon">🔍</span>
-            <span class="chap-num">CHAPTER 2 · ANALYSIS</span>
-            </div>
+            <p>Verify the data is correct.</p>
           </div>
         </summary>
         <div class="chap-body">
@@ -329,18 +497,68 @@ jupyter lab 1_data_prep/11c_prep_parlaspeech.ipynb      # prep step</code></pre>
         </div>
       </details>
 
-      <!-- ──────────────────── CHAPTER 3 ──────────────────── -->
+      <!-- ──────────────────── CHAPTER 3 — ANNOTATOR ──────────────────── -->
       <details id="ch3" class="walkthrough-chapter">
         <summary>
-          <span class="chap-num-big">3</span>
-          <div class="chap-head-col">
+          <div class="chap-id">
+            <span class="num">3</span>
+            <img class="chap-icon" src="img/chapter_imgs/3_annotator_icon.png" alt="" width="200" height="200" loading="lazy">
+          </div>
+          <div class="body">
+            <span class="kicker">ANNOTATOR</span>
             <div class="head">
-            <h2>One answer per clip</h2>
+              <span class="title">📝 The human annotator in the loop</span>
+              <span class="badge beta">beta</span>
             </div>
-            <div class="chap-meta">
-            <span class="icon">🎙️</span>
-            <span class="chap-num">CHAPTER 3 · INSTANCE MODELS</span>
+            <p>Mint Praat TextGrids from ParlaSpeech utterances for a human annotator, then read the annotated TextGrids back into canonical event or word-frame JSONL.</p>
+          </div>
+        </summary>
+        <div class="chap-body">
+          <p class="goal">Export clips to TextGrid, hand them to a human, read the annotated TextGrids back into canonical JSONL.</p>
+
+          <div class="tweak">
+            <strong>Where to tweak.</strong> The TG I/O is CPU-only. No
+            chapter config — paths live at the top of each notebook. For
+            stats on the annotation batch, see
+            <code>32_annotation_stats.ipynb</code>.
+          </div>
+
+          <h4>Command — mint a batch</h4>
+          <pre><code>jupyter lab 3_annotator/31b_mint_fp_annotation_set.ipynb</code></pre>
+          <p>
+          Pick a source JSONL and a batch size at the top of the notebook. The
+          output is one TextGrid per clip plus a <code>batch.json</code> that
+          tracks which clips belong to which annotator.
+          </p>
+
+          <h4>Command — read annotated TextGrids back</h4>
+          <pre><code>python 3_annotator/33_tg_to_jsonl.py              # filled-pause annotations → event-instance JSONL (chapter 4)
+python 3_annotator/34_stress_tg_to_jsonl.py       # primary-stress annotations → word-frame JSONL (chapter 5)</code></pre>
+          <p>
+          Each script walks the TextGrid folder and emits a canonical JSONL
+          that the training chapters can read. Filled-pause annotations feed
+          the instance task in chapter 4; primary-stress annotations feed the
+          frame task in chapter 5.
+          </p>
+
+          <div class="screenshot">[ screenshot slot — minted TG opened in Praat ]</div>
+        </div>
+      </details>
+
+      <!-- ──────────────────── CHAPTER 4 — INSTANCE MODELS ──────────────────── -->
+      <details id="ch4" class="walkthrough-chapter">
+        <summary>
+          <div class="chap-id">
+            <span class="num">4</span>
+            <img class="chap-icon" src="img/chapter_imgs/4_instance_icon.png" alt="" width="200" height="200" loading="lazy">
+          </div>
+          <div class="body">
+            <span class="kicker">INSTANCE MODELS</span>
+            <div class="head">
+              <span class="title">🎙️ One answer per clip</span>
+              <span class="badge live">live</span>
             </div>
+            <p>Train a model to answer one question about a whole clip — speaker gender, speaker age, speaker-id, or filled-pause presence.</p>
           </div>
         </summary>
         <div class="chap-body">
@@ -348,12 +566,12 @@ jupyter lab 1_data_prep/11c_prep_parlaspeech.ipynb      # prep step</code></pre>
 
           <div class="tweak">
             <strong>Where to tweak.</strong> Everything is in
-            <code>3_instance_models/3_config.json</code> — <code>run_mode</code>
+            <code>4_instance_models/4_config.json</code> — <code>run_mode</code>
             at the top, per-mode overrides in <code>modes.{test,demo,full}</code>,
             <code>classification.target</code> / <code>regression.target</code>
             to point at a different JSONL. Comparison runs live in the
             <code>TASKS</code> list at the top of
-            <code>33_run_task_list.py</code>.
+            <code>43_run_task_list.py</code>.
           </div>
 
           <h4>Step 1 — run the shipped test</h4>
@@ -362,16 +580,16 @@ jupyter lab 1_data_prep/11c_prep_parlaspeech.ipynb      # prep step</code></pre>
           the notebook (or run the headless entry point) and run everything.
           </p>
           <pre><code>mamba activate ssp-cuda
-jupyter lab 3_instance_models/31_train_instance_classification.ipynb
+jupyter lab 4_instance_models/41_train_instance_classification.ipynb
 # or headless:
-python 3_instance_models/run_31_classification.py</code></pre>
+python 4_instance_models/run_41_classification.py</code></pre>
           <p>
           The first thing you see is the GPU guard — it holds the reserved GPU
           for the whole run so the OS cannot park a stray process on it.
           </p>
 
           <figure class="guide-img">
-            <img src="img/guide_imgs/3ssp_3_gpu_guard.png" alt="GPU-guard notice at the top of the run">
+            <img src="img/guide_imgs/4ssp_4_gpu_guard.png" alt="GPU-guard notice at the top of the run">
             <figcaption>GPU guard — reserves the device for the run.</figcaption>
           </figure>
 
@@ -382,13 +600,13 @@ python 3_instance_models/run_31_classification.py</code></pre>
 
           <h4>Step 2 — promote to demo</h4>
           <p>
-          In <code>3_instance_models/3_config.json</code>, change
+          In <code>4_instance_models/4_config.json</code>, change
           <code>run_mode</code> from <code>"test"</code> to <code>"demo"</code>.
           Everything else stays. Re-run the same command.
           </p>
 
           <figure class="guide-img">
-            <img src="img/guide_imgs/3ssp_3_config-demo.png" alt="3_config.json with run_mode flipped from test to demo">
+            <img src="img/guide_imgs/4ssp_4_config-demo.png" alt="4_config.json with run_mode flipped from test to demo">
             <figcaption><code>run_mode</code> flipped from <code>"test"</code> to <code>"demo"</code>. One line changed.</figcaption>
           </figure>
 
@@ -399,23 +617,23 @@ python 3_instance_models/run_31_classification.py</code></pre>
           </p>
 
           <figure class="guide-img">
-            <img src="img/guide_imgs/3ssp_3_result_gender.png" alt="Gender confusion matrix on TEST">
+            <img src="img/guide_imgs/4ssp_4_result_gender.png" alt="Gender confusion matrix on TEST">
             <figcaption>Phase-2 TEST — gender confusion matrix.</figcaption>
           </figure>
 
           <h4>Step 3 — the full comparison via the task list</h4>
           <p>
-          <code>33_run_task_list.py</code> ships a ready-made 8-task queue:
+          <code>43_run_task_list.py</code> ships a ready-made 8-task queue:
           <strong>2 classification tasks × 2 encoders</strong> (gender +
           speaker-ID on wav2vec2-base and xls-r-300m) and
           <strong>2 regression tasks × 2 encoders</strong> (age + orientation on
           the same two encoders). Edit <code>TASKS</code> at the top of the
           file to change the queue.
           </p>
-          <pre><code>cd 3_instance_models
+          <pre><code>cd 4_instance_models
 mkdir -p ../runs
-python 33_run_task_list.py --use_gpu 2>&amp;1 \
-  | tee ../runs/33_task_list_$(date +%Y-%m-%d_%H%M%S).log</code></pre>
+python 43_run_task_list.py --use_gpu 2>&amp;1 \
+  | tee ../runs/43_task_list_$(date +%Y-%m-%d_%H%M%S).log</code></pre>
           <p>Tmux it and walk away.</p>
 
           <details class="detail-box">
@@ -442,45 +660,76 @@ python 33_run_task_list.py --use_gpu 2>&amp;1 \
           </details>
 
           <h4>At-a-glance — classification (2 × 2)</h4>
-          <p>Same 10-epoch demo budget, same batch size, same ParlaSpeech-HR benchmark v3. w2v2-base runs at lr 1e-5, xls-r-300m at lr 3e-5 (larger model, higher LR).</p>
+          <p>Same 10-epoch demo budget, same batch size, same ParlaSpeech-HR benchmark v3. w2v2-base runs at lr 1e-5, xls-r-300m at lr 3e-5 (larger model, higher LR). Numbers below are TEST, read at the best phase-2 epoch.</p>
 
+          <!-- Classification pair 1 — gender -->
+          <h5>Gender · 2-class</h5>
           <table class="guide-table">
             <thead>
               <tr>
-                <th>Task</th>
                 <th>Encoder</th>
                 <th class="num">TEST acc</th>
                 <th class="num">TEST macro-F1</th>
+                <th class="num">Best epoch</th>
                 <th class="num">Wall-clock</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>Gender (2-class)</td>
                 <td>wav2vec2-base</td>
                 <td class="num">0.993</td>
                 <td class="num">0.992</td>
-                <td class="num">~15 min</td>
+                <td class="num">5 / 10</td>
+                <td class="num">~13 min</td>
               </tr>
               <tr>
-                <td>Gender (2-class)</td>
                 <td>xls-r-300m</td>
                 <td class="num">1.000</td>
                 <td class="num">1.000</td>
-                <td class="num">~25 min</td>
+                <td class="num">7 / 10</td>
+                <td class="num">~23 min</td>
               </tr>
+            </tbody>
+          </table>
+
+          <div class="cm-grid">
+            <figure>
+              <img src="img/guide_imgs/ch4_run_task_list/gender_w2v2-base_lr1e5__confusion_matrix_test.png"
+                   alt="Gender CM, wav2vec2-base · acc 0.993 · F1 0.992">
+              <figcaption>Gender · wav2vec2-base · <span class="result">F1 0.992</span></figcaption>
+            </figure>
+            <figure>
+              <img src="img/guide_imgs/ch4_run_task_list/gender_xls-r-300m_lr3e5__confusion_matrix_test.png"
+                   alt="Gender CM, xls-r-300m · acc 1.000 · F1 1.000">
+              <figcaption>Gender · xls-r-300m · <span class="result">F1 1.000</span></figcaption>
+            </figure>
+          </div>
+
+          <!-- Classification pair 2 — speaker-id -->
+          <h5>Speaker-ID · 50 classes</h5>
+          <table class="guide-table">
+            <thead>
               <tr>
-                <td>Speaker-ID (50-class)</td>
+                <th>Encoder</th>
+                <th class="num">TEST acc</th>
+                <th class="num">TEST macro-F1</th>
+                <th class="num">Best epoch</th>
+                <th class="num">Wall-clock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
                 <td>wav2vec2-base</td>
                 <td class="num">0.990</td>
                 <td class="num">0.990</td>
-                <td class="num">~25 min</td>
+                <td class="num">6 / 10</td>
+                <td class="num">~26 min</td>
               </tr>
               <tr>
-                <td>Speaker-ID (50-class)</td>
                 <td>xls-r-300m</td>
                 <td class="num">0.964</td>
                 <td class="num">0.964</td>
+                <td class="num">8 / 10</td>
                 <td class="num">~45 min</td>
               </tr>
             </tbody>
@@ -488,222 +737,105 @@ python 33_run_task_list.py --use_gpu 2>&amp;1 \
 
           <div class="cm-grid">
             <figure>
-              <img src="img/guide_imgs/ch3_run_task_list/confusion_matrix_test-gender_base.png"
-                   alt="Gender CM, wav2vec2-base · acc 0.993 · F1 0.992">
-              <figcaption>Gender · wav2vec2-base · <span class="result">F1 0.992</span></figcaption>
-            </figure>
-            <figure>
-              <img src="img/guide_imgs/ch3_run_task_list/confusion_matrix_test-gender_xls.png"
-                   alt="Gender CM, xls-r-300m · acc 1.000 · F1 1.000">
-              <figcaption>Gender · xls-r-300m · <span class="result">F1 1.000</span></figcaption>
-            </figure>
-            <figure>
-              <img src="img/guide_imgs/ch3_run_task_list/confusion_matrix_test-speaker_base.png"
+              <img src="img/guide_imgs/ch4_run_task_list/speakerid_w2v2-base_lr1e5__confusion_matrix_test.png"
                    alt="Speaker-ID CM, wav2vec2-base · acc 0.990 · F1 0.990">
               <figcaption>Speaker-ID · wav2vec2-base · <span class="result">F1 0.990</span></figcaption>
             </figure>
             <figure>
-              <img src="img/guide_imgs/ch3_run_task_list/confusion_matrix_test-speaker_xls.png"
+              <img src="img/guide_imgs/ch4_run_task_list/speakerid_xls-r-300m_lr3e5__confusion_matrix_test.png"
                    alt="Speaker-ID CM, xls-r-300m · acc 0.964 · F1 0.964">
               <figcaption>Speaker-ID · xls-r-300m · <span class="result">F1 0.964</span></figcaption>
             </figure>
           </div>
 
           <h4>At-a-glance — regression (2 × 2)</h4>
-          <p>Same four conditions on continuous targets. Spearman ρ is the selection metric (higher is better). MAE is in real units (years for age, Likert units for orientation).</p>
+          <p>Same four conditions on continuous targets. Spearman ρ is the selection metric (higher is better).</p>
 
+          <!-- Regression pair 1 — age -->
+          <h5>Age · continuous (years)</h5>
           <table class="guide-table">
             <thead>
               <tr>
-                <th>Task</th>
                 <th>Encoder</th>
                 <th class="num">TEST Spearman ρ</th>
-                <th class="num">TEST MAE</th>
+                <th class="num">Best epoch</th>
                 <th class="num">Wall-clock</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>Age</td>
                 <td>wav2vec2-base</td>
                 <td class="num">0.733</td>
-                <td class="num">7.16 yr</td>
-                <td class="num">~10 min</td>
+                <td class="num">2 / 10</td>
+                <td class="num">~8 min</td>
               </tr>
               <tr>
-                <td>Age</td>
                 <td>xls-r-300m</td>
                 <td class="num">0.775</td>
-                <td class="num">6.39 yr</td>
-                <td class="num">~15 min</td>
-              </tr>
-              <tr>
-                <td>Orientation</td>
-                <td>wav2vec2-base</td>
-                <td class="num">0.440</td>
-                <td class="num">0.934</td>
-                <td class="num">~15 min</td>
-              </tr>
-              <tr>
-                <td>Orientation</td>
-                <td>xls-r-300m</td>
-                <td class="num">0.345</td>
-                <td class="num">1.145</td>
-                <td class="num">~25 min</td>
+                <td class="num">9 / 10</td>
+                <td class="num">~17 min</td>
               </tr>
             </tbody>
           </table>
 
           <div class="cm-grid">
             <figure>
-              <img src="img/guide_imgs/ch3_run_task_list/scatter_plot-age_base.png"
-                   alt="Age scatter, wav2vec2-base · Spearman 0.733">
+              <img src="img/guide_imgs/ch4_run_task_list/age_w2v2-base_lr1e5__scatter_distribution_test.png"
+                   alt="Age scatter + distribution, wav2vec2-base · ρ 0.733">
               <figcaption>Age · wav2vec2-base · <span class="result">ρ 0.733</span></figcaption>
             </figure>
             <figure>
-              <img src="img/guide_imgs/ch3_run_task_list/scatter_plot-age_xls.png"
-                   alt="Age scatter, xls-r-300m · Spearman 0.775">
+              <img src="img/guide_imgs/ch4_run_task_list/age_xls-r-300m_lr3e5__scatter_distribution_test.png"
+                   alt="Age scatter + distribution, xls-r-300m · ρ 0.775">
               <figcaption>Age · xls-r-300m · <span class="result">ρ 0.775</span></figcaption>
             </figure>
+          </div>
+
+          <!-- Regression pair 2 — orientation -->
+          <h5>Orientation · Likert (7-point)</h5>
+          <table class="guide-table">
+            <thead>
+              <tr>
+                <th>Encoder</th>
+                <th class="num">TEST Spearman ρ</th>
+                <th class="num">Best epoch</th>
+                <th class="num">Wall-clock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>wav2vec2-base</td>
+                <td class="num">0.440</td>
+                <td class="num">5 / 10</td>
+                <td class="num">~13 min</td>
+              </tr>
+              <tr>
+                <td>xls-r-300m</td>
+                <td class="num">0.345</td>
+                <td class="num">4 / 10</td>
+                <td class="num">~27 min</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="cm-grid">
             <figure>
-              <img src="img/guide_imgs/ch3_run_task_list/scatter_plot-orient_base.png"
-                   alt="Orientation scatter, wav2vec2-base · Spearman 0.440">
+              <img src="img/guide_imgs/ch4_run_task_list/orientation_w2v2-base_lr1e5__scatter_distribution_test.png"
+                   alt="Orientation scatter + distribution, wav2vec2-base · ρ 0.440">
               <figcaption>Orientation · wav2vec2-base · <span class="result">ρ 0.440</span></figcaption>
             </figure>
             <figure>
-              <img src="img/guide_imgs/ch3_run_task_list/scatter_plot-orient_xls.png"
-                   alt="Orientation scatter, xls-r-300m · Spearman 0.345">
+              <img src="img/guide_imgs/ch4_run_task_list/orientation_xls-r-300m_lr3e5__scatter_distribution_test.png"
+                   alt="Orientation scatter + distribution, xls-r-300m · ρ 0.345">
               <figcaption>Orientation · xls-r-300m · <span class="result">ρ 0.345</span></figcaption>
             </figure>
           </div>
 
           <p>
-          The numbers above come from one hyperparameter choice per model family
-          at demo budget (10 epochs, batch 16). Learning rate, epoch count, and
-          feature-encoder freezing all move them — tune via <code>TASKS</code>
-          and compare the resulting CSV.
-          </p>
-
-          <h4>Knobs reference</h4>
-          <table class="guide-table">
-            <thead>
-              <tr>
-                <th>Knob</th>
-                <th>Where</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td><code>run_mode</code> · test / demo / full</td><td><code>3_config.json</code> → top-level</td></tr>
-              <tr><td><code>target</code> · which JSONL + label</td><td><code>3_config.json</code> → <code>classification.target</code> / <code>regression.target</code></td></tr>
-              <tr><td><code>model_name</code></td><td><code>3_config.json</code> → <code>shared</code> or per <code>modes.{demo,full}</code></td></tr>
-              <tr><td><code>num_epochs</code>, <code>batch_size</code>, <code>learning_rate</code></td><td><code>3_config.json</code> → <code>shared</code> + per-mode overrides</td></tr>
-              <tr><td><code>freeze_feature_encoder</code></td><td><code>3_config.json</code> → <code>shared</code></td></tr>
-              <tr><td><code>dataloader_num_workers</code>, <code>map_num_proc</code></td><td><code>3_config.json</code> → <code>shared</code></td></tr>
-              <tr><td>Multi-run queue</td><td><code>33_run_task_list.py</code> → <code>TASKS</code> list at top</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </details>
-
-      <!-- ──────────────────── CHAPTER 4 ──────────────────── -->
-      <details id="ch4" class="walkthrough-chapter">
-        <summary>
-          <span class="chap-num-big">4</span>
-          <div class="chap-head-col">
-            <div class="head">
-            <h2>One answer every moment</h2>
-            </div>
-            <div class="chap-meta">
-            <span class="icon">🎞️</span>
-            <span class="chap-num">CHAPTER 4 · FRAME MODELS</span>
-            </div>
-          </div>
-        </summary>
-        <div class="chap-body">
-          <p class="goal">Train a model that answers the question frame by frame inside a clip.</p>
-
-          <div class="tweak">
-            <strong>Where to tweak.</strong> Everything is in
-            <code>4_frame_models/4_config.json</code> — <code>run_mode</code>
-            at the top, per-mode overrides in <code>modes.{test,demo,full}</code>,
-            <code>classification.target</code> to point at a different JSONL
-            (<code>"primary_stress"</code> and <code>"fp"</code> are the two
-            live tasks). Comparison runs live in the <code>TASKS</code> list
-            at the top of <code>43_run_task_list.py</code>.
-          </div>
-
-          <h4>Step 1 — run the shipped test</h4>
-          <p>
-          The config ships with <code>run_mode: "test"</code>. Open the
-          notebook or the headless entry point and run everything.
-          </p>
-          <pre><code>mamba activate ssp-cuda
-jupyter lab 4_frame_models/41_train_frame_classification.ipynb
-# or headless:
-python 4_frame_models/run_41_classification.py</code></pre>
-          <p>
-          Same GPU guard as chapter 3 holds the reserved device for the run.
-          Test mode finishes in under a minute — plumbing only.
-          </p>
-
-          <h4>Step 2 — promote to demo</h4>
-          <p>
-          In <code>4_frame_models/4_config.json</code>, change
-          <code>run_mode</code> from <code>"test"</code> to <code>"demo"</code>.
-          Everything else stays. Re-run.
-          </p>
-          <p>
-          Demo caps at ~15 epochs. Wall-clock around one hour on an A100.
-          Expect pos-F1 near 0.90 on the TEST split for primary stress with
-          the classla w2v-BERT head.
-          </p>
-
-          <h4>Step 3 — the full comparison via the task list</h4>
-          <p>
-          <code>43_run_task_list.py</code> ships a ready-made queue of
-          frame-classification runs — w2v-BERT vanilla vs the classla
-          HR/RS-finetuned head, across LRs and batch sizes. Edit
-          <code>TASKS</code> at the top of the file to change the queue.
-          Frame regression (<code>42_train_frame_regression</code>) is
-          scaffold (<code>-WIP</code>) today, so the task list is
-          classification-only for now.
-          </p>
-          <pre><code>cd 4_frame_models
-mkdir -p ../runs
-python 43_run_task_list.py --use_gpu 2>&amp;1 \
-  | tee ../runs/43_task_list_$(date +%Y-%m-%d_%H%M%S).log</code></pre>
-
-          <h4>Primary stress · the published result</h4>
-          <p>
-          The headline model — classla <code>Wav2Vec2BertPrimaryStressAudioFrameClassifier</code>
-          on ParlaSpeech-HR benchmark v3 at lr 1e-5 — lands at pos-F1 0.90 on
-          TEST at epoch 13.
-          </p>
-
-          <div class="showcase-grid single">
-            <figure>
-              <h3>Where does the stress land?
-                <small>Chapter 4 · frame classification · classla · w2v-BERT</small>
-              </h3>
-              <div class="img-wrap">
-                <img src="img/ssp_frame_stress_hero.png" alt="Example primary-stress frame predictions per word">
-              </div>
-              <div class="metrics">
-                <span class="metric"><span class="label">pos-F1</span><span class="value">0.900</span></span>
-              </div>
-              <figcaption>
-                One strip per word on TEST. Orange is the gold stress interval,
-                blue is where the model agrees, red is where it fires on the
-                wrong frame.
-                <small>ParlaSpeech-HR benchmark v3 · lr 1e-5 · best at epoch 13.</small>
-              </figcaption>
-            </figure>
-          </div>
-
-          <p>
-          Learning rate, epoch count, and head choice (vanilla w2v-BERT vs the
-          classla finetuned head) all move the pos-F1 — tune via
-          <code>TASKS</code> and compare the resulting CSV.
+          Source: <code>2026-11-04_104138_task_list</code> (A100, demo mode, 10
+          epochs, batch 16, CNN frozen; total wall-clock 172 min 9 s). Learning
+          rate, epoch count, and feature-encoder freezing all move the numbers
+          — tune via <code>TASKS</code> and compare the resulting CSV.
           </p>
 
           <h4>Knobs reference</h4>
@@ -716,73 +848,343 @@ python 43_run_task_list.py --use_gpu 2>&amp;1 \
             </thead>
             <tbody>
               <tr><td><code>run_mode</code> · test / demo / full</td><td><code>4_config.json</code> → top-level</td></tr>
-              <tr><td><code>target</code> · <code>"primary_stress"</code> / <code>"fp"</code></td><td><code>4_config.json</code> → <code>classification.target</code></td></tr>
+              <tr><td><code>target</code> · which JSONL + label</td><td><code>4_config.json</code> → <code>classification.target</code> / <code>regression.target</code></td></tr>
               <tr><td><code>model_name</code></td><td><code>4_config.json</code> → <code>shared</code> or per <code>modes.{demo,full}</code></td></tr>
               <tr><td><code>num_epochs</code>, <code>batch_size</code>, <code>learning_rate</code></td><td><code>4_config.json</code> → <code>shared</code> + per-mode overrides</td></tr>
               <tr><td><code>freeze_feature_encoder</code></td><td><code>4_config.json</code> → <code>shared</code></td></tr>
-              <tr><td><code>dataloader_num_workers</code></td><td><code>4_config.json</code> → <code>shared</code></td></tr>
+              <tr><td><code>dataloader_num_workers</code>, <code>map_num_proc</code></td><td><code>4_config.json</code> → <code>shared</code></td></tr>
               <tr><td>Multi-run queue</td><td><code>43_run_task_list.py</code> → <code>TASKS</code> list at top</td></tr>
             </tbody>
           </table>
         </div>
       </details>
 
-      <!-- ──────────────────── CHAPTER 5 ──────────────────── -->
+      <!-- ──────────────────── CHAPTER 5 — FRAME MODELS ──────────────────── -->
       <details id="ch5" class="walkthrough-chapter">
         <summary>
-          <span class="chap-num-big">5</span>
-          <div class="chap-head-col">
+          <div class="chap-id">
+            <span class="num">5</span>
+            <img class="chap-icon" src="img/chapter_imgs/5_frame_icon.png" alt="" width="200" height="200" loading="lazy">
+          </div>
+          <div class="body">
+            <span class="kicker">FRAME MODELS</span>
             <div class="head">
-            <h2>Round-trip to Praat</h2>
+              <span class="title">🎞️ One answer every moment</span>
+              <span class="badge beta">beta</span>
+              <span class="badge wip">regression wip</span>
             </div>
-            <div class="chap-meta">
-            <span class="icon">📝</span>
-            <span class="chap-num">CHAPTER 5 · TG MINTER</span>
-            </div>
+            <p>Train a model that answers the question moment by moment inside a clip — where the filled pause sits, where the primary stress lands.</p>
           </div>
         </summary>
         <div class="chap-body">
-          <p class="goal">Export clips to TextGrid, hand them to a human, read the annotated TextGrids back.</p>
+          <p class="goal">Train a model that answers the question frame by frame inside a clip.</p>
 
           <div class="tweak">
-            <strong>Where to tweak.</strong> The TG I/O is CPU-only. No
-            chapter config — paths live at the top of each notebook. For
-            stats on the annotation batch, see
-            <code>52_annotation_stats.ipynb</code>.
+            <strong>Where to tweak.</strong> Everything is in
+            <code>5_frame_models/5_config.json</code> — <code>run_mode</code>
+            at the top, per-mode overrides in <code>modes.{test,demo,full}</code>,
+            <code>classification.target</code> to point at a different JSONL
+            (<code>"parlaspeech_fp_frames"</code> and
+            <code>"parlaspeech_primary_stress_frames"</code> are the live
+            targets). Comparison runs live in the <code>TASKS</code> list at
+            the top of <code>53_run_task_list.py</code>.
           </div>
 
-          <h4>Command — mint a batch</h4>
-          <pre><code>jupyter lab 5_tg_minter/51b_mint_fp_annotation_set.ipynb</code></pre>
+          <h4>Step 1 — run the shipped test</h4>
           <p>
-          Pick a source JSONL and a batch size at the top of the notebook. The
-          output is one TextGrid per clip plus a <code>batch.json</code> that
-          tracks which clips belong to which annotator.
+          The config ships with <code>run_mode: "test"</code>. Open the
+          notebook or the headless entry point and run everything.
+          </p>
+          <pre><code>mamba activate ssp-cuda
+jupyter lab 5_frame_models/51_train_frame_classification.ipynb
+# or headless:
+python 5_frame_models/run_51_classification.py</code></pre>
+          <p>
+          Same GPU guard as chapter 4 holds the reserved device for the run.
+          Test mode finishes in under a minute — plumbing only.
           </p>
 
-          <h4>Command — read annotated TextGrids back</h4>
-          <pre><code>python 5_tg_minter/53_tg_to_jsonl.py              # filled-pause annotations
-python 5_tg_minter/54_stress_tg_to_jsonl.py       # primary-stress annotations</code></pre>
+          <h4>Step 2 — promote to demo</h4>
           <p>
-          Each script walks the TextGrid folder and emits a frame-level JSONL
-          that chapter 4 can train on.
+          In <code>5_frame_models/5_config.json</code>, change
+          <code>run_mode</code> from <code>"test"</code> to <code>"demo"</code>.
+          Everything else stays. Re-run.
+          </p>
+          <p>
+          Demo caps at 10 epochs. Wall-clock about one hour on an A100 for
+          filled-pause, 25 minutes for primary stress. Expect pos-F1 above
+          0.95 on TEST with the classla w2v-BERT warm start.
           </p>
 
-          <div class="screenshot">[ screenshot slot — minted TG opened in Praat ]</div>
+          <h4>Step 3 — the full comparison via the task list</h4>
+          <p>
+          <code>53_run_task_list.py</code> ships an 8-task queue — four FP
+          runs (HR + PL, each × vanilla w2v-BERT and classla warm-start) and
+          four primary-stress runs (HR + SI, same two encoders). Edit
+          <code>TASKS</code> at the top of the file to change the queue.
+          Frame regression (<code>52_train_frame_regression</code>) is
+          scaffold (<code>-WIP</code>) today, so the task list is
+          classification-only for now.
+          </p>
+          <pre><code>cd 5_frame_models
+mkdir -p ../runs
+python -u 53_run_task_list.py --use_gpu 2>&amp;1 \
+  | tee ../runs/53_task_list_$(date +%Y-%m-%d_%H%M%S).log</code></pre>
+
+          <details class="detail-box">
+            <summary>Benchmark splits &amp; run metadata</summary>
+            <div class="detail-body">
+              <table class="guide-table">
+                <thead>
+                  <tr>
+                    <th>Task</th>
+                    <th>Lang(s)</th>
+                    <th class="num">Train</th>
+                    <th class="num">Dev</th>
+                    <th class="num">Test</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>Filled pause · ParlaSpeech v3</td><td>HR</td><td class="num">4 000</td><td class="num">1 000</td><td class="num">1 000</td></tr>
+                  <tr><td>Filled pause · ParlaSpeech v3</td><td>PL</td><td class="num">4 000</td><td class="num">1 000</td><td class="num">1 000</td></tr>
+                  <tr><td>Primary stress · ParlaSpeech v3</td><td>HR</td><td class="num">4 000</td><td class="num">1 000</td><td class="num">1 000</td></tr>
+                  <tr><td>Primary stress · Slovenian pilot</td><td>SI</td><td class="num">4 000</td><td class="num">1 000</td><td class="num">1 000</td></tr>
+                </tbody>
+              </table>
+              <p class="detail-meta">GPU: A100 · mode: demo · epochs: 10 · frame rate 50 Hz · FP: batch 8 ga 2 + positive-only filter + 15 s length cap · stress: batch 16 (HR) / 32 (SI) · run: 2026-11-05_200734_task_list · total wall-clock 9 h 14 min</p>
+            </div>
+          </details>
+
+          <h4>At-a-glance — filled pause (2 × 2)</h4>
+          <p>Same 10-epoch demo budget, lr 3e-5, batch 8 + grad-accum 2. w2v-BERT 2.0 vanilla against the classla filled-pause warm-start, HR in-domain against PL cross-lingual. TEST numbers at the best phase-2 epoch.</p>
+
+          <!-- FP pair 1 — HR -->
+          <h5>Filled pause · HR (in-domain)</h5>
+          <table class="guide-table">
+            <thead>
+              <tr>
+                <th>Encoder</th>
+                <th class="num">TEST macro-F1</th>
+                <th class="num">TEST F1⁺</th>
+                <th class="num">Best epoch</th>
+                <th class="num">Wall-clock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>w2v-BERT 2.0 (vanilla)</td>
+                <td class="num">0.977</td>
+                <td class="num">0.956</td>
+                <td class="num">10 / 10</td>
+                <td class="num">~125 min</td>
+              </tr>
+              <tr>
+                <td>classla / wav2vecbert2-filledPause</td>
+                <td class="num">0.980</td>
+                <td class="num">0.962</td>
+                <td class="num">10 / 10</td>
+                <td class="num">~126 min</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="cm-grid">
+            <figure>
+              <img src="img/guide_imgs/ch5_run_task_list/fp_hr_bert_lr1e5__best_epoch_example_predictions.png"
+                   alt="Filled pause HR, w2v-BERT 2.0 · F1 0.977">
+              <figcaption>FP · HR · w2v-BERT · <span class="result">F1 0.977</span></figcaption>
+            </figure>
+            <figure>
+              <img src="img/guide_imgs/ch5_run_task_list/fp_hr_classla_fp_lr1e5__best_epoch_example_predictions.png"
+                   alt="Filled pause HR, classla warm start · F1 0.980">
+              <figcaption>FP · HR · classla warm start · <span class="result">F1 0.980</span></figcaption>
+            </figure>
+          </div>
+
+          <!-- FP pair 2 — PL -->
+          <h5>Filled pause · PL (cross-lingual)</h5>
+          <table class="guide-table">
+            <thead>
+              <tr>
+                <th>Encoder</th>
+                <th class="num">TEST macro-F1</th>
+                <th class="num">TEST F1⁺</th>
+                <th class="num">Best epoch</th>
+                <th class="num">Wall-clock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>w2v-BERT 2.0 (vanilla)</td>
+                <td class="num">0.975</td>
+                <td class="num">0.953</td>
+                <td class="num">10 / 10</td>
+                <td class="num">~111 min</td>
+              </tr>
+              <tr>
+                <td>classla / wav2vecbert2-filledPause</td>
+                <td class="num">0.978</td>
+                <td class="num">0.958</td>
+                <td class="num">10 / 10</td>
+                <td class="num">~110 min</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="cm-grid">
+            <figure>
+              <img src="img/guide_imgs/ch5_run_task_list/fp_pl_bert_lr1e5__best_epoch_example_predictions.png"
+                   alt="Filled pause PL, w2v-BERT 2.0 · F1 0.975">
+              <figcaption>FP · PL · w2v-BERT · <span class="result">F1 0.975</span></figcaption>
+            </figure>
+            <figure>
+              <img src="img/guide_imgs/ch5_run_task_list/fp_pl_classla_fp_lr1e5__best_epoch_example_predictions.png"
+                   alt="Filled pause PL, classla warm start · F1 0.978">
+              <figcaption>FP · PL · classla warm start · <span class="result">F1 0.978</span></figcaption>
+            </figure>
+          </div>
+
+          <h4>At-a-glance — primary stress (2 × 2)</h4>
+          <p>Same 10-epoch demo budget, lr 3e-5. Word-level frame classification. HR runs on ParlaSpeech v3 stress annotations; SI is the pilot Slovenian corpus.</p>
+
+          <!-- Stress pair 1 — HR -->
+          <h5>Primary stress · HR (in-domain for classla)</h5>
+          <table class="guide-table">
+            <thead>
+              <tr>
+                <th>Encoder</th>
+                <th class="num">TEST macro-F1</th>
+                <th class="num">TEST F1⁺</th>
+                <th class="num">Best epoch</th>
+                <th class="num">Wall-clock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>w2v-BERT 2.0 (vanilla)</td>
+                <td class="num">0.965</td>
+                <td class="num">0.943</td>
+                <td class="num">7 / 10</td>
+                <td class="num">~25 min</td>
+              </tr>
+              <tr>
+                <td>classla / Wav2Vec2BertPrimaryStress</td>
+                <td class="num">0.970</td>
+                <td class="num">0.951</td>
+                <td class="num">9 / 10</td>
+                <td class="num">~25 min</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="cm-grid">
+            <figure>
+              <img src="img/guide_imgs/ch5_run_task_list/stress_hr_bert_lr1e5__best_epoch_example_predictions.png"
+                   alt="Primary stress HR, w2v-BERT 2.0 · F1 0.965">
+              <figcaption>Stress · HR · w2v-BERT · <span class="result">F1 0.965</span></figcaption>
+            </figure>
+            <figure>
+              <img src="img/guide_imgs/ch5_run_task_list/stress_hr_classla_lr1e5__best_epoch_example_predictions.png"
+                   alt="Primary stress HR, classla warm start · F1 0.970">
+              <figcaption>Stress · HR · classla warm start · <span class="result">F1 0.970</span></figcaption>
+            </figure>
+          </div>
+
+          <!-- Stress pair 2 — SI -->
+          <h5>Primary stress · SI (cross-lingual)</h5>
+          <table class="guide-table">
+            <thead>
+              <tr>
+                <th>Encoder</th>
+                <th class="num">TEST macro-F1</th>
+                <th class="num">TEST F1⁺</th>
+                <th class="num">Best epoch</th>
+                <th class="num">Wall-clock</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>w2v-BERT 2.0 (vanilla)</td>
+                <td class="num">0.933</td>
+                <td class="num">0.891</td>
+                <td class="num">9 / 10</td>
+                <td class="num">~11 min</td>
+              </tr>
+              <tr>
+                <td>classla / Wav2Vec2BertPrimaryStress (HR/RS-trained)</td>
+                <td class="num">0.935</td>
+                <td class="num">0.895</td>
+                <td class="num">9 / 10</td>
+                <td class="num">~11 min</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="cm-grid">
+            <figure>
+              <img src="img/guide_imgs/ch5_run_task_list/stress_si_bert_lr1e5__best_epoch_example_predictions.png"
+                   alt="Primary stress SI, w2v-BERT 2.0 · F1 0.933">
+              <figcaption>Stress · SI · w2v-BERT · <span class="result">F1 0.933</span></figcaption>
+            </figure>
+            <figure>
+              <img src="img/guide_imgs/ch5_run_task_list/stress_si_classla_lr1e5__best_epoch_example_predictions.png"
+                   alt="Primary stress SI, classla warm start · F1 0.935">
+              <figcaption>Stress · SI · classla warm start · <span class="result">F1 0.935</span></figcaption>
+            </figure>
+          </div>
+
+          <p>
+          <!-- TODO (2026-11-06): replace with the clean weekend re-run once the
+               best-vs-last epoch fix has landed. Keep until then. -->
+          Source: <code>2026-11-05_200734_task_list</code> (A100, demo mode).
+          Filled-pause tasks ran with <code>require_positive=True</code> and a
+          15 s length cap to keep the train split on-topic and avoid long-clip
+          OOMs. Primary-stress tasks ran on word-level frame extracts.
+          </p>
+
+          <p>
+          Learning rate, epoch count, and head choice (vanilla w2v-BERT vs the
+          classla finetuned head) all move the macro-F1 and F1⁺ — tune via
+          <code>TASKS</code> and compare the resulting CSV. The headline run on
+          the landing page is the best of the eight above; the Colab notebook
+          mirrors its own output for the no-install path.
+          </p>
+
+          <h4>Knobs reference</h4>
+          <table class="guide-table">
+            <thead>
+              <tr>
+                <th>Knob</th>
+                <th>Where</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>run_mode</code> · test / demo / full</td><td><code>5_config.json</code> → top-level</td></tr>
+              <tr><td><code>target</code> · <code>"parlaspeech_fp_frames"</code> / <code>"parlaspeech_primary_stress_frames"</code></td><td><code>5_config.json</code> → <code>classification.target</code></td></tr>
+              <tr><td><code>model_name</code></td><td><code>5_config.json</code> → <code>shared</code> or per <code>modes.{demo,full}</code></td></tr>
+              <tr><td><code>num_epochs</code>, <code>batch_size</code>, <code>learning_rate</code></td><td><code>5_config.json</code> → <code>shared</code> + per-mode overrides</td></tr>
+              <tr><td><code>freeze_feature_encoder</code></td><td><code>5_config.json</code> → <code>shared</code></td></tr>
+              <tr><td><code>dataloader_num_workers</code></td><td><code>5_config.json</code> → <code>shared</code></td></tr>
+              <tr><td>Multi-run queue</td><td><code>53_run_task_list.py</code> → <code>TASKS</code> list at top</td></tr>
+            </tbody>
+          </table>
         </div>
       </details>
 
       <!-- ──────────────────── CHAPTER 6 ──────────────────── -->
       <details id="ch6" class="walkthrough-chapter">
         <summary>
-          <span class="chap-num-big">6</span>
-          <div class="chap-head-col">
+          <div class="chap-id">
+            <span class="num">6</span>
+            <img class="chap-icon" src="img/chapter_imgs/6_inference_icon.png" alt="" width="200" height="200" loading="lazy">
+          </div>
+          <div class="body">
+            <span class="kicker">INFERENCE</span>
             <div class="head">
-            <h2>Run the trained model</h2>
+              <span class="title">🚀 Deploy the trained model</span>
+              <span class="badge beta">beta</span>
             </div>
-            <div class="chap-meta">
-            <span class="icon">🚀</span>
-            <span class="chap-num">CHAPTER 6 · INFERENCE</span>
-            </div>
+            <p>Point a trained model at a folder of new audio and get predictions out. Frame-classification path is wired today; other paths are scaffolded.</p>
           </div>
         </summary>
         <div class="chap-body">
@@ -885,6 +1287,24 @@ python 6_inference/run_63_frame_classification_inference.py \
         if (best) setActive(best.target.id);
       }, { rootMargin: '-80px 0px -55% 0px', threshold: [0, 0.2] });
       chapters.forEach(ch => obs.observe(ch));
+    })();
+
+    /* ───────── hash auto-open — ssp-guide.html#chN opens that chapter ───────── */
+    (function hashOpen() {
+      function openFromHash() {
+        const hash = window.location.hash;
+        if (!hash) return;
+        const el = document.querySelector(hash);
+        if (el && el.classList.contains('walkthrough-chapter')) {
+          el.setAttribute('open', '');
+          requestAnimationFrame(() => {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        }
+      }
+      document.addEventListener('DOMContentLoaded', openFromHash);
+      window.addEventListener('hashchange', openFromHash);
+      if (document.readyState !== 'loading') openFromHash();
     })();
   </script>
 </body>
