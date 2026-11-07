@@ -387,7 +387,7 @@ jupyter lab 1_data_prep/11e_get_prep_parlaspeech_benchmark_v3.ipynb</code></pre>
             <figcaption>Benchmark v3 ready — four task JSONLs emitted.</figcaption>
           </figure>
 
-          <h4>Command — full ParlaSpeech-HR</h4>
+          <h4>Command — full ParlaSpeech v4</h4>
           <pre><code>jupyter lab 1_data_prep/10_download_data_clarin.ipynb   # CLARIN downloader
 jupyter lab 1_data_prep/11c_prep_parlaspeech.ipynb      # prep step</code></pre>
           <p>
@@ -397,12 +397,19 @@ jupyter lab 1_data_prep/11c_prep_parlaspeech.ipynb      # prep step</code></pre>
           land.
           </p>
 
-          <figure class="guide-img">
-            <img src="img/guide_imgs/1ssp_1data_ps-demo.png" alt="ParlaSpeech-HR downloaded and folder structure sanity check">
-            <figcaption>ParlaSpeech-HR downloaded — folder tree for sanity.</figcaption>
+          <figure class="guide-img-dual">
+            <div style="display: flex; gap: 1rem; align-items: stretch;">
+              <div style="flex: 1; display: flex; flex-direction: column;">
+                <img src="img/guide_imgs/1ssp_1data_ps-demo_data.png" alt="ParlaSpeech-HR downloaded data folder structure sanity check" style="width: 100%; height: 100%; object-fit: contain;">
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column;">
+                <img src="img/guide_imgs/1ssp_1data_ps-demo_audio.png" alt="ParlaSpeech-HR downloaded audio folder structure sanity check" style="width: 100%; height: 100%; object-fit: contain;">
+              </div>
+            </div>
+            <figcaption>ParlaSpeech v4 downloaded — folder tree sanity check for data and audio.</figcaption>
           </figure>
 
-          <h4>Expected output — full ParlaSpeech prep (all four languages)</h4>
+          <h4>Expected output — full ParlaSpeech v4 prep (all five languages)</h4>
           <p>
           <code>11c_prep_parlaspeech</code> emits three JSONL types: utterance-level
           instance records, utterance-level frame records (50 Hz label sequences for
@@ -426,34 +433,42 @@ jupyter lab 1_data_prep/11c_prep_parlaspeech.ipynb      # prep step</code></pre>
                 <td class="num">922 676</td>
                 <td class="num">881 235</td>
                 <td class="num">11 341 813</td>
-                <td class="num">~25 min</td>
+                <td class="num">~35 min</td>
               </tr>
               <tr>
                 <td>RS</td>
                 <td class="num">290 778</td>
                 <td class="num">280 260</td>
                 <td class="num">1 998 020</td>
-                <td class="num">~5 min</td>
+                <td class="num">~8 min</td>
               </tr>
               <tr>
                 <td>PL</td>
                 <td class="num">535 465</td>
                 <td class="num">531 731</td>
                 <td class="num">—</td>
-                <td class="num">~5 min</td>
+                <td class="num">~8 min</td>
               </tr>
               <tr>
                 <td>CZ</td>
                 <td class="num">717 675</td>
                 <td class="num">712 321</td>
                 <td class="num">—</td>
-                <td class="num">~7 min</td>
+                <td class="num">~16 min</td>
+              </tr>
+              <tr>
+                <td>SI</td>
+                <td class="num">1 434 973</td>
+                <td class="num">1 434 973</td>
+                <td class="num">—</td>
+                <td class="num">~31 min</td>
               </tr>
             </tbody>
           </table>
           <p>
-          Total ~41 min on CPU only. Word-frame records are primary-stress
-          annotations and are only available for HR and RS. PL and CZ have no
+          Total ~97 min for all five languages on CPU. ParlaSpeech v3
+          runs in ~41 min. Word-frame records are primary-stress annotations
+          and are available for HR and RS only; the other languages have no
           primary-stress annotation layer.
           </p>
         </div>
@@ -590,7 +605,7 @@ python 4_instance_models/run_41_classification.py</code></pre>
 
           <figure class="guide-img">
             <img src="img/guide_imgs/4ssp_4_gpu_guard.png" alt="GPU-guard notice at the top of the run">
-            <figcaption>GPU guard — reserves the device for the run.</figcaption>
+            <figcaption>GPU guard — reserves the device for the run. Ran in VS Code on Linux Mint.</figcaption>
           </figure>
 
           <p>
@@ -655,12 +670,12 @@ python 43_run_task_list.py --use_gpu 2>&amp;1 \
                   <tr><td>Orientation</td><td class="num">2 500</td><td class="num">900</td><td class="num">900</td></tr>
                 </tbody>
               </table>
-              <p class="detail-meta">GPU: A100 · mode: demo · epochs: 10 · batch: 16 · CNN frozen · total wall-clock: 172 min 9 s · run: 2026-11-04_104138_task_list</p>
+              <p class="detail-meta">GPU: A100 · mode: demo · epochs: 10 (class.) / 20 (regr.) · batch: 32 · CNN frozen · total wall-clock: ~220 min · run: 2026-11-06_195108_task_list</p>
             </div>
           </details>
 
           <h4>At-a-glance — classification (2 × 2)</h4>
-          <p>Same 10-epoch demo budget, same batch size, same ParlaSpeech-HR benchmark v3. w2v2-base runs at lr 1e-5, xls-r-300m at lr 3e-5 (larger model, higher LR). Numbers below are TEST, read at the best phase-2 epoch.</p>
+          <p>Same 10-epoch demo budget, batch 32, ParlaSpeech-HR benchmark v3. w2v2-base runs at lr 1e-5, xls-r-300m at lr 3e-5. Numbers below are TEST, read at the best phase-2 epoch. Click any image to play the learning curve, then it returns to still.</p>
 
           <!-- Classification pair 1 — gender -->
           <h5>Gender · 2-class</h5>
@@ -677,34 +692,42 @@ python 43_run_task_list.py --use_gpu 2>&amp;1 \
             <tbody>
               <tr>
                 <td>wav2vec2-base</td>
-                <td class="num">0.993</td>
-                <td class="num">0.992</td>
-                <td class="num">5 / 10</td>
-                <td class="num">~13 min</td>
+                <td class="num">0.9995</td>
+                <td class="num">0.9995</td>
+                <td class="num">2 / 10</td>
+                <td class="num">~12 min</td>
               </tr>
               <tr>
                 <td>xls-r-300m</td>
                 <td class="num">1.000</td>
                 <td class="num">1.000</td>
                 <td class="num">7 / 10</td>
-                <td class="num">~23 min</td>
+                <td class="num">~22 min</td>
               </tr>
             </tbody>
           </table>
 
           <div class="cm-grid">
-            <figure>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch4_run_task_list/gender_w2v2-base_lr1e5__phase2_test.gif"
+                    data-ms="3000">
               <img src="img/guide_imgs/ch4_run_task_list/gender_w2v2-base_lr1e5__confusion_matrix_test.png"
-                   alt="Gender CM, wav2vec2-base · acc 0.993 · F1 0.992">
-              <figcaption>Gender · wav2vec2-base · <span class="result">F1 0.992</span></figcaption>
+                   alt="Gender CM, wav2vec2-base · acc 0.9995 · F1 0.9995">
+              <figcaption>Gender · wav2vec2-base · <span class="result">F1 0.9995</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
-            <figure>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch4_run_task_list/gender_xls-r-300m_lr3e5__phase2_test.gif"
+                    data-ms="3000">
               <img src="img/guide_imgs/ch4_run_task_list/gender_xls-r-300m_lr3e5__confusion_matrix_test.png"
                    alt="Gender CM, xls-r-300m · acc 1.000 · F1 1.000">
-              <figcaption>Gender · xls-r-300m · <span class="result">F1 1.000</span></figcaption>
+              <figcaption>Gender · xls-r-300m · <span class="result">F1 1.000</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
           </div>
 
+          <div class="tweak">
+            <strong>Interactive!</strong> Click on each plot to display training over its epochs.
+          </div>
+          
           <!-- Classification pair 2 — speaker-id -->
           <h5>Speaker-ID · 50 classes</h5>
           <table class="guide-table">
@@ -722,34 +745,38 @@ python 43_run_task_list.py --use_gpu 2>&amp;1 \
                 <td>wav2vec2-base</td>
                 <td class="num">0.990</td>
                 <td class="num">0.990</td>
-                <td class="num">6 / 10</td>
-                <td class="num">~26 min</td>
+                <td class="num">9 / 10</td>
+                <td class="num">~25 min</td>
               </tr>
               <tr>
                 <td>xls-r-300m</td>
-                <td class="num">0.964</td>
-                <td class="num">0.964</td>
-                <td class="num">8 / 10</td>
-                <td class="num">~45 min</td>
+                <td class="num">0.878</td>
+                <td class="num">0.874</td>
+                <td class="num">10 / 10</td>
+                <td class="num">~43 min</td>
               </tr>
             </tbody>
           </table>
 
           <div class="cm-grid">
-            <figure>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch4_run_task_list/speakerid_w2v2-base_lr1e5__phase2_test.gif"
+                    data-ms="3000">
               <img src="img/guide_imgs/ch4_run_task_list/speakerid_w2v2-base_lr1e5__confusion_matrix_test.png"
                    alt="Speaker-ID CM, wav2vec2-base · acc 0.990 · F1 0.990">
-              <figcaption>Speaker-ID · wav2vec2-base · <span class="result">F1 0.990</span></figcaption>
+              <figcaption>Speaker-ID · wav2vec2-base · <span class="result">F1 0.990</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
-            <figure>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch4_run_task_list/speakerid_xls-r-300m_lr3e5__phase2_test.gif"
+                    data-ms="3000">
               <img src="img/guide_imgs/ch4_run_task_list/speakerid_xls-r-300m_lr3e5__confusion_matrix_test.png"
-                   alt="Speaker-ID CM, xls-r-300m · acc 0.964 · F1 0.964">
-              <figcaption>Speaker-ID · xls-r-300m · <span class="result">F1 0.964</span></figcaption>
+                   alt="Speaker-ID CM, xls-r-300m · acc 0.878 · F1 0.874">
+              <figcaption>Speaker-ID · xls-r-300m · <span class="result">F1 0.874</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
           </div>
 
           <h4>At-a-glance — regression (2 × 2)</h4>
-          <p>Same four conditions on continuous targets. Spearman ρ is the selection metric (higher is better).</p>
+          <p>Same two encoders, 20 epochs, batch 32. Spearman ρ is the selection metric (higher is better).</p>
 
           <!-- Regression pair 1 — age -->
           <h5>Age · continuous (years)</h5>
@@ -765,29 +792,33 @@ python 43_run_task_list.py --use_gpu 2>&amp;1 \
             <tbody>
               <tr>
                 <td>wav2vec2-base</td>
-                <td class="num">0.733</td>
-                <td class="num">2 / 10</td>
-                <td class="num">~8 min</td>
+                <td class="num">0.745</td>
+                <td class="num">5 / 20</td>
+                <td class="num">~15 min</td>
               </tr>
               <tr>
                 <td>xls-r-300m</td>
-                <td class="num">0.775</td>
-                <td class="num">9 / 10</td>
-                <td class="num">~17 min</td>
+                <td class="num">0.729</td>
+                <td class="num">17 / 20</td>
+                <td class="num">~32 min</td>
               </tr>
             </tbody>
           </table>
 
           <div class="cm-grid">
-            <figure>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch4_run_task_list/age_w2v2-base_lr1e5__phase2_test.gif"
+                    data-ms="6000">
               <img src="img/guide_imgs/ch4_run_task_list/age_w2v2-base_lr1e5__scatter_distribution_test.png"
-                   alt="Age scatter + distribution, wav2vec2-base · ρ 0.733">
-              <figcaption>Age · wav2vec2-base · <span class="result">ρ 0.733</span></figcaption>
+                   alt="Age scatter + distribution, wav2vec2-base · ρ 0.745">
+              <figcaption>Age · wav2vec2-base · <span class="result">ρ 0.745</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
-            <figure>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch4_run_task_list/age_xls-r-300m_lr3e5__phase2_test.gif"
+                    data-ms="6000">
               <img src="img/guide_imgs/ch4_run_task_list/age_xls-r-300m_lr3e5__scatter_distribution_test.png"
-                   alt="Age scatter + distribution, xls-r-300m · ρ 0.775">
-              <figcaption>Age · xls-r-300m · <span class="result">ρ 0.775</span></figcaption>
+                   alt="Age scatter + distribution, xls-r-300m · ρ 0.729">
+              <figcaption>Age · xls-r-300m · <span class="result">ρ 0.729</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
           </div>
 
@@ -805,37 +836,41 @@ python 43_run_task_list.py --use_gpu 2>&amp;1 \
             <tbody>
               <tr>
                 <td>wav2vec2-base</td>
-                <td class="num">0.440</td>
-                <td class="num">5 / 10</td>
-                <td class="num">~13 min</td>
+                <td class="num">0.386</td>
+                <td class="num">4 / 20</td>
+                <td class="num">~22 min</td>
               </tr>
               <tr>
                 <td>xls-r-300m</td>
-                <td class="num">0.345</td>
-                <td class="num">4 / 10</td>
-                <td class="num">~27 min</td>
+                <td class="num">0.355</td>
+                <td class="num">12 / 20</td>
+                <td class="num">~49 min</td>
               </tr>
             </tbody>
           </table>
 
           <div class="cm-grid">
-            <figure>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch4_run_task_list/orientation_w2v2-base_lr1e5__phase2_test.gif"
+                    data-ms="6000">
               <img src="img/guide_imgs/ch4_run_task_list/orientation_w2v2-base_lr1e5__scatter_distribution_test.png"
-                   alt="Orientation scatter + distribution, wav2vec2-base · ρ 0.440">
-              <figcaption>Orientation · wav2vec2-base · <span class="result">ρ 0.440</span></figcaption>
+                   alt="Orientation scatter + distribution, wav2vec2-base · ρ 0.386">
+              <figcaption>Orientation · wav2vec2-base · <span class="result">ρ 0.386</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
-            <figure>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch4_run_task_list/orientation_xls-r-300m_lr3e5__phase2_test.gif"
+                    data-ms="6000">
               <img src="img/guide_imgs/ch4_run_task_list/orientation_xls-r-300m_lr3e5__scatter_distribution_test.png"
-                   alt="Orientation scatter + distribution, xls-r-300m · ρ 0.345">
-              <figcaption>Orientation · xls-r-300m · <span class="result">ρ 0.345</span></figcaption>
+                   alt="Orientation scatter + distribution, xls-r-300m · ρ 0.355">
+              <figcaption>Orientation · xls-r-300m · <span class="result">ρ 0.355</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
           </div>
 
           <p>
-          Source: <code>2026-11-04_104138_task_list</code> (A100, demo mode, 10
-          epochs, batch 16, CNN frozen; total wall-clock 172 min 9 s). Learning
-          rate, epoch count, and feature-encoder freezing all move the numbers
-          — tune via <code>TASKS</code> and compare the resulting CSV.
+          A100, demo mode,
+          10 epochs / 20 epochs, batch 32, CNN frozen; total wall-clock ~220 min.
+          Learning rate, epoch count, and feature-encoder freezing all move the
+          numbers — tune via <code>TASKS</code> and compare the resulting CSV.
           </p>
 
           <h4>Knobs reference</h4>
@@ -1305,6 +1340,26 @@ python 6_inference/run_63_frame_classification_inference.py \
       document.addEventListener('DOMContentLoaded', openFromHash);
       window.addEventListener('hashchange', openFromHash);
       if (document.readyState !== 'loading') openFromHash();
+    })();
+
+    /* ───────── gif-fig · click to play one loop, then back to still ───────── */
+    (function gifFig() {
+      document.querySelectorAll('.gif-fig').forEach(function(fig) {
+        const img = fig.querySelector('img');
+        if (!img) return;
+        const pngSrc = img.src;
+        const gifSrc = fig.dataset.gif;
+        const ms = parseInt(fig.dataset.ms, 10) || 3000;
+        fig.addEventListener('click', function() {
+          if (fig.classList.contains('gif-playing')) return;
+          fig.classList.add('gif-playing');
+          img.src = gifSrc + '?t=' + Date.now();
+          setTimeout(function() {
+            img.src = pngSrc;
+            fig.classList.remove('gif-playing');
+          }, ms);
+        });
+      });
     })();
   </script>
 </body>

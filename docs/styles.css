@@ -973,6 +973,23 @@ details.walkthrough-chapter > summary p { margin: 0; font-size: 0.9rem; color: v
   display: block;
 }
 
+/* ──────────────────── gif-fig · click-to-animate ──────────────────── */
+/* first figure in each pair gets the accent border; second stays plain */
+.cm-grid > figure:first-child {
+  border-left: 3px solid var(--status-wip);
+  border-radius: 0 0.4rem 0.4rem 0;
+}
+.gif-fig { cursor: pointer; user-select: none; }
+.gif-fig img { pointer-events: none; }
+.gif-hint {
+  font-size: 0.72em;
+  opacity: 0.45;
+  margin-left: 0.25em;
+  transition: opacity 0.15s;
+}
+.gif-fig:hover .gif-hint { opacity: 0.9; }
+.gif-fig.gif-playing .gif-hint { opacity: 0.2; }
+
 /* compact comparison + encoder-pick table */
 .guide-table {
   width: 100%;
