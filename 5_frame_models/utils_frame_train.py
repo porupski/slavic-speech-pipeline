@@ -128,20 +128,24 @@ TARGETS: dict = {}
 
 
 def _add_parlaspeech_frame_targets(targets: dict) -> None:
-    """Chapter-4 north-star targets from ParlaSpeech (built by 11c).
-    - fp_frames: binary filled_pause over the utterance (HR/RS/PL/CZ).
-    - primary_stress_frames: word-level (HR/RS only)."""
+    """Chapter-5 north-star targets from ParlaSpeech (built by 11c).
+    - fp_frames: binary filled_pause over the utterance (HR/RS/PL/CZ/SI on v4).
+    - primary_stress_frames: word-level (HR/RS only).
+    `{version}` expands to v3 or v4; 11c writes `parlaspeech_v4_<lang>_*.jsonl`
+    so v3 and v4 preps do not clobber each other."""
     targets["parlaspeech_fp_frames"] = {
-        "jsonl_template": "data/processed_jsonl/parlaspeech_{lang}_utterance_frame.jsonl",
-        "langs":       ("hr", "rs", "pl", "cz"),
+        "jsonl_template": "data/processed_jsonl/parlaspeech_{version}_{lang}_utterance_frame.jsonl",
+        "langs":       ("hr", "rs", "pl", "cz", "si"),
+        "default_version": "v4",
         "label_key":   "filled_pause",
         "task_type":   "classification",
         "level":       "frame",
         "label_order": [0, 1],
     }
     targets["parlaspeech_primary_stress_frames"] = {
-        "jsonl_template": "data/processed_jsonl/parlaspeech_{lang}_word_frame.jsonl",
+        "jsonl_template": "data/processed_jsonl/parlaspeech_{version}_{lang}_word_frame.jsonl",
         "langs":       ("hr", "rs"),
+        "default_version": "v4",
         "label_key":   "primary_stress",
         "task_type":   "classification",
         "level":       "frame",
@@ -215,18 +219,23 @@ def resolve_target(cfg, targets: dict = TARGETS) -> None:
         raise ValueError(
             f"cfg.langs {unknown} not supported by {cfg.target!r} (supports {list(supported)})"
         )
+    # Version — cfg.parlaspeech_version overrides the target's default. v4 by default.
+    tmpl = t["jsonl_template"]
+    version = (getattr(cfg, "parlaspeech_version", None)
+               or t.get("default_version") or "v4")
     paths = []
     for l in chosen:
-        p = t["jsonl_template"].format(lang=l)
+        p = tmpl.format(lang=l, version=version)
         if udp.from_project_relative(p).exists():
             paths.append(p)
         elif cfg.langs:
-            raise FileNotFoundError(f"requested lang {l!r} but {p} is missing — run 11c")
+            raise FileNotFoundError(f"requested lang {l!r} but {p} is missing — run 11c (version={version})")
         else:
             print(f"  ⏭  {l}: {p} not found — skipping")
     if not paths:
         raise FileNotFoundError(
-            f"no JSONL on disk for {cfg.target!r} (langs={list(chosen)}). Run 11c first."
+            f"no JSONL on disk for {cfg.target!r} (langs={list(chosen)}, version={version}). "
+            f"Run 11c first."
         )
     cfg.jsonl_paths = paths
 
@@ -240,6 +249,9 @@ class Config:
     # -- Target preset (resolve_target overwrites the data fields below) -----
     target: str = ""
     langs:  tuple = ()
+    # ParlaSpeech corpus version for multi-lang targets. Resolves the {version}
+    # placeholder in the target's jsonl_template. None → use target's default (v4).
+    parlaspeech_version: str = ""
 
     # -- Data (overwritten by resolve_target) --------------------------------
     jsonl_paths: list = field(default_factory=list)

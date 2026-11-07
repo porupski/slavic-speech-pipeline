@@ -36,7 +36,7 @@
 #
 # **One record = one annotated interval on the annotation tier** (event
 # instance, `cut=True` — per-event 16 kHz mono WAV written under
-# `data/cut_audio/<dataset_tag>/<file_id>/`). Intervals that still carry the
+# `data/processed_audio/<dataset_tag>/<file_id>/`). Intervals that still carry the
 # pending placeholder (`?` by default) are emitted with `labels.fp_type =
 # null` — the trainer drops those per-target, so they cost only themselves.
 # Empty intervals are ignored.
@@ -69,7 +69,7 @@ VALID_LABELS    = ("Vocal", "Nasal", "V-N", "Other", "FalsePositive")
 
 # --- OUTPUT NAMING ----------------------------------------------------------
 DATASET_TAG   = "ParlaSpeech-HR-FP"            # ends up in record["dataset"]
-EVENT_CUT_DIR = "data/cut_audio/ParlaSpeech-HR-FP"  # project-relative; one
+EVENT_CUT_DIR = "data/processed_audio/ParlaSpeech-HR-FP"  # project-relative; one
                                                      # sub-folder per file_id
 
 # --- RUN OPTIONS ------------------------------------------------------------
@@ -229,7 +229,7 @@ if MERGE_PSV3:
 # 1. Locate the parent utterance WAV (`UTT_AUDIO_DIR / <base>.wav` — in merge
 #    mode we cross-check against the source record's `audio_path`).
 # 2. For each annotated interval on the annotation tier, cut a 16 kHz mono
-#    event clip into `data/cut_audio/<DATASET_TAG>/<file_id>/<event>.wav` via
+#    event clip into `data/processed_audio/<DATASET_TAG>/<file_id>/<event>.wav` via
 #    `utils_dataprep.resample_to_16k_mono` (which also handles the resample if
 #    the parent isn't 16 kHz).
 # 3. Emit one canonical record per event. In merge mode `start_t` / `end_t`

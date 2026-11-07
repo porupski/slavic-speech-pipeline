@@ -171,11 +171,15 @@ TARGETS: dict = {
 }
 
 
-def _add_parlaspeech_targets(targets: dict, langs=("hr", "rs", "pl", "cz")) -> None:
+def _add_parlaspeech_targets(targets: dict,
+                              langs=("hr", "rs", "pl", "cz", "si"),
+                              version: str = "v4") -> None:
     """ParlaSpeech utterance_instance presets per lang: classification
-    (gender + filled-pause presence/count) and regression (sentiment, age)."""
+    (gender + filled-pause presence/count) and regression (sentiment, age).
+    Versioned filename — 11c writes `parlaspeech_v4_<lang>_utterance_instance.jsonl`
+    so v3 and v4 preps do not clobber each other. v4 adds SI."""
     for l in langs:
-        path = f"data/processed_jsonl/parlaspeech_{l}_utterance_instance.jsonl"
+        path = f"data/processed_jsonl/parlaspeech_{version}_{l}_utterance_instance.jsonl"
         targets[f"parlaspeech_{l}_gender"] = {
             "jsonl_path": path, "label_key": "speaker_gender",
             "task_type": "classification", "label_order": ["M", "F"],
