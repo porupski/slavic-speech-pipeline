@@ -92,6 +92,7 @@ class Config:
     dry_run: bool = False        # plan only, do not touch disk
     download_only: bool = False  # download but skip the unpack step
     cleanup_raw_after_unpack: bool = True   # delete the raw archive once its unpack dir is populated
+    include_optional: bool = False  # also fetch vert.gz / textgrid.tgz listed under _files_optional_not_downloaded
 
 cfg = Config()
 print(cfg)
@@ -111,6 +112,7 @@ print(cfg)
 # | `dry_run`       | `False` | Print the plan and stop. Nothing touches disk. Great for a first pass. |
 # | `download_only` | `False` | Fetch archives but skip the unpack step. Useful when moving data between machines. |
 # | `cleanup_raw_after_unpack` | `True`  | Delete each raw archive (`.tgz`/`.zip`/`.gz`) once its unpack dir is populated. Raw archives are reproducible from CLARIN; set `False` only when debugging unpack. |
+# | `include_optional` | `False` | Also fetch optional files (vert.gz, textgrid.tgz) listed under `_files_optional_not_downloaded`. Off by default — the pipeline reads JSONL only. |
 #
 # **Resume is on by default** — Ctrl-C the notebook mid-download and just re-run this cell.
 # CLARIN sources continue via HTTP `Range` on the `.part` file; HF snapshots continue via
@@ -124,12 +126,14 @@ cfg.force         = False
 cfg.dry_run       = False
 cfg.download_only = False
 cfg.cleanup_raw_after_unpack = True
+cfg.include_optional         = False
 
 print(f"  confirm_large            = {cfg.confirm_large}")
 print(f"  force                    = {cfg.force}")
 print(f"  dry_run                  = {cfg.dry_run}")
 print(f"  download_only            = {cfg.download_only}")
 print(f"  cleanup_raw_after_unpack = {cfg.cleanup_raw_after_unpack}")
+print(f"  include_optional         = {cfg.include_optional}")
 
 # %% [markdown]
 # ---
@@ -160,7 +164,7 @@ for ds_name in target_datasets:
     udp.banner(f"Download plan — {ds_name}", char="-")
     print(f"source: {spec['source']}   note: {spec['note']}\n")
 
-    items = udl.iter_files(spec)
+    items = udl.iter_files(spec, include_optional=cfg.include_optional)
     for item in items:
         is_large = item.get("is_large", False)
         size_mb  = item.get("size_mb", 0)

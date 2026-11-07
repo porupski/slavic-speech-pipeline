@@ -10,7 +10,8 @@ test_processed_jsonl/
 0_env_setup/backups/
 ref_files/
 misc/
-*_test.*
+*_test.py
+*_test.ipynb
 docs/mockup
 docs/img/guide_imgs/.trash
 

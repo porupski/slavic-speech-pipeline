@@ -12,6 +12,10 @@ and w2v-BERT — on Slavic speech corpora. The pipeline supports instance-level
 and frame-level tasks with one shared code base. A single config setting
 selects classification or regression.
 
+<p align="center">
+  <img src="docs/img/schema_pipeline_v2.png" alt="SSP flowchart" width="100%" style="max-width: 720px;">
+</p>
+
 The default corpus is **ParlaSpeech 4.0** (HR, RS, CZ, PL, SI). Two pre-built
 **ParlaSpeech-HR benchmark** bundles (v1 and v3) give a smaller entry
 point. **ROG-Art** and **ROG-Dialog** corpora are also supported. The
@@ -123,7 +127,7 @@ Per-language ParlaSpeech audio handles and citations are in
 `1_data_prep/1_README.md`.
 
 ## Author
-[Ivan Porupski](https://porupski.github.io/cv/) - July 2026, [Jožef Stefan Institue](https://www.ijs.si/ijsw/JSI)
+[Ivan Porupski](https://porupski.github.io/cv/) - November 2026, [Jožef Stefan Institue](https://www.ijs.si/ijsw/JSI)
 
 ## License
 

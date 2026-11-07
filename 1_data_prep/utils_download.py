@@ -80,14 +80,19 @@ def resolve_datasets(requested: list[str], registry: dict[str, Any]) -> list[str
 # Planning
 # --------------------------------------------------------------------------- #
 
-def iter_files(spec: dict[str, Any]) -> list[dict[str, Any]]:
-    """Yield the individual downloadable items for a dataset entry.
+def iter_files(spec: dict[str, Any], include_optional: bool = False) -> list[dict[str, Any]]:
+    """Return the individual downloadable items for a dataset entry.
 
     - ``clarin`` datasets expose one item per file in ``spec['files']``.
+      When ``include_optional=True``, items in ``_files_optional_not_downloaded``
+      (vert.gz, textgrid.tgz, …) are appended after the required files.
     - ``hf`` datasets expose one virtual item representing the whole snapshot.
     """
     if spec["source"] == "clarin":
-        return list(spec["files"])
+        items = list(spec["files"])
+        if include_optional:
+            items += list(spec.get("_files_optional_not_downloaded", []))
+        return items
     if spec["source"] == "hf":
         return [{
             "name":     f"{spec['hf_repo']} (HF snapshot)",

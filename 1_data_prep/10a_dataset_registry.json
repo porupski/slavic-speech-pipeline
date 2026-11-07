@@ -67,11 +67,13 @@
       "target_dir": "data/raw/ParlaSpeech-HR",
       "unpack_dir": "data/unpacked/ParlaSpeech-HR",
       "files": [
-        {"name": "ParlaSpeech-HR.v3.0.jsonl.gz",     "size_mb": 2580, "is_large": false},
-        {"name": "ParlaSpeech-HR.v3.0.vert.gz",      "size_mb": 260,  "is_large": false},
-        {"name": "ParlaSpeech-HR.v3.0.textgrid.tgz", "size_mb": 4330, "is_large": true}
+        {"name": "ParlaSpeech-HR.v3.0.jsonl.gz", "size_mb": 2580, "is_large": false}
       ],
-      "note": "Croatian parliamentary speech — v3.0 annotations only. Pair with ParlaSpeech-HR-audio for the actual audio."
+      "_files_optional_not_downloaded": [
+        {"name": "ParlaSpeech-HR.v3.0.vert.gz",      "size_mb": 260,  "is_large": false, "_why_skipped": "vertical-format mirror of the JSONL; ssp reads JSONL only"},
+        {"name": "ParlaSpeech-HR.v3.0.textgrid.tgz", "size_mb": 4330, "is_large": true,  "_why_skipped": "TextGrid alignment files; set include_optional=True if needed"}
+      ],
+      "note": "Croatian parliamentary speech — v3.0 annotations (JSONL only; vert.gz and textgrid.tgz listed under _files_optional_not_downloaded). Pair with ParlaSpeech-HR-audio for the actual audio."
     },
 
     "ParlaSpeech-RS": {
@@ -81,11 +83,13 @@
       "target_dir": "data/raw/ParlaSpeech-RS",
       "unpack_dir": "data/unpacked/ParlaSpeech-RS",
       "files": [
-        {"name": "ParlaSpeech-RS.v3.0.jsonl.gz",     "size_mb": 586,  "is_large": false},
-        {"name": "ParlaSpeech-RS.v3.0.vert.gz",      "size_mb": 73,   "is_large": false},
-        {"name": "ParlaSpeech-RS.v3.0.textgrid.tgz", "size_mb": 1270, "is_large": true}
+        {"name": "ParlaSpeech-RS.v3.0.jsonl.gz", "size_mb": 586, "is_large": false}
       ],
-      "note": "Serbian parliamentary speech — v3.0 annotations. Smallest of the four ParlaSpeech corpora. Pair with ParlaSpeech-RS-audio."
+      "_files_optional_not_downloaded": [
+        {"name": "ParlaSpeech-RS.v3.0.vert.gz",      "size_mb": 73,   "is_large": false, "_why_skipped": "vertical-format mirror of the JSONL; ssp reads JSONL only"},
+        {"name": "ParlaSpeech-RS.v3.0.textgrid.tgz", "size_mb": 1270, "is_large": true,  "_why_skipped": "TextGrid alignment files; set include_optional=True if needed"}
+      ],
+      "note": "Serbian parliamentary speech — v3.0 annotations (JSONL only; vert.gz and textgrid.tgz listed under _files_optional_not_downloaded). Smallest of the four ParlaSpeech corpora. Pair with ParlaSpeech-RS-audio."
     },
 
     "ParlaSpeech-PL": {
@@ -95,10 +99,12 @@
       "target_dir": "data/raw/ParlaSpeech-PL",
       "unpack_dir": "data/unpacked/ParlaSpeech-PL",
       "files": [
-        {"name": "ParlaSpeech-PL.v3.0.jsonl.gz", "size_mb": 393, "is_large": false},
-        {"name": "ParlaSpeech-PL.v3.0.vert.gz",  "size_mb": 103, "is_large": false}
+        {"name": "ParlaSpeech-PL.v3.0.jsonl.gz", "size_mb": 393, "is_large": false}
       ],
-      "note": "Polish parliamentary speech — v3.0 annotations. No TextGrid ships with this release. Pair with ParlaSpeech-PL-audio."
+      "_files_optional_not_downloaded": [
+        {"name": "ParlaSpeech-PL.v3.0.vert.gz", "size_mb": 103, "is_large": false, "_why_skipped": "vertical-format mirror of the JSONL; ssp reads JSONL only"}
+      ],
+      "note": "Polish parliamentary speech — v3.0 annotations (JSONL only; vert.gz listed under _files_optional_not_downloaded). No TextGrid ships with this release. Pair with ParlaSpeech-PL-audio."
     },
 
     "ParlaSpeech-CZ": {
@@ -108,10 +114,12 @@
       "target_dir": "data/raw/ParlaSpeech-CZ",
       "unpack_dir": "data/unpacked/ParlaSpeech-CZ",
       "files": [
-        {"name": "ParlaSpeech-CZ.v3.0.jsonl.gz", "size_mb": 565, "is_large": false},
-        {"name": "ParlaSpeech-CZ.v3.0.vert.gz",  "size_mb": 129, "is_large": false}
+        {"name": "ParlaSpeech-CZ.v3.0.jsonl.gz", "size_mb": 565, "is_large": false}
       ],
-      "note": "Czech parliamentary speech — v3.0 annotations. No TextGrid. Pair with ParlaSpeech-CZ-audio."
+      "_files_optional_not_downloaded": [
+        {"name": "ParlaSpeech-CZ.v3.0.vert.gz", "size_mb": 129, "is_large": false, "_why_skipped": "vertical-format mirror of the JSONL; ssp reads JSONL only"}
+      ],
+      "note": "Czech parliamentary speech — v3.0 annotations (JSONL only; vert.gz listed under _files_optional_not_downloaded). No TextGrid. Pair with ParlaSpeech-CZ-audio."
     },
 
     "ParlaSpeech-HR-audio": {
