@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Under the Hood of ssp</title>
   <link rel="icon" type="image/png" href="img/ssp_logo_v0.png">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
   <nav class="top">
@@ -873,6 +873,8 @@ python 43_run_task_list.py --use_gpu 2>&amp;1 \
           numbers — tune via <code>TASKS</code> and compare the resulting CSV.
           </p>
 
+          <p>Source: <code>2026-11-06_195108</code></p>
+
           <h4>Knobs reference</h4>
           <table class="guide-table">
             <thead>
@@ -986,7 +988,7 @@ python -u 53_run_task_list.py --use_gpu 2>&amp;1 \
                   <tr><td>Primary stress · Slovenian pilot</td><td>SI</td><td class="num">4 000</td><td class="num">1 000</td><td class="num">1 000</td></tr>
                 </tbody>
               </table>
-              <p class="detail-meta">GPU: A100 · mode: demo · epochs: 10 · frame rate 50 Hz · FP: batch 8 ga 2 + positive-only filter + 15 s length cap · stress: batch 16 (HR) / 32 (SI) · run: 2026-11-05_200734_task_list · total wall-clock 9 h 14 min</p>
+              <p class="detail-meta">GPU: A100 · mode: demo · epochs: 10 · frame rate 50 Hz · FP: batch 8 ga 2 + positive-only filter + 15 s length cap · stress: batch 16 (HR) / 32 (SI) · run: 2026-11-08_012920_task_list · total wall-clock ~9 h</p>
             </div>
           </details>
 
@@ -1011,28 +1013,32 @@ python -u 53_run_task_list.py --use_gpu 2>&amp;1 \
                 <td class="num">0.977</td>
                 <td class="num">0.956</td>
                 <td class="num">10 / 10</td>
-                <td class="num">~125 min</td>
+                <td class="num">~121 min</td>
               </tr>
               <tr>
                 <td>classla / wav2vecbert2-filledPause</td>
                 <td class="num">0.980</td>
                 <td class="num">0.962</td>
-                <td class="num">10 / 10</td>
-                <td class="num">~126 min</td>
+                <td class="num">7 / 10</td>
+                <td class="num">~121 min</td>
               </tr>
             </tbody>
           </table>
 
           <div class="cm-grid">
-            <figure>
-              <img src="img/guide_imgs/ch5_run_task_list/fp_hr_bert_lr1e5__best_epoch_example_predictions.png"
-                   alt="Filled pause HR, w2v-BERT 2.0 · F1 0.977">
-              <figcaption>FP · HR · w2v-BERT · <span class="result">F1 0.977</span></figcaption>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch5_run_task_list/fp_hr_bert_lr1e5__phase2_test.gif"
+                    data-ms="3000">
+              <img src="img/guide_imgs/ch5_run_task_list/fp_hr_bert_lr1e5__phase2_test__epoch_10__example_predictions.png"
+                   alt="Filled pause HR, w2v-BERT 2.0 · epoch 10 · F1 0.977">
+              <figcaption>FP · HR · w2v-BERT · <span class="result">F1 0.977</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
-            <figure>
-              <img src="img/guide_imgs/ch5_run_task_list/fp_hr_classla_fp_lr1e5__best_epoch_example_predictions.png"
-                   alt="Filled pause HR, classla warm start · F1 0.980">
-              <figcaption>FP · HR · classla warm start · <span class="result">F1 0.980</span></figcaption>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch5_run_task_list/fp_hr_classla_fp_lr1e5__phase2_test.gif"
+                    data-ms="3000">
+              <img src="img/guide_imgs/ch5_run_task_list/fp_hr_classla_fp_lr1e5__phase2_test__epoch_07__example_predictions.png"
+                   alt="Filled pause HR, classla warm start · epoch 7 · F1 0.980">
+              <figcaption>FP · HR · classla warm start · <span class="result">F1 0.980</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
           </div>
 
@@ -1051,15 +1057,15 @@ python -u 53_run_task_list.py --use_gpu 2>&amp;1 \
             <tbody>
               <tr>
                 <td>w2v-BERT 2.0 (vanilla)</td>
-                <td class="num">0.975</td>
-                <td class="num">0.953</td>
+                <td class="num">0.976</td>
+                <td class="num">0.954</td>
                 <td class="num">10 / 10</td>
-                <td class="num">~111 min</td>
+                <td class="num">~110 min</td>
               </tr>
               <tr>
                 <td>classla / wav2vecbert2-filledPause</td>
                 <td class="num">0.978</td>
-                <td class="num">0.958</td>
+                <td class="num">0.959</td>
                 <td class="num">10 / 10</td>
                 <td class="num">~110 min</td>
               </tr>
@@ -1067,17 +1073,49 @@ python -u 53_run_task_list.py --use_gpu 2>&amp;1 \
           </table>
 
           <div class="cm-grid">
-            <figure>
-              <img src="img/guide_imgs/ch5_run_task_list/fp_pl_bert_lr1e5__best_epoch_example_predictions.png"
-                   alt="Filled pause PL, w2v-BERT 2.0 · F1 0.975">
-              <figcaption>FP · PL · w2v-BERT · <span class="result">F1 0.975</span></figcaption>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch5_run_task_list/fp_pl_bert_lr1e5__phase2_test.gif"
+                    data-ms="3000">
+              <img src="img/guide_imgs/ch5_run_task_list/fp_pl_bert_lr1e5__phase2_test__epoch_10__example_predictions.png"
+                   alt="Filled pause PL, w2v-BERT 2.0 · epoch 10 · F1 0.976">
+              <figcaption>FP · PL · w2v-BERT · <span class="result">F1 0.976</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
-            <figure>
-              <img src="img/guide_imgs/ch5_run_task_list/fp_pl_classla_fp_lr1e5__best_epoch_example_predictions.png"
-                   alt="Filled pause PL, classla warm start · F1 0.978">
-              <figcaption>FP · PL · classla warm start · <span class="result">F1 0.978</span></figcaption>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch5_run_task_list/fp_pl_classla_fp_lr1e5__phase2_test.gif"
+                    data-ms="3000">
+              <img src="img/guide_imgs/ch5_run_task_list/fp_pl_classla_fp_lr1e5__phase2_test__epoch_10__example_predictions.png"
+                   alt="Filled pause PL, classla warm start · epoch 10 · F1 0.978">
+              <figcaption>FP · PL · classla warm start · <span class="result">F1 0.978</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
           </div>
+
+          <details class="detail-box">
+            <summary>Full test-set predictions — filled pause (all 4 runs)</summary>
+            <div class="detail-body">
+              <div class="cm-grid tall">
+                <figure>
+                  <img src="img/guide_imgs/ch5_run_task_list/fp_hr_bert_lr1e5__example_predictions_test.png"
+                       alt="FP HR w2v-BERT — best, worst, random test predictions">
+                  <figcaption>FP · HR · w2v-BERT 2.0 — test predictions (best 6 · worst 6 · random 12)</figcaption>
+                </figure>
+                <figure>
+                  <img src="img/guide_imgs/ch5_run_task_list/fp_hr_classla_fp_lr1e5__example_predictions_test.png"
+                       alt="FP HR classla — best, worst, random test predictions">
+                  <figcaption>FP · HR · classla warm start — test predictions (best 6 · worst 6 · random 12)</figcaption>
+                </figure>
+                <figure>
+                  <img src="img/guide_imgs/ch5_run_task_list/fp_pl_bert_lr1e5__example_predictions_test.png"
+                       alt="FP PL w2v-BERT — best, worst, random test predictions">
+                  <figcaption>FP · PL · w2v-BERT 2.0 — test predictions (best 6 · worst 6 · random 12)</figcaption>
+                </figure>
+                <figure>
+                  <img src="img/guide_imgs/ch5_run_task_list/fp_pl_classla_fp_lr1e5__example_predictions_test.png"
+                       alt="FP PL classla — best, worst, random test predictions">
+                  <figcaption>FP · PL · classla warm start — test predictions (best 6 · worst 6 · random 12)</figcaption>
+                </figure>
+              </div>
+            </div>
+          </details>
 
           <h4>At-a-glance — primary stress (2 × 2)</h4>
           <p>Same 10-epoch demo budget, lr 3e-5. Word-level frame classification. HR runs on ParlaSpeech v3 stress annotations; SI is the pilot Slovenian corpus.</p>
@@ -1099,29 +1137,33 @@ python -u 53_run_task_list.py --use_gpu 2>&amp;1 \
                 <td>w2v-BERT 2.0 (vanilla)</td>
                 <td class="num">0.965</td>
                 <td class="num">0.943</td>
-                <td class="num">7 / 10</td>
-                <td class="num">~25 min</td>
+                <td class="num">10 / 10</td>
+                <td class="num">~26 min</td>
               </tr>
               <tr>
                 <td>classla / Wav2Vec2BertPrimaryStress</td>
-                <td class="num">0.970</td>
-                <td class="num">0.951</td>
-                <td class="num">9 / 10</td>
+                <td class="num">0.971</td>
+                <td class="num">0.953</td>
+                <td class="num">8 / 10</td>
                 <td class="num">~25 min</td>
               </tr>
             </tbody>
           </table>
 
           <div class="cm-grid">
-            <figure>
-              <img src="img/guide_imgs/ch5_run_task_list/stress_hr_bert_lr1e5__best_epoch_example_predictions.png"
-                   alt="Primary stress HR, w2v-BERT 2.0 · F1 0.965">
-              <figcaption>Stress · HR · w2v-BERT · <span class="result">F1 0.965</span></figcaption>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch5_run_task_list/stress_hr_bert_lr1e5__phase2_test.gif"
+                    data-ms="3000">
+              <img src="img/guide_imgs/ch5_run_task_list/stress_hr_bert_lr1e5__phase2_test__epoch_10__example_predictions.png"
+                   alt="Primary stress HR, w2v-BERT 2.0 · epoch 10 · F1 0.965">
+              <figcaption>Stress · HR · w2v-BERT · <span class="result">F1 0.965</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
-            <figure>
-              <img src="img/guide_imgs/ch5_run_task_list/stress_hr_classla_lr1e5__best_epoch_example_predictions.png"
-                   alt="Primary stress HR, classla warm start · F1 0.970">
-              <figcaption>Stress · HR · classla warm start · <span class="result">F1 0.970</span></figcaption>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch5_run_task_list/stress_hr_classla_lr1e5__phase2_test.gif"
+                    data-ms="3000">
+              <img src="img/guide_imgs/ch5_run_task_list/stress_hr_classla_lr1e5__phase2_test__epoch_08__example_predictions.png"
+                   alt="Primary stress HR, classla warm start · epoch 8 · F1 0.971">
+              <figcaption>Stress · HR · classla warm start · <span class="result">F1 0.971</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
           </div>
 
@@ -1140,42 +1182,67 @@ python -u 53_run_task_list.py --use_gpu 2>&amp;1 \
             <tbody>
               <tr>
                 <td>w2v-BERT 2.0 (vanilla)</td>
-                <td class="num">0.933</td>
-                <td class="num">0.891</td>
-                <td class="num">9 / 10</td>
-                <td class="num">~11 min</td>
+                <td class="num">0.935</td>
+                <td class="num">0.894</td>
+                <td class="num">10 / 10</td>
+                <td class="num">~12 min</td>
               </tr>
               <tr>
                 <td>classla / Wav2Vec2BertPrimaryStress (HR/RS-trained)</td>
-                <td class="num">0.935</td>
-                <td class="num">0.895</td>
-                <td class="num">9 / 10</td>
+                <td class="num">0.938</td>
+                <td class="num">0.900</td>
+                <td class="num">8 / 10</td>
                 <td class="num">~11 min</td>
               </tr>
             </tbody>
           </table>
 
           <div class="cm-grid">
-            <figure>
-              <img src="img/guide_imgs/ch5_run_task_list/stress_si_bert_lr1e5__best_epoch_example_predictions.png"
-                   alt="Primary stress SI, w2v-BERT 2.0 · F1 0.933">
-              <figcaption>Stress · SI · w2v-BERT · <span class="result">F1 0.933</span></figcaption>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch5_run_task_list/stress_si_bert_lr1e5__phase2_test.gif"
+                    data-ms="3000">
+              <img src="img/guide_imgs/ch5_run_task_list/stress_si_bert_lr1e5__phase2_test__epoch_10__example_predictions.png"
+                   alt="Primary stress SI, w2v-BERT 2.0 · epoch 10 · F1 0.935">
+              <figcaption>Stress · SI · w2v-BERT · <span class="result">F1 0.935</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
-            <figure>
-              <img src="img/guide_imgs/ch5_run_task_list/stress_si_classla_lr1e5__best_epoch_example_predictions.png"
-                   alt="Primary stress SI, classla warm start · F1 0.935">
-              <figcaption>Stress · SI · classla warm start · <span class="result">F1 0.935</span></figcaption>
+            <figure class="gif-fig"
+                    data-gif="img/guide_imgs/ch5_run_task_list/stress_si_classla_lr1e5__phase2_test.gif"
+                    data-ms="3000">
+              <img src="img/guide_imgs/ch5_run_task_list/stress_si_classla_lr1e5__phase2_test__epoch_08__example_predictions.png"
+                   alt="Primary stress SI, classla warm start · epoch 8 · F1 0.938">
+              <figcaption>Stress · SI · classla warm start · <span class="result">F1 0.938</span> <span class="gif-hint">▶</span></figcaption>
             </figure>
           </div>
 
-          <p>
-          <!-- TODO (2026-11-06): replace with the clean weekend re-run once the
-               best-vs-last epoch fix has landed. Keep until then. -->
-          Source: <code>2026-11-05_200734_task_list</code> (A100, demo mode).
-          Filled-pause tasks ran with <code>require_positive=True</code> and a
-          15 s length cap to keep the train split on-topic and avoid long-clip
-          OOMs. Primary-stress tasks ran on word-level frame extracts.
-          </p>
+          <details class="detail-box">
+            <summary>Full test-set predictions — primary stress (all 4 runs)</summary>
+            <div class="detail-body">
+              <div class="cm-grid tall">
+                <figure>
+                  <img src="img/guide_imgs/ch5_run_task_list/stress_hr_bert_lr1e5__example_predictions_test.png"
+                       alt="Stress HR w2v-BERT — best, worst, random test predictions">
+                  <figcaption>Stress · HR · w2v-BERT 2.0 — test predictions (best 6 · worst 6 · random 12)</figcaption>
+                </figure>
+                <figure>
+                  <img src="img/guide_imgs/ch5_run_task_list/stress_hr_classla_lr1e5__example_predictions_test.png"
+                       alt="Stress HR classla — best, worst, random test predictions">
+                  <figcaption>Stress · HR · classla warm start — test predictions (best 6 · worst 6 · random 12)</figcaption>
+                </figure>
+                <figure>
+                  <img src="img/guide_imgs/ch5_run_task_list/stress_si_bert_lr1e5__example_predictions_test.png"
+                       alt="Stress SI w2v-BERT — best, worst, random test predictions">
+                  <figcaption>Stress · SI · w2v-BERT 2.0 — test predictions (best 6 · worst 6 · random 12)</figcaption>
+                </figure>
+                <figure>
+                  <img src="img/guide_imgs/ch5_run_task_list/stress_si_classla_lr1e5__example_predictions_test.png"
+                       alt="Stress SI classla — best, worst, random test predictions">
+                  <figcaption>Stress · SI · classla warm start — test predictions (best 6 · worst 6 · random 12)</figcaption>
+                </figure>
+              </div>
+            </div>
+          </details>
+
+          <p>Source: <code>2026-11-08_012920</code></p>
 
           <p>
           Learning rate, epoch count, and head choice (vanilla w2v-BERT vs the

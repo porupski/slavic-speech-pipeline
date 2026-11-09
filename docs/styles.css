@@ -925,6 +925,29 @@ details.walkthrough-chapter > summary p { margin: 0; font-size: 0.9rem; color: v
   font-size: 0.82rem;
   font-style: italic;
 }
+.guide-img-dual {
+  margin: 0.8rem 0;
+  padding: 0.75rem 0.9rem 0.65rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--status-wip);
+  border-radius: 0 0.4rem 0.4rem 0;
+  text-align: center;
+}
+.guide-img-dual img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.3rem;
+  display: block;
+  margin: 0 auto;
+  background: var(--bg-alt);
+}
+.guide-img-dual figcaption {
+  margin-top: 0.45rem;
+  color: var(--fg-muted);
+  font-size: 0.82rem;
+  font-style: italic;
+}
 .hardware-note {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -972,6 +995,7 @@ details.walkthrough-chapter > summary p { margin: 0; font-size: 0.9rem; color: v
   object-fit: contain;
   display: block;
 }
+.cm-grid.tall img { max-height: none; }
 
 /* ──────────────────── gif-fig · click-to-animate ──────────────────── */
 /* first figure in each pair gets the accent border; second stays plain */
