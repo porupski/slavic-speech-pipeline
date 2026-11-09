@@ -345,6 +345,19 @@ class Config:
     normalize:   str  = "zscore"
     loss_function: str = "mse"   # "mse" | "l1"
 
+    # -- Classification-only imbalance knobs (ignored by regression) ---------
+    # Values to drop at load time, treated as if they were None. Lets the task
+    # list strip e.g. "unspecifiedFunction" before the ratio cap runs.
+    drop_label_values: list | None = None
+    # 1:N ratio cap. When set, any class with fewer than top_train_count/N
+    # training rows is relabeled "Other" across train, dev, and test. None
+    # disables (default) — existing targets keep their full label set.
+    max_class_ratio: float | None = None
+    # Class-weighted cross-entropy. "none" | "inverse_freq" | "sqrt_inverse".
+    # Weights are computed on TRAIN (after collapse) and normalized so the
+    # mean weight is 1.0 — loss magnitude stays comparable across runs.
+    class_weighting: str = "none"
+
     # -- Run mode (set from 4_config.json / CLI; apply_mode layers the caps) ----
     run_mode: str = "full"                  # "test" | "demo" | "full"
     demo_sampling: str = "proportional"     # "proportional" | "balanced" — only when pooling >1 lang
@@ -457,6 +470,15 @@ def validate_config(cfg: Config) -> None:
             raise ValueError(f"label_order has duplicates: {cfg.label_order}")
         if cfg.best_metric_classification not in ("macro_f1", "accuracy", "spearman"):
             raise ValueError(f"best_metric_classification: invalid {cfg.best_metric_classification!r}")
+        if cfg.class_weighting not in ("none", "inverse_freq", "sqrt_inverse"):
+            raise ValueError(
+                f"class_weighting: invalid {cfg.class_weighting!r} "
+                "(choose none|inverse_freq|sqrt_inverse)"
+            )
+        if cfg.max_class_ratio is not None and cfg.max_class_ratio <= 0:
+            raise ValueError(f"max_class_ratio must be >0 or null, got {cfg.max_class_ratio!r}")
+        if cfg.drop_label_values is not None and not isinstance(cfg.drop_label_values, list):
+            raise ValueError(f"drop_label_values must be a list or null, got {type(cfg.drop_label_values).__name__}")
     elif cfg.task_type == "regression":
         if cfg.loss_function not in ("mse", "l1"):
             raise ValueError(f"loss_function must be 'mse' or 'l1', got {cfg.loss_function!r}")
@@ -504,6 +526,12 @@ def print_config_summary(cfg: Config, device: str) -> None:
     print(f"task_type   = {cfg.task_type}")
     if cfg.task_type == "classification":
         print(f"label_order = {cfg.label_order}")
+        if cfg.drop_label_values:
+            print(f"drop_label_values = {cfg.drop_label_values}")
+        if cfg.max_class_ratio is not None:
+            print(f"max_class_ratio   = 1:{cfg.max_class_ratio:g}  (rare→{OTHER_LABEL!r})")
+        if cfg.class_weighting != "none":
+            print(f"class_weighting   = {cfg.class_weighting}")
     else:
         print(f"normalize   = {cfg.normalize}")
     print(f"device      = {device}")
@@ -516,16 +544,29 @@ def print_config_summary(cfg: Config, device: str) -> None:
 # Data — load splits, cap them, rough ETA
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def load_split(jsonl_path: str, split: str, label_key: str, max_duration_s: float) -> list[dict]:
+OTHER_LABEL = "Other"
+
+
+def load_split(jsonl_path: str, split: str, label_key: str, max_duration_s: float,
+               drop_values: list | None = None) -> list[dict]:
     """Records of one split that carry a non-null ``label_key``, dropping
-    instances longer than ``max_duration_s`` (padding-waste OOM guard)."""
-    out, n_long = [], 0
+    instances longer than ``max_duration_s`` (padding-waste OOM guard).
+
+    ``drop_values`` treats the listed label values as if they were None —
+    rows carrying them are filtered out. Lets the task list strip
+    e.g. "unspecifiedFunction" before class-collapse runs."""
+    drop_set = set(drop_values) if drop_values else set()
+    out, n_long, n_dropped = [], 0, 0
     for r in udp.iter_jsonl(jsonl_path):
         if r["split"] != split:
             continue
         if label_key not in r.get("labels", {}):
             continue
-        if r["labels"][label_key] is None:
+        v = r["labels"][label_key]
+        if v is None:
+            continue
+        if v in drop_set:
+            n_dropped += 1
             continue
         if r.get("metadata", {}).get("audio_length", 0.0) > max_duration_s:
             n_long += 1
@@ -533,7 +574,79 @@ def load_split(jsonl_path: str, split: str, label_key: str, max_duration_s: floa
         out.append(r)
     if n_long:
         print(f"  dropped {n_long} {split} records > {max_duration_s}s")
+    if n_dropped:
+        print(f"  dropped {n_dropped} {split} records via drop_label_values={sorted(drop_set)}")
     return out
+
+
+def collapse_rare_classes(train_records: list[dict], dev_records: list[dict],
+                          test_records: list[dict], label_key: str,
+                          max_ratio: float) -> dict:
+    """Relabel to ``OTHER_LABEL`` every class with fewer than
+    ``top_train_count / max_ratio`` rows in TRAIN. Applied in-place across all
+    three splits; labels seen only in dev/test (never in train) also fold to
+    Other since they are, by definition, below threshold.
+
+    Returns a stats dict for logging. No-op when ``max_ratio`` is None."""
+    from collections import Counter
+    counts = Counter(r["labels"][label_key] for r in train_records)
+    if not counts:
+        return {"kept_classes": [], "collapsed_classes": [], "threshold": 0, "top_count": 0}
+
+    top = counts.most_common(1)[0][1]
+    threshold = top / max_ratio
+    kept = {lab for lab, n in counts.items() if n >= threshold}
+    collapsed = {lab for lab in counts if lab not in kept}
+
+    n_relabeled = {"train": 0, "dev": 0, "test": 0}
+    for name, recs in (("train", train_records), ("dev", dev_records), ("test", test_records)):
+        for r in recs:
+            if r["labels"][label_key] not in kept:
+                r["labels"][label_key] = OTHER_LABEL
+                n_relabeled[name] += 1
+
+    print(f"class collapse (1:{max_ratio:g} vs top={top}): "
+          f"threshold={threshold:.1f}, kept {len(kept)} classes, "
+          f"collapsed {len(collapsed)} → {OTHER_LABEL!r}")
+    print(f"   collapsed: {sorted(collapsed, key=str)}")
+    print(f"   relabeled per split: {n_relabeled}")
+    return {
+        "kept_classes": sorted(kept, key=str),
+        "collapsed_classes": sorted(collapsed, key=str),
+        "threshold": threshold,
+        "top_count": top,
+        "n_relabeled": n_relabeled,
+    }
+
+
+def compute_class_weights(train_records: list[dict], label_key: str,
+                          label2id: dict, kind: str):
+    """Per-class CE weights computed on TRAIN. Returns a float32 tensor sized
+    ``len(label2id)`` or None when ``kind == "none"``. Weights are normalized so
+    the mean weight equals 1.0 (ignoring zero-count classes), which keeps the
+    loss magnitude comparable to the unweighted run."""
+    if kind == "none":
+        return None
+    from collections import Counter
+    counts = Counter(r["labels"][label_key] for r in train_records)
+    n_classes = len(label2id)
+    w = torch.zeros(n_classes, dtype=torch.float32)
+    for lab, idx in label2id.items():
+        c = counts.get(lab, 0)
+        if c == 0:
+            continue
+        if kind == "inverse_freq":
+            w[idx] = 1.0 / c
+        elif kind == "sqrt_inverse":
+            w[idx] = 1.0 / (c ** 0.5)
+        else:
+            raise ValueError(f"unknown class_weighting {kind!r}")
+    nz = w[w > 0]
+    if len(nz) > 0:
+        w = w * (1.0 / nz.mean())
+    print(f"class_weighting={kind} → mean(nonzero)=1.000, "
+          f"min={float(w[w > 0].min()):.3f}, max={float(w.max()):.3f}")
+    return w
 
 
 def cap_split(records: list[dict], n, seed: int, sampling: str = "proportional") -> list[dict]:
@@ -575,12 +688,14 @@ def cap_split(records: list[dict], n, seed: int, sampling: str = "proportional")
 
 
 def load_and_cap_splits(cfg: Config) -> tuple[list[dict], list[dict], list[dict]]:
-    """Load train/dev/test for cfg's JSONL + label_key, then apply the run-mode
-    caps identically to every split. Prints the cap report; raises if any split
-    comes back empty."""
-    train_records = load_split(cfg.jsonl_path, "train", cfg.label_key, cfg.max_duration_s)
-    dev_records   = load_split(cfg.jsonl_path, "dev",   cfg.label_key, cfg.max_duration_s)
-    test_records  = load_split(cfg.jsonl_path, "test",  cfg.label_key, cfg.max_duration_s)
+    """Load train/dev/test for cfg's JSONL + label_key, apply the run-mode caps
+    identically to every split, then (classification only) collapse rare classes
+    per cfg.max_class_ratio. Prints the cap + collapse report; raises if any
+    split comes back empty."""
+    drop_vals = cfg.drop_label_values if cfg.task_type == "classification" else None
+    train_records = load_split(cfg.jsonl_path, "train", cfg.label_key, cfg.max_duration_s, drop_vals)
+    dev_records   = load_split(cfg.jsonl_path, "dev",   cfg.label_key, cfg.max_duration_s, drop_vals)
+    test_records  = load_split(cfg.jsonl_path, "test",  cfg.label_key, cfg.max_duration_s, drop_vals)
 
     # One knob, applied identically to every split. None caps (full mode) are no-ops.
     _pre = (len(train_records), len(dev_records), len(test_records))
@@ -598,6 +713,11 @@ def load_and_cap_splits(cfg: Config) -> tuple[list[dict], list[dict], list[dict]
     _capline("test",  _pre[2], len(test_records),  cfg.cap_test)
     if not train_records or not dev_records or not test_records:
         raise ValueError("one of the splits is empty after filtering for label_key — check the JSONL")
+
+    if cfg.task_type == "classification" and cfg.max_class_ratio is not None:
+        collapse_rare_classes(train_records, dev_records, test_records,
+                              cfg.label_key, cfg.max_class_ratio)
+
     return train_records, dev_records, test_records
 
 
@@ -1057,6 +1177,23 @@ def plot_distribution(gold, pred, out_path: Path):
     plt.tight_layout(); fig.savefig(out_path); plt.close(fig)
 
 
+class WeightedLossTrainer(Trainer):
+    """Trainer with class-weighted CE. Used only when cfg.class_weighting != "none"."""
+
+    def __init__(self, *args, class_weights=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._class_weights = class_weights
+
+    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+        labels = inputs.pop("labels")
+        outputs = model(**inputs)
+        logits = outputs.logits
+        weight = self._class_weights.to(logits.device) if self._class_weights is not None else None
+        loss_fct = nn.CrossEntropyLoss(weight=weight)
+        loss = loss_fct(logits.view(-1, logits.size(-1)), labels.view(-1))
+        return (loss, outputs) if return_outputs else loss
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Training engine — epoch callback, best-epoch pick, run_phase
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1305,12 +1442,22 @@ def run_phase(*, phase_name: str, train_records: list[dict], eval_records: list[
         track_best_state=save_best_model,
     )
 
-    trainer = Trainer(
+    class_weights = None
+    if cfg.task_type == "classification" and cfg.class_weighting != "none":
+        class_weights = compute_class_weights(
+            train_records, cfg.label_key, label2id, cfg.class_weighting,
+        )
+
+    trainer_kwargs = dict(
         model=model, args=training_args,
         train_dataset=train_ds, eval_dataset=eval_ds,
         compute_metrics=compute_metrics,
         data_collator=data_collator, callbacks=[callback],
     )
+    if class_weights is not None:
+        trainer = WeightedLossTrainer(class_weights=class_weights, **trainer_kwargs)
+    else:
+        trainer = Trainer(**trainer_kwargs)
     print(f"🚀 training {cfg.num_epochs} epochs (bs={cfg.batch_size} ga={cfg.grad_accum} lr={cfg.learning_rate})")
     trainer.train()
 
