@@ -19,6 +19,23 @@
   },
 
   "datasets": {
+    "ROG-Dialog-v2": {
+      "source":   "clarin",
+      "handle":   "http://hdl.handle.net/11356/2637",
+      "base_url": "https://www.clarin.si/repository/xmlui/bitstream/handle/11356/2637",
+      "target_dir": "data/raw/ROG-Dialog-v2",
+      "unpack_dir": "data/unpacked/ROG-Dialog-v2",
+      "files": [
+        {"name": "ROG-Dialog-2.0-EXMARaLDA.zip", "size_mb": 1250, "is_large": true}
+      ],
+      "_files_optional_not_downloaded": [
+        {"name": "ROG-Dialog-2.0-DOC.zip",     "size_mb": 5,   "is_large": false, "_why_skipped": "PDF corpus docs + README + speaker metadata TSVs; not consumed by ssp"},
+        {"name": "ROG-Dialog-2.0-CONLLU.zip",  "size_mb": 10,  "is_large": false, "_why_skipped": "CoNLL-U token-level morph/syntax; ssp reads EXB"},
+        {"name": "ROG-Dialog-2.0-VERT.zip",    "size_mb": 10,  "is_large": false, "_why_skipped": "vertical-format mirror; ssp reads EXB"}
+      ],
+      "note": "Slovenian dialogue corpus v2.0 (2026 release, hdl 11356/2637) — 25 speakers, 5.17 h, 12 conversations. Retains ROG-Dialog v1.0 audio but adds revised dialogue-act annotations (hierarchical), new semantic-content and KROHOT humour layers, sentence IDs, transcription fixes. The EXMARaLDA.zip (~1.25 GB) bundles WAV + EXB + TRS + TXT + COMA together; only WAV + EXB are consumed downstream. Default ROG-dia source."
+    },
+
     "ROG-Dialog": {
       "source":   "clarin",
       "handle":   "http://hdl.handle.net/11356/2073",
@@ -29,7 +46,7 @@
         {"name": "ROG-Dialog.zip",       "size_mb": 5,    "is_large": true},
         {"name": "ROG-Dialog_audio.zip", "size_mb": 1220, "is_large": true}
       ],
-      "note": "Slovenian dialogue corpus — sentiment, dialogue-act, filled-pause. 25 speakers, 5.2 h, EXB/TRS/TXT. The _audio.zip (~1.2 GB) is required for audio tasks."
+      "note": "LEGACY — ROG-Dialog v1.0 (hdl 11356/2073). Slovenian dialogue corpus — sentiment, dialogue-act, filled-pause. 25 speakers, 5.2 h, EXB/TRS/TXT. Superseded by ROG-Dialog-v2 (hdl 11356/2637); kept for backwards compatibility with earlier results."
     },
 
     "ROG": {

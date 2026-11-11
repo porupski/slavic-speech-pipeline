@@ -68,18 +68,29 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    # Where to find unpacked EXB files. Glob is applied recursively.
-    exb_glob: str = "data/unpacked/ROG-Dialog/ROG-Dialog/**/*.exb"
+    # Which ROG-Dialog release to prepare. Default is v2.0 (hdl 11356/2637), which bundles
+    # WAVs and EXBs inside a single EXMARaLDA zip. Set to "ROG-Dialog" for the legacy v1.0
+    # (hdl 11356/2073) which ships WAVs and EXBs in two separate archives.
+    source_name: str = "ROG-Dialog-v2"
 
-    # Session-WAV root — the splitter indexes this tree by stem and slices.
-    audio_source_dir: str = "data/unpacked/ROG-Dialog/ROG-Dialog_audio"
+    # Where to find unpacked EXB files. Recursive glob under the unpack dir. `{source_name}`
+    # is substituted at runtime. v2's EXMARaLDA.zip nests its contents under
+    # `ROG-Dialog-2.0-EXMARaLDA/...`; v1 nests under `ROG-Dialog/...`. The `**` keeps us
+    # agnostic to the exact inner layout.
+    exb_glob: str = "data/unpacked/{source_name}/**/*.exb"
+
+    # Session-WAV root. The splitter indexes this tree recursively by stem (matched against
+    # each record's `metadata.source_file`). v2 bundles audio in the EXMARaLDA zip (same tree
+    # as EXBs); v1 has a separate `{source_name}_audio/` subdir.
+    audio_source_dir: str = "data/unpacked/{source_name}"
     audio_source_pattern: str = "*.wav"
 
     # Where the cut WAVs land (per-instance 16 kHz mono PCM-16).
-    processed_audio_subdir: str = "data/processed_audio/ROG-Dialog"
+    processed_audio_subdir: str = "data/processed_audio/{source_name}"
 
     # Final canonical JSONL (post-cut). audio_path points at files that exist.
-    output_jsonl: str = "data/processed_jsonl/rog_dialog_instance.jsonl"
+    # v2 → rog_dialog_v2_instance.jsonl; v1 → rog_dialog_instance.jsonl.
+    output_jsonl: str = "data/processed_jsonl/{source_name_jsonl}_instance.jsonl"
 
     # Cut toggle — set False to rewrite the JSONL against an already-cut WAV cache
     # without touching audio (useful when iterating on label logic).
@@ -104,6 +115,15 @@ class Config:
     test_n_files: int = 3   # cap on number of EXB files in test mode
 
 cfg = Config()
+
+# Resolve `{source_name}` / `{source_name_jsonl}` placeholders in path fields.
+# source_name_jsonl: "ROG-Dialog-v2" → "rog_dialog_v2", "ROG-Dialog" → "rog_dialog".
+_source_jsonl = cfg.source_name.lower().replace("-", "_")
+for _f in ("exb_glob", "audio_source_dir", "processed_audio_subdir", "output_jsonl"):
+    _v = getattr(cfg, _f)
+    if "{" in _v:
+        setattr(cfg, _f, _v.format(source_name=cfg.source_name, source_name_jsonl=_source_jsonl))
+
 print(cfg)
 
 # Tier categories we ask for if present in ROG-Dialog EXBs.

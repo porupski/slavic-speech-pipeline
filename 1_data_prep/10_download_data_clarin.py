@@ -36,8 +36,9 @@
 #
 # This downloader is for the **full corpora from CLARIN** — ParlaSpeech-{HR,RS,PL,CZ},
 # ROG, GOS — when you need the complete release rather than a benchmark slice.
-# The small default below (`ROG-Dialog`, ~1.2 GB) is a safe starting pick to
-# see the flow; swap in whatever you actually need before running.
+# The small default below (`ROG-Dialog-v2`, ~1.25 GB EXMARaLDA bundle — WAV+EXB) is a safe
+# starting pick to see the flow; swap in whatever you actually need before running.
+# Legacy `ROG-Dialog` (v1.0) remains available in the registry for reproducing earlier results.
 #
 # ---
 #
@@ -73,7 +74,8 @@ print(f"Shorthands:         {sorted(REGISTRY['shorthands'])}")
 #
 # `cfg.datasets` is the list of registry keys (or shorthands) to fetch. Examples:
 #
-# - `["ROG-Dialog"]` — the starting default; Slovenian dialogue corpus (~1.2 GB, annotations + audio).
+# - `["ROG-Dialog-v2"]` — the starting default; Slovenian dialogue corpus v2.0 (~1.25 GB EXMARaLDA bundle — WAV+EXB+TRS+TXT+COMA; downstream uses WAV+EXB only).
+# - `["ROG-Dialog"]` — legacy v1.0 (~1.2 GB, annotations + audio in two zips).
 # - `["ParlaSpeech-RS-v4"]` — just Serbian ParlaSpeech v4.0 transcripts (~0.6 GB, no audio).
 # - `["ParlaSpeech-RS-v4", "ParlaSpeech-RS-v4-audio"]` — Serbian v4 transcripts + audio; smallest
 #   of the five v4 releases (~63 GB audio).
@@ -86,7 +88,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Config:
-    datasets: list = field(default_factory=lambda: ["ROG-Dialog"])
+    datasets: list = field(default_factory=lambda: ["ROG-Dialog-v2"])
     confirm_large: bool = True   # allow files/snapshots marked is_large
     force: bool = False          # re-download things already on disk
     dry_run: bool = False        # plan only, do not touch disk
@@ -318,7 +320,8 @@ for ds_name in target_datasets:
 #
 # ## Next
 #
-# - **ROG-Dialog** → `11b_prep_ROG-dia.ipynb`
+# - **ROG-Dialog-v2** (default) → `11b_prep_ROG-dia.ipynb` with `cfg.source_name="ROG-Dialog-v2"`.
+#   Legacy **ROG-Dialog** (v1.0) → same notebook with `cfg.source_name="ROG-Dialog"`.
 # - **ROG** → `11a_prep_ROG-art.ipynb`
 # - **ParlaSpeech-{HR,RS,PL,CZ,SI} v4** → `11c_prep_parlaspeech.ipynb` (`cfg.version`
 #   selects v4 or v3; `cfg.lang` pins one language; empty = every ParlaSpeech-{LANG}
