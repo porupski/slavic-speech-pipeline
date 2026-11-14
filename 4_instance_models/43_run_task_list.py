@@ -60,25 +60,27 @@ TASKS: list[dict] = [
     # jsonl_path stays at whatever the config block pointed at and the split
     # comes back empty.
     #
-    # ROG-Dialog baselines on XLS-R-300M (10 runs):
-    #   • sentiment            — uncapped, 6 classes, Nones already dropped
-    #   • dialogue_act_dimension — 1:20 ratio cap → rare classes fold to "Other"
-    #   • dialogue_act_function  — 1:30 ratio cap → rare classes fold to "Other"
-    # Each task runs twice: class_weighting=none vs sqrt_inverse.
-    # DA tasks also run twice over "variant A" (drop unspecified* before
-    # collapse) vs "variant B" (keep unspecified*, let them fold into Other).
+    # ROG-Dialog follow-up (post-bugfix, 2026-11-09):
+    #   - tasks 3-6 (DA dimension) crashed on "Other not in label_order" —
+    #     collapse now resets cfg.label_order so build_label_maps rebuilds.
+    #   - tasks 7-8 (DA function varA) crashed on SpecAugment mask_length vs
+    #     sequence_length — add min_duration_s=1.0 to drop sub-second clips.
+    # min_duration_s=1.0 is also applied to the DA tasks of varB to keep the
+    # six re-runs methodologically identical (cross-variant comparability).
+    # Adds two sentiment_3 runs using the new label_remap hook to collapse
+    # the 6-class scale to neg/neu/pos (see TARGETS["rog_dia_sentiment_3"]).
 
-    # --- Sentiment (6 classes, no cap, no drop) --------------------------
-    {"label": "sentiment_xls-r_cw-none",
+    # --- Sentiment 3-class (via label_remap in the target preset) --------
+    {"label": "sentiment3_xls-r_cw-none",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_sentiment",
+     "target":        "rog_dia_sentiment_3",
      "task_type":     "classification",
      "num_epochs":    10,
      "learning_rate": 3e-5,
      "class_weighting": "none"},
-    {"label": "sentiment_xls-r_cw-sqrt",
+    {"label": "sentiment3_xls-r_cw-sqrt",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_sentiment",
+     "target":        "rog_dia_sentiment_3",
      "task_type":     "classification",
      "num_epochs":    10,
      "learning_rate": 3e-5,
@@ -93,6 +95,7 @@ TASKS: list[dict] = [
      "learning_rate": 3e-5,
      "drop_label_values": ["unspecifiedDimension"],
      "max_class_ratio": 20,
+     "min_duration_s": 1.0,
      "class_weighting": "none"},
     {"label": "da-dim_varA_xls-r_cw-sqrt",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
@@ -102,6 +105,7 @@ TASKS: list[dict] = [
      "learning_rate": 3e-5,
      "drop_label_values": ["unspecifiedDimension"],
      "max_class_ratio": 20,
+     "min_duration_s": 1.0,
      "class_weighting": "sqrt_inverse"},
 
     # --- DA dimension — variant B (keep unspecified, let it fold into Other) ---
@@ -112,6 +116,7 @@ TASKS: list[dict] = [
      "num_epochs":    10,
      "learning_rate": 3e-5,
      "max_class_ratio": 20,
+     "min_duration_s": 1.0,
      "class_weighting": "none"},
     {"label": "da-dim_varB_xls-r_cw-sqrt",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
@@ -120,6 +125,7 @@ TASKS: list[dict] = [
      "num_epochs":    10,
      "learning_rate": 3e-5,
      "max_class_ratio": 20,
+     "min_duration_s": 1.0,
      "class_weighting": "sqrt_inverse"},
 
     # --- DA function — variant A (drop unspecified, then 1:30 collapse) ---
@@ -131,6 +137,7 @@ TASKS: list[dict] = [
      "learning_rate": 3e-5,
      "drop_label_values": ["unspecifiedFunction"],
      "max_class_ratio": 30,
+     "min_duration_s": 1.0,
      "class_weighting": "none"},
     {"label": "da-fn_varA_xls-r_cw-sqrt",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
@@ -140,24 +147,7 @@ TASKS: list[dict] = [
      "learning_rate": 3e-5,
      "drop_label_values": ["unspecifiedFunction"],
      "max_class_ratio": 30,
-     "class_weighting": "sqrt_inverse"},
-
-    # --- DA function — variant B (keep unspecified, let it fold into Other) ---
-    {"label": "da-fn_varB_xls-r_cw-none",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_dialogue_act_function",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 3e-5,
-     "max_class_ratio": 30,
-     "class_weighting": "none"},
-    {"label": "da-fn_varB_xls-r_cw-sqrt",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_dialogue_act_function",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 3e-5,
-     "max_class_ratio": 30,
+     "min_duration_s": 1.0,
      "class_weighting": "sqrt_inverse"},
 ]
 

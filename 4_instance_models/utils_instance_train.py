@@ -148,6 +148,24 @@ TARGETS: dict = {
             "neutralPositive", "mixedPositive", "predominantlyPositive",
         ],
     },
+    "rog_dia_sentiment_3": {
+        # Same JSONL as rog_dia_sentiment, collapsed to 3 polarity classes
+        # via label_remap at load time. "neutralNegative" + "neutralPositive"
+        # fold into "neutral" (least-committal annotator calls); predominantly*
+        # and mixed* keep their polarity sign.
+        "jsonl_path": "data/processed_jsonl/rog_dialog_instance.jsonl",
+        "label_key":  "sentiment",
+        "task_type":  "classification",
+        "label_order": ["negative", "neutral", "positive"],
+        "label_remap": {
+            "predominantlyNegative": "negative",
+            "mixedNegative":         "negative",
+            "neutralNegative":       "neutral",
+            "neutralPositive":       "neutral",
+            "mixedPositive":         "positive",
+            "predominantlyPositive": "positive",
+        },
+    },
     "rog_dia_dialogue_act_dimension": {
         "jsonl_path": "data/processed_jsonl/rog_dialog_instance.jsonl",
         "label_key":  "dialogue_act_dimension",
@@ -301,7 +319,7 @@ def print_target_menu(task_type: str | None = None) -> None:
 # resolve_target applies it to cfg in addition to the data fields above —
 # mode-level overrides in 4_config.json still win (they apply later in
 # load_config). Add to this tuple to wire more constraints through.
-TARGET_CONSTRAINT_FIELDS: tuple = ("max_duration_s",)
+TARGET_CONSTRAINT_FIELDS: tuple = ("max_duration_s", "min_duration_s", "label_remap")
 
 
 def resolve_target(cfg, targets: dict = TARGETS) -> None:
@@ -349,6 +367,11 @@ class Config:
     # Values to drop at load time, treated as if they were None. Lets the task
     # list strip e.g. "unspecifiedFunction" before the ratio cap runs.
     drop_label_values: list | None = None
+    # Optional label-value rewrite applied at load time (after drop filter).
+    # Example: {"predominantlyNegative": "negative", "mixedNegative": "negative", ...}
+    # collapses the 6-class sentiment onto 3-class without a new JSONL. Keys not
+    # present in the dict pass through unchanged.
+    label_remap: dict | None = None
     # 1:N ratio cap. When set, any class with fewer than top_train_count/N
     # training rows is relabeled "Other" across train, dev, and test. None
     # disables (default) — existing targets keep their full label set.
@@ -401,6 +424,11 @@ class Config:
     dataloader_num_workers: int = 16   # drop to 0–2 on the CPU box if RAM-bound
     map_num_proc: int = 8              # parallel workers for the .map() feature pass
     max_duration_s: float = 15.0       # drop instances longer than this (OOM guard)
+    min_duration_s: float = 0.0        # drop instances shorter than this. XLS-R's
+                                       # internal SpecAugment crashes on records with
+                                       # fewer than ~11 feature frames (~220 ms of
+                                       # audio); 0.5 s is a safe lower bound when a
+                                       # corpus has very short clips. 0.0 disables.
 
     # -- Hardware ------------------------------------------------------------
     # GPU pinning happens in the consumer's guard BEFORE this module is
@@ -464,6 +492,12 @@ def validate_config(cfg: Config) -> None:
         raise ValueError(f"run_mode invalid: {cfg.run_mode!r} (choose test|demo|full)")
     if cfg.demo_sampling not in ("proportional", "balanced"):
         raise ValueError(f"demo_sampling invalid: {cfg.demo_sampling!r} (proportional|balanced)")
+    if cfg.min_duration_s < 0:
+        raise ValueError(f"min_duration_s must be ≥0, got {cfg.min_duration_s!r}")
+    if cfg.min_duration_s and cfg.min_duration_s >= cfg.max_duration_s:
+        raise ValueError(
+            f"min_duration_s ({cfg.min_duration_s}) must be < max_duration_s ({cfg.max_duration_s})"
+        )
     if cfg.task_type == "classification":
         # label_order=None is allowed — it signals "build from data union after load".
         if cfg.label_order is not None and len(set(cfg.label_order)) != len(cfg.label_order):
@@ -479,6 +513,13 @@ def validate_config(cfg: Config) -> None:
             raise ValueError(f"max_class_ratio must be >0 or null, got {cfg.max_class_ratio!r}")
         if cfg.drop_label_values is not None and not isinstance(cfg.drop_label_values, list):
             raise ValueError(f"drop_label_values must be a list or null, got {type(cfg.drop_label_values).__name__}")
+        if cfg.label_remap is not None:
+            if not isinstance(cfg.label_remap, dict):
+                raise ValueError(f"label_remap must be a dict or null, got {type(cfg.label_remap).__name__}")
+            bad = [(k, v) for k, v in cfg.label_remap.items()
+                   if not isinstance(k, str) or not isinstance(v, str)]
+            if bad:
+                raise ValueError(f"label_remap must map str→str; offending pairs: {bad[:3]}")
     elif cfg.task_type == "regression":
         if cfg.loss_function not in ("mse", "l1"):
             raise ValueError(f"loss_function must be 'mse' or 'l1', got {cfg.loss_function!r}")
@@ -528,12 +569,16 @@ def print_config_summary(cfg: Config, device: str) -> None:
         print(f"label_order = {cfg.label_order}")
         if cfg.drop_label_values:
             print(f"drop_label_values = {cfg.drop_label_values}")
+        if cfg.label_remap:
+            print(f"label_remap       = {cfg.label_remap}")
         if cfg.max_class_ratio is not None:
             print(f"max_class_ratio   = 1:{cfg.max_class_ratio:g}  (rare→{OTHER_LABEL!r})")
         if cfg.class_weighting != "none":
             print(f"class_weighting   = {cfg.class_weighting}")
     else:
         print(f"normalize   = {cfg.normalize}")
+    if cfg.min_duration_s:
+        print(f"min_duration_s    = {cfg.min_duration_s}s")
     print(f"device      = {device}")
     if device == "cuda":
         print(f"✓ visible devices : {torch.cuda.device_count()}  (CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')})")
@@ -548,15 +593,23 @@ OTHER_LABEL = "Other"
 
 
 def load_split(jsonl_path: str, split: str, label_key: str, max_duration_s: float,
-               drop_values: list | None = None) -> list[dict]:
+               drop_values: list | None = None,
+               min_duration_s: float = 0.0,
+               label_remap: dict | None = None) -> list[dict]:
     """Records of one split that carry a non-null ``label_key``, dropping
-    instances longer than ``max_duration_s`` (padding-waste OOM guard).
+    instances outside [min_duration_s, max_duration_s].
 
-    ``drop_values`` treats the listed label values as if they were None —
-    rows carrying them are filtered out. Lets the task list strip
-    e.g. "unspecifiedFunction" before class-collapse runs."""
+    ``drop_values`` treats the listed label values as if they were None.
+    ``label_remap`` rewrites label values at load time (e.g. 6-class → 3-class).
+    Remap is applied AFTER the drop filter — if a remap target is itself in
+    drop_values it will not survive.
+
+    The audio-length check uses a sentinel of 0.0 for missing metadata, so
+    the min filter only runs when audio_length is populated (otherwise the
+    record passes through — the existing max filter behaves the same way)."""
     drop_set = set(drop_values) if drop_values else set()
-    out, n_long, n_dropped = [], 0, 0
+    remap = dict(label_remap) if label_remap else None
+    out, n_long, n_short, n_dropped = [], 0, 0, 0
     for r in udp.iter_jsonl(jsonl_path):
         if r["split"] != split:
             continue
@@ -568,12 +621,20 @@ def load_split(jsonl_path: str, split: str, label_key: str, max_duration_s: floa
         if v in drop_set:
             n_dropped += 1
             continue
-        if r.get("metadata", {}).get("audio_length", 0.0) > max_duration_s:
+        if remap is not None and v in remap:
+            r["labels"][label_key] = remap[v]
+        dur = r.get("metadata", {}).get("audio_length", 0.0)
+        if dur > max_duration_s:
             n_long += 1
+            continue
+        if min_duration_s > 0 and 0 < dur < min_duration_s:
+            n_short += 1
             continue
         out.append(r)
     if n_long:
         print(f"  dropped {n_long} {split} records > {max_duration_s}s")
+    if n_short:
+        print(f"  dropped {n_short} {split} records < {min_duration_s}s")
     if n_dropped:
         print(f"  dropped {n_dropped} {split} records via drop_label_values={sorted(drop_set)}")
     return out
@@ -693,9 +754,14 @@ def load_and_cap_splits(cfg: Config) -> tuple[list[dict], list[dict], list[dict]
     per cfg.max_class_ratio. Prints the cap + collapse report; raises if any
     split comes back empty."""
     drop_vals = cfg.drop_label_values if cfg.task_type == "classification" else None
-    train_records = load_split(cfg.jsonl_path, "train", cfg.label_key, cfg.max_duration_s, drop_vals)
-    dev_records   = load_split(cfg.jsonl_path, "dev",   cfg.label_key, cfg.max_duration_s, drop_vals)
-    test_records  = load_split(cfg.jsonl_path, "test",  cfg.label_key, cfg.max_duration_s, drop_vals)
+    remap     = cfg.label_remap        if cfg.task_type == "classification" else None
+    _load = lambda sp: load_split(
+        cfg.jsonl_path, sp, cfg.label_key, cfg.max_duration_s,
+        drop_values=drop_vals, min_duration_s=cfg.min_duration_s, label_remap=remap,
+    )
+    train_records = _load("train")
+    dev_records   = _load("dev")
+    test_records  = _load("test")
 
     # One knob, applied identically to every split. None caps (full mode) are no-ops.
     _pre = (len(train_records), len(dev_records), len(test_records))
@@ -715,8 +781,13 @@ def load_and_cap_splits(cfg: Config) -> tuple[list[dict], list[dict], list[dict]
         raise ValueError("one of the splits is empty after filtering for label_key — check the JSONL")
 
     if cfg.task_type == "classification" and cfg.max_class_ratio is not None:
-        collapse_rare_classes(train_records, dev_records, test_records,
-                              cfg.label_key, cfg.max_class_ratio)
+        stats = collapse_rare_classes(train_records, dev_records, test_records,
+                                      cfg.label_key, cfg.max_class_ratio)
+        # A collapsed run invalidates any hardcoded label_order from the preset
+        # ("Other" is now a class, old rare labels are gone). Reset to None so
+        # build_label_maps rebuilds from the data union.
+        if stats["collapsed_classes"]:
+            cfg.label_order = None
 
     return train_records, dev_records, test_records
 
