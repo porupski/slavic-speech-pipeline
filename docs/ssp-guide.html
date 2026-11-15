@@ -151,7 +151,7 @@
             <span class="audience-label">Just Browsing</span>
           </summary>
           <div class="audience-body">
-            <p>Browse as much as you like. If the research or the approach caught your interest, that is great! Enjoy your stay.</p>
+            <p>If the research or the approach caught your interest, that is great! Enjoy your stay.</p>
           </div>
         </details>
 
@@ -671,6 +671,65 @@ python 43_run_task_list.py --use_gpu 2>&amp;1 \
                 </tbody>
               </table>
               <p class="detail-meta">GPU: A100 · mode: demo · epochs: 10 (class.) / 20 (regr.) · batch: 32 · CNN frozen · total wall-clock: ~220 min · run: 2026-11-06_195108_task_list</p>
+              <details class="detail-box task-list-box">
+                <summary>Task list · 8 runs</summary>
+                <div class="detail-body">
+                  <div class="code-snippet">
+                    <button class="copy-btn" aria-label="Copy to clipboard">Copy</button>
+                    <pre><code># Four-way comparison on ParlaSpeech-HR benchmark v3 (demo = 10 epochs).
+# w2v2-base vs xls-r-300m, gender vs speaker-ID. Bigger model gets the
+# higher LR it needs. One age regression closes the queue.
+{"label": "gender_w2v2-base_lr1e5",
+ "model_name":    "facebook/wav2vec2-base",
+ "target":        "hr_bench_v3_gender",
+ "task_type":     "classification",
+ "num_epochs": 10,
+ "learning_rate": 1e-5},
+{"label": "gender_xls-r-300m_lr3e5",
+ "model_name":    "facebook/wav2vec2-xls-r-300m",
+ "target":        "hr_bench_v3_gender",
+ "task_type":     "classification",
+ "num_epochs": 10,
+ "learning_rate": 3e-5},
+{"label": "speakerid_w2v2-base_lr1e5",
+ "model_name":    "facebook/wav2vec2-base",
+ "target":        "hr_bench_v3_speaker_id",
+ "task_type":     "classification",
+ "num_epochs": 10,
+ "learning_rate": 1e-5},
+{"label": "speakerid_xls-r-300m_lr3e5",
+ "model_name":    "facebook/wav2vec2-xls-r-300m",
+ "target":        "hr_bench_v3_speaker_id",
+ "task_type":     "classification",
+ "num_epochs": 10,
+ "learning_rate": 3e-5},
+{"label": "age_w2v2-base_lr1e5",
+ "model_name":    "facebook/wav2vec2-base",
+ "target":        "hr_bench_v3_age",
+ "task_type":     "regression",
+ "num_epochs": 20,
+ "learning_rate": 1e-5},
+{"label": "age_xls-r-300m_lr3e5",
+ "model_name":    "facebook/wav2vec2-xls-r-300m",
+ "target":        "hr_bench_v3_age",
+ "task_type":     "regression",
+ "num_epochs": 20,
+ "learning_rate": 3e-5},
+{"label": "orientation_w2v2-base_lr1e5",
+ "model_name":    "facebook/wav2vec2-base",
+ "target":        "hr_bench_v3_orientation",
+ "task_type":     "regression",
+ "num_epochs": 20,
+ "learning_rate": 1e-5},
+{"label": "orientation_xls-r-300m_lr3e5",
+ "model_name":    "facebook/wav2vec2-xls-r-300m",
+ "target":        "hr_bench_v3_orientation",
+ "task_type":     "regression",
+ "num_epochs": 20,
+ "learning_rate": 3e-5}</code></pre>
+                  </div>
+                </div>
+              </details>
             </div>
           </details>
 
@@ -1407,6 +1466,24 @@ python 6_inference/run_63_frame_classification_inference.py \
       document.addEventListener('DOMContentLoaded', openFromHash);
       window.addEventListener('hashchange', openFromHash);
       if (document.readyState !== 'loading') openFromHash();
+    })();
+
+    /* ───────── copy-btn — copy code snippets to clipboard ───────── */
+    (function copySnippets() {
+      document.querySelectorAll('.copy-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var code = btn.closest('.code-snippet').querySelector('code');
+          if (!code) return;
+          navigator.clipboard.writeText(code.textContent).then(function() {
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(function() {
+              btn.textContent = 'Copy';
+              btn.classList.remove('copied');
+            }, 1800);
+          });
+        });
+      });
     })();
 
     /* ───────── gif-fig · click to play one loop, then back to still ───────── */

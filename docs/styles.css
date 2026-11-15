@@ -1172,6 +1172,28 @@ details.detail-box .detail-body {
   line-height: 1.6;
 }
 
+/* ──────────────────── code-snippet (copyable block) ──────────────────── */
+.code-snippet { position: relative; }
+.copy-btn {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  color: var(--fg-muted);
+  font-size: 0.72rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding: 0.18rem 0.5rem;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+  line-height: 1.4;
+  z-index: 1;
+}
+.copy-btn:hover { opacity: 1; background: var(--accent-soft); color: var(--fg); }
+.copy-btn.copied { opacity: 1; color: var(--status-live); }
+
 /* ──────────────────── landing · chapter cards (expandable details) ──────────────────── */
 details.chapter-card {
   display: block;
