@@ -45,7 +45,7 @@
 
     "demo_sampling": "proportional",
     "cap_seed": 1234,
-    "reserved_gpu": "2"
+    "reserved_gpu": "3"
   },
 
   "classification": {

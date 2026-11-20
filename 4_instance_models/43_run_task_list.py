@@ -56,44 +56,96 @@ sys.path.insert(0, str(HERE))
 TASKS: list[dict] = [
     # Pick a `target` from the TARGETS registry (see available_targets() in
     # utils_instance_train.py) — this resolves jsonl_path, label_key and
-    # label_order in one step. Overriding `label_key` alone is wrong: the
-    # jsonl_path stays at whatever the config block pointed at and the split
-    # comes back empty.
+    # label_order in one step.
     #
-    # Audio iso benchmarks on rog_dia_full (2026-11-20) — Sentiment_Search
-    # Report 5 first table. Three backbones × rog_dia_sentiment_3 target
-    # (ROG-Dialog v2 full train/dev/test, 3-class remap). No context window.
-    # Standard wav2vec2 recipe: SSP default `freeze_feature_encoder: true`,
-    # encoder trainable, head trained from scratch. Per-backbone LR follows
-    # 4_instance_models/supported_models.md guidance (base at 1e-5; larger
-    # backbones at 3e-5). class_weighting=none since the 3-class prior is
-    # the same 15/72/13 skew we want the model to learn.
-    # Suggested launch (from 4_instance_models/):
+    # Audio iso v2 (2026-11-20): three backbones × three recipes on
+    # rog_dia_sentiment_3. The v1 cw=none pass collapsed both trained
+    # backbones to the 72 % neutral prior (TEST F1_3 = 0.276 for
+    # wav2vec2-base, 0.292 for xls-r-300m); w2v-bert-2.0 OOM'd on the 40 GB
+    # GPU at batch_size=32. This v2 matrix moves to class_weighting=sqrt
+    # across the board and probes two orthogonal fixes against the
+    # majority-class collapse: higher LR (R2) and longer training (R3).
+    # w2v-bert-2.0 uses batch_size=8 × grad_accum=4 (effective batch 32)
+    # for memory.
+    # Launch from 4_instance_models/:
     #   python 43_run_task_list.py --mode full --use_gpu \
-    #       --list_dir senthunt_audio_iso_v1 \
-    #       2>&1 | tee ../runs/43_senthunt_audio_iso_$(date +%Y-%m-%d_%H%M%S).log
+    #       --list_dir senthunt_audio_iso_v2 \
+    #       2>&1 | tee ../runs/43_senthunt_audio_iso_v2_$(date +%Y-%m-%d_%H%M%S).log
 
-    {"label": "iso_w2v2-base_rog_dia_full",
+    # R1 — sqrt-inverse class weighting, same LR + epoch budget as v1.
+    {"label": "sqrt_w2v2-base_rog_dia_full",
      "model_name":    "facebook/wav2vec2-base",
      "target":        "rog_dia_sentiment_3",
      "task_type":     "classification",
      "num_epochs":    10,
      "learning_rate": 1e-5,
-     "class_weighting": "none"},
-    {"label": "iso_xls-r-300m_rog_dia_full",
+     "class_weighting": "sqrt_inverse"},
+    {"label": "sqrt_xls-r-300m_rog_dia_full",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
      "target":        "rog_dia_sentiment_3",
      "task_type":     "classification",
      "num_epochs":    10,
      "learning_rate": 3e-5,
-     "class_weighting": "none"},
-    {"label": "iso_w2v-bert-2_rog_dia_full",
+     "class_weighting": "sqrt_inverse"},
+    {"label": "sqrt_w2v-bert-2_rog_dia_full",
      "model_name":    "facebook/w2v-bert-2.0",
      "target":        "rog_dia_sentiment_3",
      "task_type":     "classification",
      "num_epochs":    10,
      "learning_rate": 3e-5,
-     "class_weighting": "none"},
+     "class_weighting": "sqrt_inverse",
+     "batch_size":    8,
+     "grad_accum":    4},
+
+    # R2 — sqrt + higher LR (3× default per backbone).
+    {"label": "sqrt-lrhi_w2v2-base_rog_dia_full",
+     "model_name":    "facebook/wav2vec2-base",
+     "target":        "rog_dia_sentiment_3",
+     "task_type":     "classification",
+     "num_epochs":    10,
+     "learning_rate": 3e-5,
+     "class_weighting": "sqrt_inverse"},
+    {"label": "sqrt-lrhi_xls-r-300m_rog_dia_full",
+     "model_name":    "facebook/wav2vec2-xls-r-300m",
+     "target":        "rog_dia_sentiment_3",
+     "task_type":     "classification",
+     "num_epochs":    10,
+     "learning_rate": 1e-4,
+     "class_weighting": "sqrt_inverse"},
+    {"label": "sqrt-lrhi_w2v-bert-2_rog_dia_full",
+     "model_name":    "facebook/w2v-bert-2.0",
+     "target":        "rog_dia_sentiment_3",
+     "task_type":     "classification",
+     "num_epochs":    10,
+     "learning_rate": 1e-4,
+     "class_weighting": "sqrt_inverse",
+     "batch_size":    8,
+     "grad_accum":    4},
+
+    # R3 — sqrt + 20 epochs at default LR (longer anneal).
+    {"label": "sqrt-e20_w2v2-base_rog_dia_full",
+     "model_name":    "facebook/wav2vec2-base",
+     "target":        "rog_dia_sentiment_3",
+     "task_type":     "classification",
+     "num_epochs":    20,
+     "learning_rate": 1e-5,
+     "class_weighting": "sqrt_inverse"},
+    {"label": "sqrt-e20_xls-r-300m_rog_dia_full",
+     "model_name":    "facebook/wav2vec2-xls-r-300m",
+     "target":        "rog_dia_sentiment_3",
+     "task_type":     "classification",
+     "num_epochs":    20,
+     "learning_rate": 3e-5,
+     "class_weighting": "sqrt_inverse"},
+    {"label": "sqrt-e20_w2v-bert-2_rog_dia_full",
+     "model_name":    "facebook/w2v-bert-2.0",
+     "target":        "rog_dia_sentiment_3",
+     "task_type":     "classification",
+     "num_epochs":    20,
+     "learning_rate": 3e-5,
+     "class_weighting": "sqrt_inverse",
+     "batch_size":    8,
+     "grad_accum":    4},
 ]
 
 # Former ROG-Dialog audio task list (2026-11-09, pre-v2 JSONL rename):
