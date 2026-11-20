@@ -60,96 +60,122 @@ TASKS: list[dict] = [
     # jsonl_path stays at whatever the config block pointed at and the split
     # comes back empty.
     #
-    # ROG-Dialog follow-up (post-bugfix, 2026-11-09):
-    #   - tasks 3-6 (DA dimension) crashed on "Other not in label_order" —
-    #     collapse now resets cfg.label_order so build_label_maps rebuilds.
-    #   - tasks 7-8 (DA function varA) crashed on SpecAugment mask_length vs
-    #     sequence_length — add min_duration_s=1.0 to drop sub-second clips.
-    # min_duration_s=1.0 is also applied to the DA tasks of varB to keep the
-    # six re-runs methodologically identical (cross-variant comparability).
-    # Adds two sentiment_3 runs using the new label_remap hook to collapse
-    # the 6-class scale to neg/neu/pos (see TARGETS["rog_dia_sentiment_3"]).
+    # Audio iso benchmarks on rog_dia_full (2026-11-20) — Sentiment_Search
+    # Report 5 first table. Three backbones × rog_dia_sentiment_3 target
+    # (ROG-Dialog v2 full train/dev/test, 3-class remap). No context window.
+    # Standard wav2vec2 recipe: SSP default `freeze_feature_encoder: true`,
+    # encoder trainable, head trained from scratch. Per-backbone LR follows
+    # 4_instance_models/supported_models.md guidance (base at 1e-5; larger
+    # backbones at 3e-5). class_weighting=none since the 3-class prior is
+    # the same 15/72/13 skew we want the model to learn.
+    # Suggested launch (from 4_instance_models/):
+    #   python 43_run_task_list.py --mode full --use_gpu \
+    #       --list_dir senthunt_audio_iso_v1 \
+    #       2>&1 | tee ../runs/43_senthunt_audio_iso_$(date +%Y-%m-%d_%H%M%S).log
 
-    # --- Sentiment 3-class (via label_remap in the target preset) --------
-    {"label": "sentiment3_xls-r_cw-none",
+    {"label": "iso_w2v2-base_rog_dia_full",
+     "model_name":    "facebook/wav2vec2-base",
+     "target":        "rog_dia_sentiment_3",
+     "task_type":     "classification",
+     "num_epochs":    10,
+     "learning_rate": 1e-5,
+     "class_weighting": "none"},
+    {"label": "iso_xls-r-300m_rog_dia_full",
      "model_name":    "facebook/wav2vec2-xls-r-300m",
      "target":        "rog_dia_sentiment_3",
      "task_type":     "classification",
      "num_epochs":    10,
      "learning_rate": 3e-5,
      "class_weighting": "none"},
-    {"label": "sentiment3_xls-r_cw-sqrt",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
+    {"label": "iso_w2v-bert-2_rog_dia_full",
+     "model_name":    "facebook/w2v-bert-2.0",
      "target":        "rog_dia_sentiment_3",
      "task_type":     "classification",
      "num_epochs":    10,
      "learning_rate": 3e-5,
-     "class_weighting": "sqrt_inverse"},
-
-    # --- DA dimension — variant A (drop unspecified, then 1:20 collapse) ---
-    {"label": "da-dim_varA_xls-r_cw-none",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_dialogue_act_dimension",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 3e-5,
-     "drop_label_values": ["unspecifiedDimension"],
-     "max_class_ratio": 20,
-     "min_duration_s": 1.0,
      "class_weighting": "none"},
-    {"label": "da-dim_varA_xls-r_cw-sqrt",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_dialogue_act_dimension",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 3e-5,
-     "drop_label_values": ["unspecifiedDimension"],
-     "max_class_ratio": 20,
-     "min_duration_s": 1.0,
-     "class_weighting": "sqrt_inverse"},
-
-    # --- DA dimension — variant B (keep unspecified, let it fold into Other) ---
-    {"label": "da-dim_varB_xls-r_cw-none",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_dialogue_act_dimension",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 3e-5,
-     "max_class_ratio": 20,
-     "min_duration_s": 1.0,
-     "class_weighting": "none"},
-    {"label": "da-dim_varB_xls-r_cw-sqrt",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_dialogue_act_dimension",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 3e-5,
-     "max_class_ratio": 20,
-     "min_duration_s": 1.0,
-     "class_weighting": "sqrt_inverse"},
-
-    # --- DA function — variant A (drop unspecified, then 1:30 collapse) ---
-    {"label": "da-fn_varA_xls-r_cw-none",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_dialogue_act_function",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 3e-5,
-     "drop_label_values": ["unspecifiedFunction"],
-     "max_class_ratio": 30,
-     "min_duration_s": 1.0,
-     "class_weighting": "none"},
-    {"label": "da-fn_varA_xls-r_cw-sqrt",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_dialogue_act_function",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 3e-5,
-     "drop_label_values": ["unspecifiedFunction"],
-     "max_class_ratio": 30,
-     "min_duration_s": 1.0,
-     "class_weighting": "sqrt_inverse"},
 ]
+
+# Former ROG-Dialog audio task list (2026-11-09, pre-v2 JSONL rename):
+# Historical, kept for reference. Two sentiment3 cells (cw-none / cw-sqrt),
+# four DA-dimension cells (varA/varB × cw-none/sqrt), two DA-function cells.
+# min_duration_s=1.0 was added after a SpecAugment mask-vs-sequence-length crash
+# on sub-second clips; drop_label_values + max_class_ratio handled the rare-class
+# tail in DA dimension/function. Uncomment to rerun.
+# TASKS = [
+#     {"label": "sentiment3_xls-r_cw-none",
+#      "model_name":    "facebook/wav2vec2-xls-r-300m",
+#      "target":        "rog_dia_sentiment_3",
+#      "task_type":     "classification",
+#      "num_epochs":    10,
+#      "learning_rate": 3e-5,
+#      "class_weighting": "none"},
+#     {"label": "sentiment3_xls-r_cw-sqrt",
+#      "model_name":    "facebook/wav2vec2-xls-r-300m",
+#      "target":        "rog_dia_sentiment_3",
+#      "task_type":     "classification",
+#      "num_epochs":    10,
+#      "learning_rate": 3e-5,
+#      "class_weighting": "sqrt_inverse"},
+#     {"label": "da-dim_varA_xls-r_cw-none",
+#      "model_name":    "facebook/wav2vec2-xls-r-300m",
+#      "target":        "rog_dia_dialogue_act_dimension",
+#      "task_type":     "classification",
+#      "num_epochs":    10,
+#      "learning_rate": 3e-5,
+#      "drop_label_values": ["unspecifiedDimension"],
+#      "max_class_ratio": 20,
+#      "min_duration_s": 1.0,
+#      "class_weighting": "none"},
+#     {"label": "da-dim_varA_xls-r_cw-sqrt",
+#      "model_name":    "facebook/wav2vec2-xls-r-300m",
+#      "target":        "rog_dia_dialogue_act_dimension",
+#      "task_type":     "classification",
+#      "num_epochs":    10,
+#      "learning_rate": 3e-5,
+#      "drop_label_values": ["unspecifiedDimension"],
+#      "max_class_ratio": 20,
+#      "min_duration_s": 1.0,
+#      "class_weighting": "sqrt_inverse"},
+#     {"label": "da-dim_varB_xls-r_cw-none",
+#      "model_name":    "facebook/wav2vec2-xls-r-300m",
+#      "target":        "rog_dia_dialogue_act_dimension",
+#      "task_type":     "classification",
+#      "num_epochs":    10,
+#      "learning_rate": 3e-5,
+#      "max_class_ratio": 20,
+#      "min_duration_s": 1.0,
+#      "class_weighting": "none"},
+#     {"label": "da-dim_varB_xls-r_cw-sqrt",
+#      "model_name":    "facebook/wav2vec2-xls-r-300m",
+#      "target":        "rog_dia_dialogue_act_dimension",
+#      "task_type":     "classification",
+#      "num_epochs":    10,
+#      "learning_rate": 3e-5,
+#      "max_class_ratio": 20,
+#      "min_duration_s": 1.0,
+#      "class_weighting": "sqrt_inverse"},
+#     {"label": "da-fn_varA_xls-r_cw-none",
+#      "model_name":    "facebook/wav2vec2-xls-r-300m",
+#      "target":        "rog_dia_dialogue_act_function",
+#      "task_type":     "classification",
+#      "num_epochs":    10,
+#      "learning_rate": 3e-5,
+#      "drop_label_values": ["unspecifiedFunction"],
+#      "max_class_ratio": 30,
+#      "min_duration_s": 1.0,
+#      "class_weighting": "none"},
+#     {"label": "da-fn_varA_xls-r_cw-sqrt",
+#      "model_name":    "facebook/wav2vec2-xls-r-300m",
+#      "target":        "rog_dia_dialogue_act_function",
+#      "task_type":     "classification",
+#      "num_epochs":    10,
+#      "learning_rate": 3e-5,
+#      "drop_label_values": ["unspecifiedFunction"],
+#      "max_class_ratio": 30,
+#      "min_duration_s": 1.0,
+#      "class_weighting": "sqrt_inverse"},
+# ]
 
 # Task list used in page demos:
 # # Four-way comparison on ParlaSpeech-HR benchmark v3 (demo = 10 epochs).

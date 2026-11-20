@@ -129,9 +129,9 @@ TARGETS: dict = {
         "label_order": [0, 1, 2],   # class 2 is ~0.5% of rows; macro-F1 will be brutal
     },
 
-    # ---- ROG-Dialog (rog_dialog_instance.jsonl) ------------------------
+    # ---- ROG-Dialog (rog_dialog_v2_instance.jsonl) ---------------------
     "rog_dia_sentiment": {
-        "jsonl_path": "data/processed_jsonl/rog_dialog_instance.jsonl",
+        "jsonl_path": "data/processed_jsonl/rog_dialog_v2_instance.jsonl",
         "label_key":  "sentiment",
         "task_type":  "classification",
         "label_order": [
@@ -140,7 +140,7 @@ TARGETS: dict = {
         ],
     },
     "rog_dia_sentiment_annotated": {
-        "jsonl_path": "data/processed_jsonl/rog_dialog_instance.jsonl",
+        "jsonl_path": "data/processed_jsonl/rog_dialog_v2_instance.jsonl",
         "label_key":  "sentiment_annotated",
         "task_type":  "classification",
         "label_order": [
@@ -153,7 +153,7 @@ TARGETS: dict = {
         # via label_remap at load time. "neutralNegative" + "neutralPositive"
         # fold into "neutral" (least-committal annotator calls); predominantly*
         # and mixed* keep their polarity sign.
-        "jsonl_path": "data/processed_jsonl/rog_dialog_instance.jsonl",
+        "jsonl_path": "data/processed_jsonl/rog_dialog_v2_instance.jsonl",
         "label_key":  "sentiment",
         "task_type":  "classification",
         "label_order": ["negative", "neutral", "positive"],
@@ -167,7 +167,7 @@ TARGETS: dict = {
         },
     },
     "rog_dia_dialogue_act_dimension": {
-        "jsonl_path": "data/processed_jsonl/rog_dialog_instance.jsonl",
+        "jsonl_path": "data/processed_jsonl/rog_dialog_v2_instance.jsonl",
         "label_key":  "dialogue_act_dimension",
         "task_type":  "classification",
         # ~8 categories; non-ordinal, so Spearman is uninterpretable here.
@@ -178,7 +178,7 @@ TARGETS: dict = {
         ],
     },
     "rog_dia_dialogue_act_function": {
-        "jsonl_path": "data/processed_jsonl/rog_dialog_instance.jsonl",
+        "jsonl_path": "data/processed_jsonl/rog_dialog_v2_instance.jsonl",
         "label_key":  "dialogue_act_function",
         "task_type":  "classification",
         # 30+ categories with a long tail; loader builds label_order from data.
