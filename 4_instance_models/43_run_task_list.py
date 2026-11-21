@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """43_run_task_list — chapter-4 sequential task-list runner.
 
-Walks the ``TASKS`` list below one by one. Each task is a full
-phase-1 (DEV) → phase-2 (TEST) instance-classification/regression run through
-the same engine as ``run_41_classification`` / ``run_42_regression``. A crash
-in one task does not kill the queue — the error lands in that task's CSV row
-and the next task runs. All stdout + stderr is teed into each run folder's
-``run.log``, so tmux it and walk away.
+Walks ``task_list.json`` (a JSON array of task dicts) one by one. Each task is
+a full phase-1 (DEV) → phase-2 (TEST) instance-classification/regression run
+through the same engine as ``run_41_classification`` / ``run_42_regression``.
+A crash in one task does not kill the queue — the error lands in that task's
+CSV row and the next task runs. All stdout + stderr is teed into each run
+folder's ``run.log``, so tmux it and walk away.
 
 Every task writes its own ``<list_root>/<label>/`` tree with:
 - per-epoch predictions.json / epoch_summary.json
@@ -16,13 +16,18 @@ Every task writes its own ``<list_root>/<label>/`` tree with:
 
 Aggregate summary lands at ``<list_root>/task_list_summary.csv`` +
 ``<list_root>/task_list_summary.png``. ``tasks.json`` snapshots the exact
-TASKS list for provenance.
+list that was run (post-``--limit``) for provenance.
+
+Task-list file: ``task_list.json`` sits next to this script and is the live
+queue. Historical queues are preserved as ``task_list_REF-<YYYY-MM-DD>.json``
+snapshots — rerun one with ``--tasks task_list_REF-2026-11-20.json``.
 
 Usage:
   python 43_run_task_list.py --use_gpu
   python 43_run_task_list.py --use_gpu --dry_run              # print tasks, exit
   python 43_run_task_list.py --use_gpu --limit 2              # first 2 only
   python 43_run_task_list.py --use_gpu --list_dir my_run_set
+  python 43_run_task_list.py --use_gpu --tasks task_list_REF-2026-11-20.json
 
   python 43_run_task_list.py --use_gpu 2>&1 | tee ../runs/43_task_list_$(date +%Y-%m-%d_%H%M%S).log
 
@@ -46,242 +51,39 @@ sys.path.insert(0, str(HERE))
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# TASKS — edit this list to change the queue
+# TASKS — loaded from task_list.json (next to this script)
 # ══════════════════════════════════════════════════════════════════════════
-# Each task is a dict of Config field overrides plus a `label` (sub-dir name,
-# CSV row key) and an optional `task_type` ("classification" or "regression").
-# task_type selects which config block to load; the remaining keys must match
-# real Config fields in utils_instance_train.py (typos are a hard error).
+# The live queue is JSON — ``task_list.json``. Each task is a dict of Config
+# field overrides plus a ``label`` (sub-dir name, CSV row key) and an optional
+# ``task_type`` ("classification" or "regression"). task_type selects which
+# config block to load; the remaining keys must match real Config fields in
+# utils_instance_train.py (typos are a hard error at task-start).
+#
+# Historical queues live beside this script as
+# ``task_list_REF-<YYYY-MM-DD>.json``. Override the file with ``--tasks``.
 
-TASKS: list[dict] = [
-    # Pick a `target` from the TARGETS registry (see available_targets() in
-    # utils_instance_train.py) — this resolves jsonl_path, label_key and
-    # label_order in one step.
-    #
-    # Audio iso v2 (2026-11-20): three backbones × three recipes on
-    # rog_dia_sentiment_3. The v1 cw=none pass collapsed both trained
-    # backbones to the 72 % neutral prior (TEST F1_3 = 0.276 for
-    # wav2vec2-base, 0.292 for xls-r-300m); w2v-bert-2.0 OOM'd on the 40 GB
-    # GPU at batch_size=32. This v2 matrix moves to class_weighting=sqrt
-    # across the board and probes two orthogonal fixes against the
-    # majority-class collapse: higher LR (R2) and longer training (R3).
-    # w2v-bert-2.0 uses batch_size=8 × grad_accum=4 (effective batch 32)
-    # for memory.
-    # Launch from 4_instance_models/:
-    #   python 43_run_task_list.py --mode full --use_gpu \
-    #       --list_dir senthunt_audio_iso_v2 \
-    #       2>&1 | tee ../runs/43_senthunt_audio_iso_v2_$(date +%Y-%m-%d_%H%M%S).log
 
-    # R1 — sqrt-inverse class weighting, same LR + epoch budget as v1.
-    {"label": "sqrt_w2v2-base_rog_dia_full",
-     "model_name":    "facebook/wav2vec2-base",
-     "target":        "rog_dia_sentiment_3",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 1e-5,
-     "class_weighting": "sqrt_inverse"},
-    {"label": "sqrt_xls-r-300m_rog_dia_full",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_sentiment_3",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 3e-5,
-     "class_weighting": "sqrt_inverse"},
-    {"label": "sqrt_w2v-bert-2_rog_dia_full",
-     "model_name":    "facebook/w2v-bert-2.0",
-     "target":        "rog_dia_sentiment_3",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 3e-5,
-     "class_weighting": "sqrt_inverse",
-     "batch_size":    8,
-     "grad_accum":    4},
+def load_tasks(tasks_path: Path) -> list[dict]:
+    with open(tasks_path) as f:
+        raw = json.load(f)
+    if not isinstance(raw, list):
+        raise ValueError(
+            f"{tasks_path.name}: expected a JSON array of task dicts, got "
+            f"{type(raw).__name__}"
+        )
+    for i, t in enumerate(raw):
+        if not isinstance(t, dict) or "label" not in t:
+            raise ValueError(
+                f"{tasks_path.name}[{i}]: each task must be an object with a "
+                f"'label' key (got {t!r})"
+            )
+    return raw
 
-    # R2 — sqrt + higher LR (3× default per backbone).
-    {"label": "sqrt-lrhi_w2v2-base_rog_dia_full",
-     "model_name":    "facebook/wav2vec2-base",
-     "target":        "rog_dia_sentiment_3",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 3e-5,
-     "class_weighting": "sqrt_inverse"},
-    {"label": "sqrt-lrhi_xls-r-300m_rog_dia_full",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_sentiment_3",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 1e-4,
-     "class_weighting": "sqrt_inverse"},
-    {"label": "sqrt-lrhi_w2v-bert-2_rog_dia_full",
-     "model_name":    "facebook/w2v-bert-2.0",
-     "target":        "rog_dia_sentiment_3",
-     "task_type":     "classification",
-     "num_epochs":    10,
-     "learning_rate": 1e-4,
-     "class_weighting": "sqrt_inverse",
-     "batch_size":    8,
-     "grad_accum":    4},
 
-    # R3 — sqrt + 20 epochs at default LR (longer anneal).
-    {"label": "sqrt-e20_w2v2-base_rog_dia_full",
-     "model_name":    "facebook/wav2vec2-base",
-     "target":        "rog_dia_sentiment_3",
-     "task_type":     "classification",
-     "num_epochs":    20,
-     "learning_rate": 1e-5,
-     "class_weighting": "sqrt_inverse"},
-    {"label": "sqrt-e20_xls-r-300m_rog_dia_full",
-     "model_name":    "facebook/wav2vec2-xls-r-300m",
-     "target":        "rog_dia_sentiment_3",
-     "task_type":     "classification",
-     "num_epochs":    20,
-     "learning_rate": 3e-5,
-     "class_weighting": "sqrt_inverse"},
-    {"label": "sqrt-e20_w2v-bert-2_rog_dia_full",
-     "model_name":    "facebook/w2v-bert-2.0",
-     "target":        "rog_dia_sentiment_3",
-     "task_type":     "classification",
-     "num_epochs":    20,
-     "learning_rate": 3e-5,
-     "class_weighting": "sqrt_inverse",
-     "batch_size":    8,
-     "grad_accum":    4},
-]
-
-# Former ROG-Dialog audio task list (2026-11-09, pre-v2 JSONL rename):
-# Historical, kept for reference. Two sentiment3 cells (cw-none / cw-sqrt),
-# four DA-dimension cells (varA/varB × cw-none/sqrt), two DA-function cells.
-# min_duration_s=1.0 was added after a SpecAugment mask-vs-sequence-length crash
-# on sub-second clips; drop_label_values + max_class_ratio handled the rare-class
-# tail in DA dimension/function. Uncomment to rerun.
-# TASKS = [
-#     {"label": "sentiment3_xls-r_cw-none",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "rog_dia_sentiment_3",
-#      "task_type":     "classification",
-#      "num_epochs":    10,
-#      "learning_rate": 3e-5,
-#      "class_weighting": "none"},
-#     {"label": "sentiment3_xls-r_cw-sqrt",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "rog_dia_sentiment_3",
-#      "task_type":     "classification",
-#      "num_epochs":    10,
-#      "learning_rate": 3e-5,
-#      "class_weighting": "sqrt_inverse"},
-#     {"label": "da-dim_varA_xls-r_cw-none",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "rog_dia_dialogue_act_dimension",
-#      "task_type":     "classification",
-#      "num_epochs":    10,
-#      "learning_rate": 3e-5,
-#      "drop_label_values": ["unspecifiedDimension"],
-#      "max_class_ratio": 20,
-#      "min_duration_s": 1.0,
-#      "class_weighting": "none"},
-#     {"label": "da-dim_varA_xls-r_cw-sqrt",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "rog_dia_dialogue_act_dimension",
-#      "task_type":     "classification",
-#      "num_epochs":    10,
-#      "learning_rate": 3e-5,
-#      "drop_label_values": ["unspecifiedDimension"],
-#      "max_class_ratio": 20,
-#      "min_duration_s": 1.0,
-#      "class_weighting": "sqrt_inverse"},
-#     {"label": "da-dim_varB_xls-r_cw-none",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "rog_dia_dialogue_act_dimension",
-#      "task_type":     "classification",
-#      "num_epochs":    10,
-#      "learning_rate": 3e-5,
-#      "max_class_ratio": 20,
-#      "min_duration_s": 1.0,
-#      "class_weighting": "none"},
-#     {"label": "da-dim_varB_xls-r_cw-sqrt",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "rog_dia_dialogue_act_dimension",
-#      "task_type":     "classification",
-#      "num_epochs":    10,
-#      "learning_rate": 3e-5,
-#      "max_class_ratio": 20,
-#      "min_duration_s": 1.0,
-#      "class_weighting": "sqrt_inverse"},
-#     {"label": "da-fn_varA_xls-r_cw-none",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "rog_dia_dialogue_act_function",
-#      "task_type":     "classification",
-#      "num_epochs":    10,
-#      "learning_rate": 3e-5,
-#      "drop_label_values": ["unspecifiedFunction"],
-#      "max_class_ratio": 30,
-#      "min_duration_s": 1.0,
-#      "class_weighting": "none"},
-#     {"label": "da-fn_varA_xls-r_cw-sqrt",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "rog_dia_dialogue_act_function",
-#      "task_type":     "classification",
-#      "num_epochs":    10,
-#      "learning_rate": 3e-5,
-#      "drop_label_values": ["unspecifiedFunction"],
-#      "max_class_ratio": 30,
-#      "min_duration_s": 1.0,
-#      "class_weighting": "sqrt_inverse"},
-# ]
-
-# Task list used in page demos:
-# # Four-way comparison on ParlaSpeech-HR benchmark v3 (demo = 10 epochs).
-#     # w2v2-base vs xls-r-300m, gender vs speaker-ID. Bigger model gets the
-#     # higher LR it needs. One age regression closes the queue.
-#     {"label": "gender_w2v2-base_lr1e5",
-#      "model_name":    "facebook/wav2vec2-base",
-#      "target":        "hr_bench_v3_gender",
-#      "task_type":     "classification",
-#      "num_epochs": 10,
-#      "learning_rate": 1e-5},
-#     {"label": "gender_xls-r-300m_lr3e5",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "hr_bench_v3_gender",
-#      "task_type":     "classification",
-#      "num_epochs": 10,
-#      "learning_rate": 3e-5},
-#     {"label": "speakerid_w2v2-base_lr1e5",
-#      "model_name":    "facebook/wav2vec2-base",
-#      "target":        "hr_bench_v3_speaker_id",
-#      "task_type":     "classification",
-#      "num_epochs": 10,     
-#      "learning_rate": 1e-5},
-#     {"label": "speakerid_xls-r-300m_lr3e5",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "hr_bench_v3_speaker_id",
-#      "task_type":     "classification",
-#      "num_epochs": 10,
-#      "learning_rate": 3e-5},
-#     {"label": "age_w2v2-base_lr1e5",
-#      "model_name":    "facebook/wav2vec2-base",
-#      "target":        "hr_bench_v3_age",
-#      "task_type":     "regression",
-#      "num_epochs": 20,
-#      "learning_rate": 1e-5},
-#     {"label": "age_xls-r-300m_lr3e5",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "hr_bench_v3_age",
-#      "task_type":     "regression",
-#      "num_epochs": 20,
-#      "learning_rate": 3e-5},
-#     {"label": "orientation_w2v2-base_lr1e5",
-#      "model_name":    "facebook/wav2vec2-base",
-#      "target":        "hr_bench_v3_orientation",
-#      "task_type":     "regression",
-#      "num_epochs": 20,
-#      "learning_rate": 1e-5},
-#     {"label": "orientation_xls-r-300m_lr3e5",
-#      "model_name":    "facebook/wav2vec2-xls-r-300m",
-#      "target":        "hr_bench_v3_orientation",
-#      "task_type":     "regression",
-#      "num_epochs": 20,
-#      "learning_rate": 3e-5},
-
+# Prior queues live on disk as snapshots:
+#   task_list_REF-2026-11-20.json  — audio iso v2 (3 backbones × 3 recipes)
+#   task_list_REF-2026-11-09.json  — pre-v2 ROG-Dialog (sentiment3 + DA)
+#   task_list_REF-demo-hr-bench-v3.json  — HR benchmark v3 demo list
 
 CSV_FIELDS = [
     "task_idx", "label", "task_type", "model_name", "label_key",
@@ -309,6 +111,8 @@ def parse_args() -> argparse.Namespace:
                    help="run only the first N tasks (for smoke tests)")
     p.add_argument("--list_dir", default=None,
                    help="task-list sub-directory under runs/ (default: <timestamp>_task_list)")
+    p.add_argument("--tasks", default=str(HERE / "task_list.json"),
+                   help="path to the task-list JSON (live queue by default)")
     return p.parse_args()
 
 
@@ -489,7 +293,17 @@ def make_comparison_plot(csv_path: Path, out_path: Path) -> None:
 
 def main() -> None:
     args = parse_args()
-    tasks = TASKS[: args.limit] if args.limit else TASKS
+    tasks_path = Path(args.tasks)
+    if not tasks_path.is_absolute():
+        tasks_path = (HERE / tasks_path).resolve()
+    if not tasks_path.exists():
+        raise FileNotFoundError(
+            f"task-list JSON not found: {tasks_path} "
+            f"(point --tasks at task_list.json or a task_list_REF-*.json)"
+        )
+    print(f"task-list file : {tasks_path.name}")
+    all_tasks = load_tasks(tasks_path)
+    tasks = all_tasks[: args.limit] if args.limit else all_tasks
     if args.dry_run:
         print_task_plan(tasks); return
 

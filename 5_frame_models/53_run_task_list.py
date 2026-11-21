@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """53_run_task_list — chapter-5 sequential task-list runner.
 
-Walks the ``TASKS`` list below one by one. Each task is a full
-phase-1 (DEV) → phase-2 (TEST) frame-classification run through the same
-engine as ``run_51_classification``. Aggregates the best DEV + best TEST
-metrics into a CSV, plots a bar chart comparing macro-F1 and positive-class F1
-across tasks, and lets you fire-and-forget overnight. A crash in one task does
-not kill the queue — the error is written into that task's CSV row and the
-next task runs.
+Walks ``task_list.json`` (a JSON array of task dicts) one by one. Each task
+is a full phase-1 (DEV) → phase-2 (TEST) frame-classification run through the
+same engine as ``run_51_classification``. Aggregates the best DEV + best TEST
+metrics into a CSV, plots a bar chart comparing macro-F1 and positive-class
+F1 across tasks, and lets you fire-and-forget overnight. A crash in one task
+does not kill the queue — the error is written into that task's CSV row and
+the next task runs.
 
 Every task writes its own ``<list_root>/<label>/`` tree with:
 - per-epoch predictions.json / epoch_summary.json / example_predictions.png
@@ -16,14 +16,19 @@ Every task writes its own ``<list_root>/<label>/`` tree with:
 - best_model/ (weights only for the best phase-2 epoch)
 
 Aggregate summary lands at ``<list_root>/task_list_summary.csv`` +
-``<list_root>/task_list_summary.png``. ``tasks.json`` snapshots the exact TASKS
-list for provenance.
+``<list_root>/task_list_summary.png``. ``tasks.json`` snapshots the exact
+list that was run (post-``--limit``) for provenance.
+
+Task-list file: ``task_list.json`` sits next to this script and is the live
+queue. Historical queues are preserved as ``task_list_REF-<YYYY-MM-DD>.json``
+snapshots — rerun one with ``--tasks task_list_REF-2026-11-04.json``.
 
 Usage:
   python -u 53_run_task_list.py --use_gpu
   python -u 53_run_task_list.py --use_gpu --dry_run          # print tasks, exit
   python -u 53_run_task_list.py --use_gpu --limit 2          # first 2 tasks only
   python -u 53_run_task_list.py --use_gpu --list_dir ch4_demo
+  python -u 53_run_task_list.py --use_gpu --tasks task_list_REF-2026-11-04.json
 
   # With tee — always use -u to prevent 8 KB stdout block-buffer delay:
   python -u 53_run_task_list.py --use_gpu 2>&1 | tee ../runs/53_task_list_$(date +%Y-%m-%d_%H%M%S).log
@@ -50,19 +55,15 @@ TASK_TYPE = "classification"   # ch5 engine is classification-only for now
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# TASKS — edit this list to change the queue
+# TASKS — loaded from task_list.json (next to this script)
 # ══════════════════════════════════════════════════════════════════════════
-# Two 2×2 comparison tables. Within each table, lr/epochs/batch_size are held
-# constant so the only variable is (a) the model and (b) the data language.
+# The live queue is JSON — ``task_list.json``. Each task is a dict of Config
+# field overrides plus a ``label`` (sub-dir name, CSV row key). The runner
+# re-resolves ``target`` after every task override. Typos in field names are
+# a hard error at task-start.
 #
-#   Group 1 — Filled pause (FP) detection on ParlaSpeech utterances
-#     Rows : vanilla w2v-bert-2.0  vs  classla/wav2vecbert2-filledPause
-#     Cols : HR (pretrained in-domain)  vs  PL (cross-lingual)
-#
-#   Group 2 — Primary stress detection, word-level frames
-#     Rows : vanilla w2v-bert-2.0  vs  classla/Wav2Vec2BertPrimaryStress...
-#     Cols : HR ParlaSpeech (in-domain for classla)  vs  SI (cross-lingual)
-#            SI has finer phonetic annotation — expected cleaner labels.
+# Historical queues live beside this script as
+# ``task_list_REF-<YYYY-MM-DD>.json``. Override the file with ``--tasks``.
 #
 # TODO (2026-11-04): once the ParlaSpeech primary-stress JSONL files cover
 # HR+RS+SI, replace target "si_primary_stress_frames" in the SI stress tasks
@@ -70,74 +71,23 @@ TASK_TYPE = "classification"   # ch5 engine is classification-only for now
 # dataset is a standalone pilot; the north-star is a unified HR+RS+SI pool.
 # See TARGETS["parlaspeech_primary_stress_frames"] in utils_frame_train.py.
 
-TASKS: list[dict] = [
-    # ═══ GROUP 1 — Filled pause ════════════════════════════════════════════
-    # 10 epochs · lr 3e-5 · batch 8 · grad_accum 2 · demo caps · binary (0=speech, 1=fp)
-    # FP: positive-only + length cap applied before the cap to keep train on-topic
-    # and avoid the long-utterance OOMs we hit on batch 8.
 
-    # HR, vanilla w2v-bert-2.0
-    {"label": "fp_hr_bert_lr1e5",
-     "target": "parlaspeech_fp_frames", "langs": ["hr"],
-     "model_name": "facebook/w2v-bert-2.0",
-     "enable_max_audio_seconds": True,
-     "require_positive": True,
-     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 8, "grad_accum": 2},
+def load_tasks(tasks_path: Path) -> list[dict]:
+    with open(tasks_path) as f:
+        raw = json.load(f)
+    if not isinstance(raw, list):
+        raise ValueError(
+            f"{tasks_path.name}: expected a JSON array of task dicts, got "
+            f"{type(raw).__name__}"
+        )
+    for i, t in enumerate(raw):
+        if not isinstance(t, dict) or "label" not in t:
+            raise ValueError(
+                f"{tasks_path.name}[{i}]: each task must be an object with a "
+                f"'label' key (got {t!r})"
+            )
+    return raw
 
-    # HR, pretrained FP classifier (classla warm start — in-domain)
-    {"label": "fp_hr_classla_fp_lr1e5",
-     "target": "parlaspeech_fp_frames", "langs": ["hr"],
-     "model_name": "classla/wav2vecbert2-filledPause",
-     "enable_max_audio_seconds": True,
-     "require_positive": True,
-     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 8, "grad_accum": 2},
-
-    # PL, vanilla w2v-bert-2.0  (cross-lingual vs HR)
-    {"label": "fp_pl_bert_lr1e5",
-     "target": "parlaspeech_fp_frames", "langs": ["pl"],
-     "model_name": "facebook/w2v-bert-2.0",
-     "enable_max_audio_seconds": True,
-     "require_positive": True,
-     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 8, "grad_accum": 2},
-
-    # PL, pretrained FP classifier (classla warm start — cross-lingual)
-    {"label": "fp_pl_classla_fp_lr1e5",
-     "target": "parlaspeech_fp_frames", "langs": ["pl"],
-     "model_name": "classla/wav2vecbert2-filledPause",
-     "enable_max_audio_seconds": True,
-     "require_positive": True,
-     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 8, "grad_accum": 2},
-
-    # ═══ GROUP 2 — Primary stress ══════════════════════════════════════════
-    # 10 epochs · lr 3e-5 · demo caps · binary (0=unstressed, 1=stressed)
-    # Stress is word-level, short, and naturally positive (cfg.require_positive=False).
-
-    # HR ParlaSpeech, vanilla w2v-bert-2.0
-    {"label": "stress_hr_bert_lr1e5",
-     "target": "parlaspeech_primary_stress_frames", "langs": ["hr"],
-     "model_name": "facebook/w2v-bert-2.0",
-     "require_positive": False,
-     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 16, "grad_accum": 2},
-
-    # HR ParlaSpeech, pretrained stress classifier (classla — in-domain, same lang)
-    {"label": "stress_hr_classla_lr1e5",
-     "target": "parlaspeech_primary_stress_frames", "langs": ["hr"],
-     "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "require_positive": False,
-     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 16, "grad_accum": 2},
-
-    # SI (Slovenian), vanilla w2v-bert-2.0  (cross-lingual vs HR)
-    {"label": "stress_si_bert_lr1e5",
-     "target": "si_primary_stress_frames",
-     "model_name": "facebook/w2v-bert-2.0",
-     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 32, "grad_accum": 1},
-
-    # SI (Slovenian), pretrained HR/RS stress classifier (cross-lingual)
-    {"label": "stress_si_classla_lr1e5",
-     "target": "si_primary_stress_frames",
-     "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
-     "learning_rate": 3e-5, "num_epochs": 10, "batch_size": 32, "grad_accum": 1},
-]
 
 
 CSV_FIELDS = [
@@ -166,6 +116,8 @@ def parse_args() -> argparse.Namespace:
                    help="run only the first N tasks (for smoke tests)")
     p.add_argument("--list_dir", default=None,
                    help="task-list sub-directory name under runs/ (default: <timestamp>_task_list)")
+    p.add_argument("--tasks", default=str(HERE / "task_list.json"),
+                   help="path to the task-list JSON (live queue by default)")
     return p.parse_args()
 
 
@@ -339,7 +291,17 @@ def make_comparison_plot(csv_path: Path, out_path: Path) -> None:
 
 def main() -> None:
     args = parse_args()
-    tasks = TASKS[: args.limit] if args.limit else TASKS
+    tasks_path = Path(args.tasks)
+    if not tasks_path.is_absolute():
+        tasks_path = (HERE / tasks_path).resolve()
+    if not tasks_path.exists():
+        raise FileNotFoundError(
+            f"task-list JSON not found: {tasks_path} "
+            f"(point --tasks at task_list.json or a task_list_REF-*.json)"
+        )
+    print(f"task-list file : {tasks_path.name}")
+    all_tasks = load_tasks(tasks_path)
+    tasks = all_tasks[: args.limit] if args.limit else all_tasks
     if args.dry_run:
         print_task_plan(tasks); return
 

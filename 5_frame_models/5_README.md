@@ -28,6 +28,17 @@ Run cells top-to-bottom. First cell is the same GPU guard pattern as chapter 4 �
 
 `runs/<task>/<timestamp>/` carries per-frame predictions including `prob_pos` (softmax positive-class probability) for downstream QC thresholding, plus standard frame metrics.
 
+## Task-list runner — overnight queue
+
+```bash
+python -u 53_run_task_list.py --mode full --use_gpu           # uses task_list.json
+python -u 53_run_task_list.py --tasks task_list_REF-2026-11-04.json --use_gpu
+python -u 53_run_task_list.py --dry_run                       # print queue, exit
+```
+
+The live queue lives in `task_list.json` next to the runner. Historical
+queues are preserved as `task_list_REF-<YYYY-MM-DD>.json` snapshots.
+
 ## What's missing
 
 - **The shared-engine refactor** — chapter 5 is still standalone (the whole engine lives inline in `41`). The chapter-4 pattern (`utils_frame_train.py` + `5_config.json` + py runner) is planned. Full runs should wait for that refactor.

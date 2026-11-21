@@ -1,0 +1,90 @@
+[
+  {
+    "label": "fp_hr_bert_lr1e5",
+    "target": "parlaspeech_fp_frames",
+    "langs": ["hr"],
+    "model_name": "facebook/w2v-bert-2.0",
+    "enable_max_audio_seconds": true,
+    "require_positive": true,
+    "learning_rate": 3e-05,
+    "num_epochs": 10,
+    "batch_size": 8,
+    "grad_accum": 2
+  },
+  {
+    "label": "fp_hr_classla_fp_lr1e5",
+    "target": "parlaspeech_fp_frames",
+    "langs": ["hr"],
+    "model_name": "classla/wav2vecbert2-filledPause",
+    "enable_max_audio_seconds": true,
+    "require_positive": true,
+    "learning_rate": 3e-05,
+    "num_epochs": 10,
+    "batch_size": 8,
+    "grad_accum": 2
+  },
+  {
+    "label": "fp_pl_bert_lr1e5",
+    "target": "parlaspeech_fp_frames",
+    "langs": ["pl"],
+    "model_name": "facebook/w2v-bert-2.0",
+    "enable_max_audio_seconds": true,
+    "require_positive": true,
+    "learning_rate": 3e-05,
+    "num_epochs": 10,
+    "batch_size": 8,
+    "grad_accum": 2
+  },
+  {
+    "label": "fp_pl_classla_fp_lr1e5",
+    "target": "parlaspeech_fp_frames",
+    "langs": ["pl"],
+    "model_name": "classla/wav2vecbert2-filledPause",
+    "enable_max_audio_seconds": true,
+    "require_positive": true,
+    "learning_rate": 3e-05,
+    "num_epochs": 10,
+    "batch_size": 8,
+    "grad_accum": 2
+  },
+  {
+    "label": "stress_hr_bert_lr1e5",
+    "target": "parlaspeech_primary_stress_frames",
+    "langs": ["hr"],
+    "model_name": "facebook/w2v-bert-2.0",
+    "require_positive": false,
+    "learning_rate": 3e-05,
+    "num_epochs": 10,
+    "batch_size": 16,
+    "grad_accum": 2
+  },
+  {
+    "label": "stress_hr_classla_lr1e5",
+    "target": "parlaspeech_primary_stress_frames",
+    "langs": ["hr"],
+    "model_name": "classla/wav2vecbert2-filledPause",
+    "require_positive": false,
+    "learning_rate": 3e-05,
+    "num_epochs": 10,
+    "batch_size": 16,
+    "grad_accum": 2
+  },
+  {
+    "label": "stress_si_bert_lr1e5",
+    "target": "si_primary_stress_frames",
+    "model_name": "facebook/w2v-bert-2.0",
+    "learning_rate": 3e-05,
+    "num_epochs": 10,
+    "batch_size": 32,
+    "grad_accum": 1
+  },
+  {
+    "label": "stress_si_classla_lr1e5",
+    "target": "si_primary_stress_frames",
+    "model_name": "classla/Wav2Vec2BertPrimaryStressAudioFrameClassifier",
+    "learning_rate": 3e-05,
+    "num_epochs": 10,
+    "batch_size": 32,
+    "grad_accum": 1
+  }
+]

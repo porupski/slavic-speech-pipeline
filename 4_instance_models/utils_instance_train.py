@@ -166,6 +166,26 @@ TARGETS: dict = {
             "predominantlyPositive": "positive",
         },
     },
+    "rog_dia_sentiment_regr": {
+        # Ordinal regression over the 6-class sentiment on a [0, 5] float axis:
+        # 0 = predominantlyNegative, ..., 5 = predominantlyPositive. label_scale
+        # is applied by `get_regression_target()` at load time, so the raw JSONL
+        # does not need a numeric column. Use this target when comparing float
+        # outputs against the 3-cls/6-cls classification cells (post-hoc bin via
+        # thresholds 1.5 and 3.5 → negative / neutral / positive).
+        "jsonl_path": "data/processed_jsonl/rog_dialog_v2_instance.jsonl",
+        "label_key":  "sentiment",
+        "task_type":  "regression",
+        "label_order": None,
+        "label_scale": {
+            "predominantlyNegative": 0.0,
+            "mixedNegative":         1.0,
+            "neutralNegative":       2.0,
+            "neutralPositive":       3.0,
+            "mixedPositive":         4.0,
+            "predominantlyPositive": 5.0,
+        },
+    },
     "rog_dia_dialogue_act_dimension": {
         "jsonl_path": "data/processed_jsonl/rog_dialog_v2_instance.jsonl",
         "label_key":  "dialogue_act_dimension",
@@ -221,6 +241,48 @@ def _add_parlaspeech_targets(targets: dict,
 
 
 _add_parlaspeech_targets(TARGETS)
+
+
+def _add_sentiment_mixture_targets(targets: dict) -> None:
+    """Regression-on-sentiment presets for Phase 4.3: ROG-only + ParlaSpeech-SI
+    subsets + ROG+PS merged mixtures. All target the unified ``sentiment_f``
+    scalar on [0, 5] written by 1_data_prep/11c_prep_subset_parlaspeech.py.
+
+    The underlying JSONLs are produced by running ``11c_prep_subset_parlaspeech``
+    with ``--target_hours`` ∈ {200, 500} on
+    ``data/processed_jsonl/parlaspeech_v4_si_utterance_instance.jsonl``. For the
+    merged entries, pass ``--merge_with data/processed_jsonl/rog_dialog_v2_instance.jsonl``.
+    Registry entries point at the expected output names so tasks referencing
+    them fail loudly (``FileNotFoundError``) rather than silently when the
+    JSONL isn't on disk."""
+    base = "data/processed_jsonl"
+    targets["parlaspeech_si_sentiment_regr_200h"] = {
+        "jsonl_path": f"{base}/parlaspeech_v4_si_subset_200h.jsonl",
+        "label_key":  "sentiment_f",
+        "task_type":  "regression",
+        "label_order": None,
+    }
+    targets["parlaspeech_si_sentiment_regr_500h"] = {
+        "jsonl_path": f"{base}/parlaspeech_v4_si_subset_500h.jsonl",
+        "label_key":  "sentiment_f",
+        "task_type":  "regression",
+        "label_order": None,
+    }
+    targets["pr_sentiment_regr_200h"] = {
+        "jsonl_path": f"{base}/rog_plus_merged_200h.jsonl",
+        "label_key":  "sentiment_f",
+        "task_type":  "regression",
+        "label_order": None,
+    }
+    targets["pr_sentiment_regr_500h"] = {
+        "jsonl_path": f"{base}/rog_plus_merged_500h.jsonl",
+        "label_key":  "sentiment_f",
+        "task_type":  "regression",
+        "label_order": None,
+    }
+
+
+_add_sentiment_mixture_targets(TARGETS)
 
 def _add_hr_benchmark_v1_targets(targets: dict) -> None:
     """ParlaSpeech-HR-benchmark-v1 presets (11e output): one JSONL per task,
@@ -319,7 +381,9 @@ def print_target_menu(task_type: str | None = None) -> None:
 # resolve_target applies it to cfg in addition to the data fields above —
 # mode-level overrides in 4_config.json still win (they apply later in
 # load_config). Add to this tuple to wire more constraints through.
-TARGET_CONSTRAINT_FIELDS: tuple = ("max_duration_s", "min_duration_s", "label_remap")
+TARGET_CONSTRAINT_FIELDS: tuple = (
+    "max_duration_s", "min_duration_s", "label_remap", "label_scale",
+)
 
 
 def resolve_target(cfg, targets: dict = TARGETS) -> None:
@@ -396,6 +460,11 @@ class Config:
     # -- Model ---------------------------------------------------------------
     model_name: str              = "facebook/wav2vec2-base"
     freeze_feature_encoder: bool = True
+    # Head-only probe (F1 in the freeze matrix). When True, freeze EVERY
+    # parameter in the backbone — only the classification / regression head
+    # trains. Takes precedence over freeze_feature_encoder (which is a no-op
+    # if the whole encoder is already locked).
+    freeze_encoder: bool = False
 
     # -- Training ------------------------------------------------------------
     batch_size: int      = 16
@@ -1013,7 +1082,15 @@ class DataCollatorForInstance:
     """Pads audio within each batch and threads the attention mask through.
     Label dtype follows the task: long for classification, float32 for
     regression. Works for both wav2vec2 (input_values) and SeamlessM4T
-    (input_features) — the key is read from model_input_names."""
+    (input_features) — the key is read from model_input_names.
+
+    2-D branch: w2v-BERT-2.0 (and other Seamless-family models) emit log-Mel
+    features of shape (T, feat_dim). HuggingFace's base
+    ``SequenceFeatureExtractor._pad`` is 1-D-only (``np.pad`` with a (2, 2)
+    pad_width broadcast fails against a (1, 2) 1-D expected shape); on some
+    transformers versions the SeamlessM4T subclass override isn't dispatched,
+    so we pad manually here and skip the extractor entirely for 2-D inputs.
+    """
     def __init__(self, feature_extractor, task_type: str):
         self.feature_extractor = feature_extractor
         self.task_type = task_type
@@ -1022,10 +1099,27 @@ class DataCollatorForInstance:
     def __call__(self, features):
         audio_seqs = [f[self.audio_key] for f in features]
         labels = [f["labels"] for f in features]
-        batch = self.feature_extractor.pad(
-            {self.audio_key: audio_seqs},
-            padding=True, return_attention_mask=True, return_tensors="pt",
-        )
+
+        first = np.asarray(audio_seqs[0])
+        if first.ndim == 2:
+            max_len = max(np.asarray(a).shape[0] for a in audio_seqs)
+            n_feat = first.shape[1]
+            padded = np.zeros((len(audio_seqs), max_len, n_feat), dtype=np.float32)
+            attn = np.zeros((len(audio_seqs), max_len), dtype=np.int64)
+            for i, a in enumerate(audio_seqs):
+                arr = np.asarray(a, dtype=np.float32)
+                T = arr.shape[0]
+                padded[i, :T] = arr
+                attn[i, :T] = 1
+            batch = {
+                self.audio_key: torch.from_numpy(padded),
+                "attention_mask": torch.from_numpy(attn),
+            }
+        else:
+            batch = self.feature_extractor.pad(
+                {self.audio_key: audio_seqs},
+                padding=True, return_attention_mask=True, return_tensors="pt",
+            )
         dtype = torch.long if self.task_type == "classification" else torch.float32
         batch["labels"] = torch.tensor(labels, dtype=dtype)
         return batch
@@ -1107,15 +1201,24 @@ def build_model(cfg: Config, num_labels: int, label2id, id2label):
             cfg.model_name, config=config_obj, ignore_mismatched_sizes=True,
         )
 
-    if cfg.freeze_feature_encoder:
+    backbone_name = model.base_model_prefix
+    backbone = getattr(model, backbone_name, None)
+    if cfg.freeze_encoder:
+        # F1 head-only probe: lock the entire backbone, only the task head trains.
+        if backbone is not None:
+            n_frozen = 0
+            for p in backbone.parameters():
+                p.requires_grad = False
+                n_frozen += p.numel()
+            print(f"🔒 entire encoder frozen on backbone '{backbone_name}' "
+                  f"({n_frozen/1e6:.1f}M params) — head-only probe")
+    elif cfg.freeze_feature_encoder:
         # HF audio models expose the backbone as model.<base_model_prefix>:
         #   Wav2Vec2ForSequenceClassification     → model.wav2vec2
         #   Wav2Vec2BertForSequenceClassification → model.wav2vec2_bert
         # wav2vec-BERT 2.0 has no CNN feature encoder (input is already mel
         # filterbanks) — silently skip the freeze in that case rather than
         # spamming a warning the user can't act on.
-        backbone_name = model.base_model_prefix
-        backbone = getattr(model, backbone_name, None)
         if backbone is not None and hasattr(backbone, "freeze_feature_encoder"):
             backbone.freeze_feature_encoder()
             print(f"🔒 feature encoder (CNN) frozen on backbone '{backbone_name}'")

@@ -27,6 +27,27 @@ python run_42_regression.py     --mode demo --use_gpu --target hr_bench_v3_age
 
 Same engine, no prompts. Made for `tmux`. This is the right tool for full-corpus runs — notebooks hit kernel memory limits under full load.
 
+**Task-list runner — overnight queue:**
+
+```bash
+python -u 43_run_task_list.py --mode full --use_gpu           # uses task_list.json
+python -u 43_run_task_list.py --tasks task_list_REF-2026-11-20.json --use_gpu
+python -u 43_run_task_list.py --dry_run                       # print queue, exit
+```
+
+The live queue lives in `task_list.json` next to the runner. Each task is a
+dict of Config overrides plus a `label`; each one spins up a fresh phase-1
+(DEV) + phase-2 (TEST) pass. Historical queues are preserved as
+`task_list_REF-<YYYY-MM-DD>.json` snapshots — rerun them with `--tasks`.
+Unknown Config fields in a task are a hard error at task-start, so typos are
+caught before the GPU warms up.
+
+Task dicts can set `freeze_encoder: true` to run the head-only probe (F1 in
+the freeze matrix) — otherwise only the conv feature extractor is frozen (F0,
+default per `4_config.json`). The regression path reads `label_scale` from a
+target preset to map categorical labels (e.g. ROG sentiment strings) onto the
+[0, 5] float axis.
+
 ## Knobs
 
 Everything user-facing is in `4_config.json`:

@@ -1,0 +1,66 @@
+[
+  {
+    "label": "gender_w2v2-base_lr1e5",
+    "model_name": "facebook/wav2vec2-base",
+    "target": "hr_bench_v3_gender",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 1e-05
+  },
+  {
+    "label": "gender_xls-r-300m_lr3e5",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "hr_bench_v3_gender",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05
+  },
+  {
+    "label": "speakerid_w2v2-base_lr1e5",
+    "model_name": "facebook/wav2vec2-base",
+    "target": "hr_bench_v3_speaker_id",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 1e-05
+  },
+  {
+    "label": "speakerid_xls-r-300m_lr3e5",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "hr_bench_v3_speaker_id",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05
+  },
+  {
+    "label": "age_w2v2-base_lr1e5",
+    "model_name": "facebook/wav2vec2-base",
+    "target": "hr_bench_v3_age",
+    "task_type": "regression",
+    "num_epochs": 20,
+    "learning_rate": 1e-05
+  },
+  {
+    "label": "age_xls-r-300m_lr3e5",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "hr_bench_v3_age",
+    "task_type": "regression",
+    "num_epochs": 20,
+    "learning_rate": 3e-05
+  },
+  {
+    "label": "orientation_w2v2-base_lr1e5",
+    "model_name": "facebook/wav2vec2-base",
+    "target": "hr_bench_v3_orientation",
+    "task_type": "regression",
+    "num_epochs": 20,
+    "learning_rate": 1e-05
+  },
+  {
+    "label": "orientation_xls-r-300m_lr3e5",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "hr_bench_v3_orientation",
+    "task_type": "regression",
+    "num_epochs": 20,
+    "learning_rate": 3e-05
+  }
+]

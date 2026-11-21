@@ -1,0 +1,89 @@
+[
+  {
+    "label": "sqrt_w2v2-base_rog_dia_full",
+    "model_name": "facebook/wav2vec2-base",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 1e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "sqrt_xls-r-300m_rog_dia_full",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "sqrt_w2v-bert-2_rog_dia_full",
+    "model_name": "facebook/w2v-bert-2.0",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse",
+    "batch_size": 8,
+    "grad_accum": 4
+  },
+  {
+    "label": "sqrt-lrhi_w2v2-base_rog_dia_full",
+    "model_name": "facebook/wav2vec2-base",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "sqrt-lrhi_xls-r-300m_rog_dia_full",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 0.0001,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "sqrt-lrhi_w2v-bert-2_rog_dia_full",
+    "model_name": "facebook/w2v-bert-2.0",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 0.0001,
+    "class_weighting": "sqrt_inverse",
+    "batch_size": 8,
+    "grad_accum": 4
+  },
+  {
+    "label": "sqrt-e20_w2v2-base_rog_dia_full",
+    "model_name": "facebook/wav2vec2-base",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 1e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "sqrt-e20_xls-r-300m_rog_dia_full",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "sqrt-e20_w2v-bert-2_rog_dia_full",
+    "model_name": "facebook/w2v-bert-2.0",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse",
+    "batch_size": 8,
+    "grad_accum": 4
+  }
+]

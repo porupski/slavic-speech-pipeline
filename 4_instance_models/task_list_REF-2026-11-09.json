@@ -1,0 +1,90 @@
+[
+  {
+    "label": "sentiment3_xls-r_cw-none",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "class_weighting": "none"
+  },
+  {
+    "label": "sentiment3_xls-r_cw-sqrt",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "da-dim_varA_xls-r_cw-none",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_dialogue_act_dimension",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "drop_label_values": ["unspecifiedDimension"],
+    "max_class_ratio": 20,
+    "min_duration_s": 1.0,
+    "class_weighting": "none"
+  },
+  {
+    "label": "da-dim_varA_xls-r_cw-sqrt",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_dialogue_act_dimension",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "drop_label_values": ["unspecifiedDimension"],
+    "max_class_ratio": 20,
+    "min_duration_s": 1.0,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "da-dim_varB_xls-r_cw-none",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_dialogue_act_dimension",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "max_class_ratio": 20,
+    "min_duration_s": 1.0,
+    "class_weighting": "none"
+  },
+  {
+    "label": "da-dim_varB_xls-r_cw-sqrt",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_dialogue_act_dimension",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "max_class_ratio": 20,
+    "min_duration_s": 1.0,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "da-fn_varA_xls-r_cw-none",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_dialogue_act_function",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "drop_label_values": ["unspecifiedFunction"],
+    "max_class_ratio": 30,
+    "min_duration_s": 1.0,
+    "class_weighting": "none"
+  },
+  {
+    "label": "da-fn_varA_xls-r_cw-sqrt",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_dialogue_act_function",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "drop_label_values": ["unspecifiedFunction"],
+    "max_class_ratio": 30,
+    "min_duration_s": 1.0,
+    "class_weighting": "sqrt_inverse"
+  }
+]
