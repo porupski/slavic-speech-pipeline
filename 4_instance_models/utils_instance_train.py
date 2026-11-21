@@ -1100,17 +1100,38 @@ class DataCollatorForInstance:
         audio_seqs = [f[self.audio_key] for f in features]
         labels = [f["labels"] for f in features]
 
-        first = np.asarray(audio_seqs[0])
-        if first.ndim == 2:
-            max_len = max(np.asarray(a).shape[0] for a in audio_seqs)
-            n_feat = first.shape[1]
+        # Determine the pad branch from the extractor's input name, not from
+        # the first row — HF datasets round-trip can collapse an empty (0, F)
+        # 2-D slice into a (0,) 1-D array, so first.ndim is unreliable.
+        if self.audio_key == "input_features":
+            # Feature dim: pull from any non-empty row, else from the extractor.
+            n_feat = None
+            lens = []
+            for a in audio_seqs:
+                arr = np.asarray(a)
+                if arr.ndim == 2:
+                    lens.append(arr.shape[0])
+                    if n_feat is None and arr.shape[1] > 0:
+                        n_feat = arr.shape[1]
+                else:
+                    # Round-trip empty row — shape (0,). Treat as T=0.
+                    lens.append(0)
+            if n_feat is None:
+                n_feat = getattr(self.feature_extractor, "feature_size", 80) or 80
+            max_len = max(1, max(lens))   # avoid zero-size tensor
             padded = np.zeros((len(audio_seqs), max_len, n_feat), dtype=np.float32)
             attn = np.zeros((len(audio_seqs), max_len), dtype=np.int64)
             for i, a in enumerate(audio_seqs):
-                arr = np.asarray(a, dtype=np.float32)
-                T = arr.shape[0]
-                padded[i, :T] = arr
-                attn[i, :T] = 1
+                T = lens[i]
+                if T > 0:
+                    arr = np.asarray(a, dtype=np.float32)
+                    padded[i, :T] = arr
+                    attn[i, :T] = 1
+                else:
+                    # Degenerate zero-frame row (log-Mel extractor returned
+                    # an empty slice — usually a sub-25 ms clip). Keep one
+                    # all-zero frame so the masked-mean pool doesn't div by 0.
+                    attn[i, 0] = 1
             batch = {
                 self.audio_key: torch.from_numpy(padded),
                 "attention_mask": torch.from_numpy(attn),

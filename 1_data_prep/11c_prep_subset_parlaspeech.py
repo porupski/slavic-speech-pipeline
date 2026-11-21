@@ -403,7 +403,16 @@ def main() -> None:
     if args.merge_with:
         merge_src = Path(args.merge_with)
         if not merge_src.is_absolute():
-            merge_src = (PROJECT_ROOT / merge_src).resolve()
+            # Try CWD first (so `../data/...` from 1_data_prep/ works), then
+            # fall back to PROJECT_ROOT-relative (so `data/...` works too).
+            candidates = [Path.cwd() / merge_src, PROJECT_ROOT / merge_src]
+            merge_src = next((c.resolve() for c in candidates if c.exists()),
+                             candidates[-1].resolve())
+        if not merge_src.exists():
+            raise FileNotFoundError(
+                f"--merge_with path not found. Tried: "
+                f"{[str(Path.cwd() / args.merge_with), str(PROJECT_ROOT / args.merge_with)]}"
+            )
         pooled = merge_with(rows, merge_src, rng)
         merged_out = out_dir / f"{args.merge_tag}_merged_{name}.jsonl"
         dump_jsonl(pooled, merged_out)
