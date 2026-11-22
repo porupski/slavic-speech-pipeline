@@ -148,9 +148,16 @@ def _auto_name(args) -> str:
 
 def load_source(path: Path, dur_range: tuple[float, float],
                 require_sentiment: bool) -> list[dict]:
-    """Stream the source JSONL, apply duration + null filters. Returns the kept rows."""
+    """Stream the source JSONL, apply duration + null filters. Returns the kept rows.
+
+    require_sentiment demands BOTH sentiment_logit AND sentiment_6 are populated —
+    sentiment_6 is the discrete label that ``add_sentiment_f`` maps onto the
+    unified [0, 5] axis. ParlaSent sometimes emits only the logit on rows with
+    missing text bins (Phase 4.3 hit this: P-only cells failed because
+    sentiment_f ended up None for 100 % of rows in some caps)."""
     lo, hi = dur_range
-    out, n_total, n_short, n_long, n_nosent = [], 0, 0, 0, 0
+    out = []
+    n_total = n_short = n_long = n_nologit = n_no6 = 0
     with open(path, encoding="utf-8") as f:
         for line in f:
             n_total += 1
@@ -160,12 +167,16 @@ def load_source(path: Path, dur_range: tuple[float, float],
                 n_short += 1; continue
             if dur > hi:
                 n_long += 1; continue
-            if require_sentiment and r.get("labels", {}).get("sentiment_logit") is None:
-                n_nosent += 1; continue
+            if require_sentiment:
+                lbls = r.get("labels", {}) or {}
+                if lbls.get("sentiment_logit") is None:
+                    n_nologit += 1; continue
+                if lbls.get("sentiment_6") is None:
+                    n_no6 += 1; continue
             out.append(r)
     print(f"source: {n_total} rows, kept {len(out)}")
-    print(f"  dropped: {n_short} shorter than {lo}s, {n_long} longer than {hi}s, "
-          f"{n_nosent} missing sentiment_logit")
+    print(f"  dropped: {n_short} < {lo}s, {n_long} > {hi}s, "
+          f"{n_nologit} missing sentiment_logit, {n_no6} missing sentiment_6")
     return out
 
 
