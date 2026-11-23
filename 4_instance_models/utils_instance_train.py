@@ -465,6 +465,12 @@ class Config:
     # trains. Takes precedence over freeze_feature_encoder (which is a no-op
     # if the whole encoder is already locked).
     freeze_encoder: bool = False
+    # Partial-layer freeze (F2 in the freeze matrix). When >0, freeze the
+    # bottom-N transformer layers; top (total_layers - N) stay trainable.
+    # Also freezes the conv feature extractor + input embeddings. For xls-r
+    # (24 layers), 12 means "freeze bottom half". None/0 disables. Ignored
+    # when freeze_encoder=True (the full freeze takes precedence).
+    freeze_layers_upto: int | None = None
 
     # -- Training ------------------------------------------------------------
     batch_size: int      = 16
@@ -1233,6 +1239,46 @@ def build_model(cfg: Config, num_labels: int, label2id, id2label):
                 n_frozen += p.numel()
             print(f"🔒 entire encoder frozen on backbone '{backbone_name}' "
                   f"({n_frozen/1e6:.1f}M params) — head-only probe")
+    elif cfg.freeze_layers_upto and cfg.freeze_layers_upto > 0:
+        # F2 partial freeze: freeze bottom-N transformer layers + the CNN
+        # feature extractor + the input embeddings. Top (K - N) transformer
+        # layers + task head stay trainable. HF audio backbones keep layers
+        # under either `.encoder.layers` (wav2vec2 / xls-r) or
+        # `.encoder.layers` on the SeamlessM4T adapter (w2v-BERT); we probe
+        # both and fail loudly if neither resolves.
+        if backbone is not None:
+            if hasattr(backbone, "freeze_feature_encoder"):
+                backbone.freeze_feature_encoder()
+            enc = getattr(backbone, "encoder", None)
+            layers = getattr(enc, "layers", None) if enc is not None else None
+            if layers is None:
+                raise ValueError(
+                    f"freeze_layers_upto set but backbone '{backbone_name}' "
+                    f"has no .encoder.layers (got encoder={type(enc).__name__}). "
+                    f"Patch utils_instance_train.py: locate the transformer layer "
+                    f"stack for this architecture and freeze its first N layers."
+                )
+            n_total = len(layers)
+            n_freeze = min(cfg.freeze_layers_upto, n_total)
+            n_frozen_params = 0
+            for layer in layers[:n_freeze]:
+                for p in layer.parameters():
+                    p.requires_grad = False
+                    n_frozen_params += p.numel()
+            # Also freeze any pre-encoder embedding / positional modules that
+            # feed the first trainable layer — otherwise their gradients flow
+            # through the frozen stack as a no-op.
+            for attr in ("feature_projection", "pos_conv_embed", "embeddings",
+                         "adapter", "masked_spec_embed"):
+                mod = getattr(backbone, attr, None)
+                if mod is not None and hasattr(mod, "parameters"):
+                    for p in mod.parameters():
+                        if p.requires_grad:
+                            p.requires_grad = False
+                            n_frozen_params += p.numel()
+            print(f"🔒 bottom {n_freeze}/{n_total} transformer layers frozen on "
+                  f"backbone '{backbone_name}' ({n_frozen_params/1e6:.1f}M params) "
+                  f"— partial-freeze probe")
     elif cfg.freeze_feature_encoder:
         # HF audio models expose the backbone as model.<base_model_prefix>:
         #   Wav2Vec2ForSequenceClassification     → model.wav2vec2

@@ -1,0 +1,116 @@
+[
+  {
+    "label": "p44_xlsr_Rfull_e30_cls3",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 30,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "p44_xlsr_Rfull_e40_cls3",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 40,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "p44_xlsr_Rfull_e20_cls3_seed5678",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse",
+    "cap_seed": 5678
+  },
+  {
+    "label": "p44_xlsr_Rfull_e20_cls3_seed91",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse",
+    "cap_seed": 91
+  },
+  {
+    "label": "p44_xlsr_Rfull_e20_cls3_lrmid",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 5e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "p44_xlsr_Rfull_e20_cls3_lrlow",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 1e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "p44_xlsr_Rfull_e20_cls6",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "p44_xlsr_Rfull_e30_cls6",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment",
+    "task_type": "classification",
+    "num_epochs": 30,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "p44_w2v2_Rfull_e30_cls3",
+    "model_name": "facebook/wav2vec2-base",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 30,
+    "learning_rate": 1e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "p44_w2v2_Rfull_e20_cls6",
+    "model_name": "facebook/wav2vec2-base",
+    "target": "rog_dia_sentiment",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 1e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "p44_wbert_Rfull_sqrt_e20_cls3",
+    "model_name": "facebook/w2v-bert-2.0",
+    "target": "rog_dia_sentiment_3",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse",
+    "batch_size": 8,
+    "grad_accum": 4
+  },
+  {
+    "label": "p44_wbert_Rfull_sqrt_e20_cls6",
+    "model_name": "facebook/w2v-bert-2.0",
+    "target": "rog_dia_sentiment",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse",
+    "batch_size": 8,
+    "grad_accum": 4
+  }
+]
