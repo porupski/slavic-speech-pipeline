@@ -1,124 +1,89 @@
 [
   {
-    "label": "p45_xlsr_Rfull_e20_cls3_F2-6",
-    "model_name": "facebook/wav2vec2-xls-r-300m",
-    "target": "rog_dia_sentiment_3",
-    "task_type": "classification",
-    "num_epochs": 20,
-    "learning_rate": 3e-05,
-    "class_weighting": "sqrt_inverse",
-    "freeze_layers_upto": 6
-  },
-  {
-    "label": "p45_xlsr_Rfull_e20_cls3_F2-12",
-    "model_name": "facebook/wav2vec2-xls-r-300m",
-    "target": "rog_dia_sentiment_3",
-    "task_type": "classification",
-    "num_epochs": 20,
-    "learning_rate": 3e-05,
-    "class_weighting": "sqrt_inverse",
-    "freeze_layers_upto": 12
-  },
-  {
-    "label": "p45_xlsr_Rfull_e20_cls3_F2-18",
-    "model_name": "facebook/wav2vec2-xls-r-300m",
-    "target": "rog_dia_sentiment_3",
-    "task_type": "classification",
-    "num_epochs": 20,
-    "learning_rate": 3e-05,
-    "class_weighting": "sqrt_inverse",
-    "freeze_layers_upto": 18
-  },
-  {
-    "label": "p45_xlsr_Rfull_e20_cls3_F2-12_seed91",
-    "model_name": "facebook/wav2vec2-xls-r-300m",
-    "target": "rog_dia_sentiment_3",
-    "task_type": "classification",
-    "num_epochs": 20,
-    "learning_rate": 3e-05,
-    "class_weighting": "sqrt_inverse",
-    "freeze_layers_upto": 12,
-    "cap_seed": 91
-  },
-  {
-    "label": "p45_w2v2_Rfull_e20_cls3_F2-3",
+    "label": "sqrt_w2v2-base_rog_dia_full_asr",
     "model_name": "facebook/wav2vec2-base",
-    "target": "rog_dia_sentiment_3",
+    "target": "rog_dia_sentiment_3_asr",
     "task_type": "classification",
-    "num_epochs": 20,
+    "num_epochs": 10,
     "learning_rate": 1e-05,
-    "class_weighting": "sqrt_inverse",
-    "freeze_layers_upto": 3
+    "class_weighting": "sqrt_inverse"
   },
   {
-    "label": "p45_w2v2_Rfull_e20_cls3_F2-6",
-    "model_name": "facebook/wav2vec2-base",
-    "target": "rog_dia_sentiment_3",
+    "label": "sqrt_xls-r-300m_rog_dia_full_asr",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3_asr",
     "task_type": "classification",
-    "num_epochs": 20,
-    "learning_rate": 1e-05,
-    "class_weighting": "sqrt_inverse",
-    "freeze_layers_upto": 6
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse"
   },
   {
-    "label": "p45_wbert_Rfull_e20_cls3_F2-12",
+    "label": "sqrt_w2v-bert-2_rog_dia_full_asr",
     "model_name": "facebook/w2v-bert-2.0",
-    "target": "rog_dia_sentiment_3",
+    "target": "rog_dia_sentiment_3_asr",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse",
+    "batch_size": 8,
+    "grad_accum": 4
+  },
+  {
+    "label": "sqrt-lrhi_w2v2-base_rog_dia_full_asr",
+    "model_name": "facebook/wav2vec2-base",
+    "target": "rog_dia_sentiment_3_asr",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "sqrt-lrhi_xls-r-300m_rog_dia_full_asr",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3_asr",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 0.0001,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "sqrt-lrhi_w2v-bert-2_rog_dia_full_asr",
+    "model_name": "facebook/w2v-bert-2.0",
+    "target": "rog_dia_sentiment_3_asr",
+    "task_type": "classification",
+    "num_epochs": 10,
+    "learning_rate": 0.0001,
+    "class_weighting": "sqrt_inverse",
+    "batch_size": 8,
+    "grad_accum": 4
+  },
+  {
+    "label": "sqrt-e20_w2v2-base_rog_dia_full_asr",
+    "model_name": "facebook/wav2vec2-base",
+    "target": "rog_dia_sentiment_3_asr",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 1e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "sqrt-e20_xls-r-300m_rog_dia_full_asr",
+    "model_name": "facebook/wav2vec2-xls-r-300m",
+    "target": "rog_dia_sentiment_3_asr",
+    "task_type": "classification",
+    "num_epochs": 20,
+    "learning_rate": 3e-05,
+    "class_weighting": "sqrt_inverse"
+  },
+  {
+    "label": "sqrt-e20_w2v-bert-2_rog_dia_full_asr",
+    "model_name": "facebook/w2v-bert-2.0",
+    "target": "rog_dia_sentiment_3_asr",
     "task_type": "classification",
     "num_epochs": 20,
     "learning_rate": 3e-05,
     "class_weighting": "sqrt_inverse",
     "batch_size": 8,
-    "grad_accum": 4,
-    "freeze_layers_upto": 12
-  },
-  {
-    "label": "p45_xlsr_Rfull_e20_cls6_invfreq",
-    "model_name": "facebook/wav2vec2-xls-r-300m",
-    "target": "rog_dia_sentiment",
-    "task_type": "classification",
-    "num_epochs": 20,
-    "learning_rate": 3e-05,
-    "class_weighting": "inverse_freq"
-  },
-  {
-    "label": "p45_xlsr_Rfull_e20_cls6_droprare",
-    "model_name": "facebook/wav2vec2-xls-r-300m",
-    "target": "rog_dia_sentiment",
-    "task_type": "classification",
-    "num_epochs": 20,
-    "learning_rate": 3e-05,
-    "class_weighting": "sqrt_inverse",
-    "drop_label_values": ["mixedNegative", "mixedPositive"]
-  },
-  {
-    "label": "p45_xlsr_Rfull_e30_cls6_droprare_invfreq",
-    "model_name": "facebook/wav2vec2-xls-r-300m",
-    "target": "rog_dia_sentiment",
-    "task_type": "classification",
-    "num_epochs": 30,
-    "learning_rate": 3e-05,
-    "class_weighting": "inverse_freq",
-    "drop_label_values": ["mixedNegative", "mixedPositive"]
-  },
-  {
-    "label": "p45_xlsr_Rfull_e20_cls6_maxratio20",
-    "model_name": "facebook/wav2vec2-xls-r-300m",
-    "target": "rog_dia_sentiment",
-    "task_type": "classification",
-    "num_epochs": 20,
-    "learning_rate": 3e-05,
-    "class_weighting": "sqrt_inverse",
-    "max_class_ratio": 20
-  },
-  {
-    "label": "p45_xlsr_Rfull_e20_cls3_lrmid_seed91",
-    "model_name": "facebook/wav2vec2-xls-r-300m",
-    "target": "rog_dia_sentiment_3",
-    "task_type": "classification",
-    "num_epochs": 20,
-    "learning_rate": 5e-05,
-    "class_weighting": "sqrt_inverse",
-    "cap_seed": 91
+    "grad_accum": 4
   }
 ]

@@ -166,6 +166,35 @@ TARGETS: dict = {
             "predominantlyPositive": "positive",
         },
     },
+    # ---- ROG-Dialog ASR !! (rog_dialog_v2_instance_ASR.jsonl) ---------------------
+    "rog_dia_sentiment_asr": {
+        "jsonl_path": "data/processed_jsonl/rog_dialog_v2_instance_ASR.jsonl",
+        "label_key":  "sentiment",
+        "task_type":  "classification",
+        "label_order": [
+            "predominantlyNegative", "mixedNegative", "neutralNegative",
+            "neutralPositive", "mixedPositive", "predominantlyPositive",
+        ],
+    },
+    "rog_dia_sentiment_3_asr": {
+        # Same JSONL as rog_dia_sentiment, collapsed to 3 polarity classes
+        # via label_remap at load time. "neutralNegative" + "neutralPositive"
+        # fold into "neutral" (least-committal annotator calls); predominantly*
+        # and mixed* keep their polarity sign.
+        "jsonl_path": "data/processed_jsonl/rog_dialog_v2_instance_ASR.jsonl",
+        "label_key":  "sentiment",
+        "task_type":  "classification",
+        "label_order": ["negative", "neutral", "positive"],
+        "label_remap": {
+            "predominantlyNegative": "negative",
+            "mixedNegative":         "negative",
+            "neutralNegative":       "neutral",
+            "neutralPositive":       "neutral",
+            "mixedPositive":         "positive",
+            "predominantlyPositive": "positive",
+        },
+    },
+
     "rog_dia_sentiment_regr": {
         # Ordinal regression over the 6-class sentiment on a [0, 5] float axis:
         # 0 = predominantlyNegative, ..., 5 = predominantlyPositive. label_scale
