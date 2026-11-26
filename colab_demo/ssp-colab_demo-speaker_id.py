@@ -396,7 +396,7 @@ if FINE_TUNE:
         per_device_eval_batch_size=BATCH_SIZE,
         learning_rate=LEARNING_RATE,
         #warmup_ratio=0.10, # Depricated in newer Transformers libs.
-        warmup_steps=(len(train_ds)/NUM_EPOCHS)*BATCH_SIZE*0.10 # Using 10% warmup ratio
+        warmup_steps=(len(train_ds)/NUM_EPOCHS)*BATCH_SIZE*0.10, # Using 10% warmup ratio
         logging_steps=max(1, (len(train_ds) // BATCH_SIZE * NUM_EPOCHS) // 20),
         save_strategy="no",
         eval_strategy="no",
